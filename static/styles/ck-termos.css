@@ -100,6 +100,9 @@
    Desce 39/122,3 da altura (unidades do viewBox de data/state/assinatura_tecnico.svg) para o corpo das letras apoiar na linha;
    só as caudas da primeira e da última letra passam dela (pedido do usuário, 12/11/2026). Trocar o SVG exige recalcular a fração. */
 .tp__assinatura-img { position: absolute; bottom: calc(100% + 1px - 14mm * 39 / 122.3); left: 50%; transform: translateX(-50%); height: 14mm; width: auto; max-width: 100%; object-fit: contain; }
+/* Assinatura por nome (SVG inline, AssinaturaTexto): o viewBox 90 x 21 mm cobre os 18 mm acima da linha e 3 mm abaixo dela.
+   O fundo do SVG fica a 3/21 da própria altura abaixo da linha, então y = 0 do viewBox é a linha; escala com a largura do bloco. */
+.tp__assinatura-texto { position: absolute; left: 0; width: 100%; aspect-ratio: 90 / 21; height: auto; bottom: calc(100% + 1px); transform: translateY(calc(100% * 3 / 21)); pointer-events: none; overflow: visible; }
 
 @media print {
   /* Página nomeada: margens A4 só para a folha do termo, não para outro Ctrl+P do Cockpit.
@@ -118,5 +121,6 @@
   html.termos-imprimindo #termos-impressao .tp .tp__titulo,
   html.termos-imprimindo #termos-impressao .tp .tp__marca { color: var(--tp-cor) !important; }
   /* A assinatura desce abaixo da linha: com o fundo branco da regra acima, cobria a linha e o rótulo do técnico. */
-  html.termos-imprimindo #termos-impressao .tp__assinatura-img { background: transparent !important; }
+  html.termos-imprimindo #termos-impressao .tp__assinatura-img,
+  html.termos-imprimindo #termos-impressao .tp__assinatura-texto { background: transparent !important; }
 }

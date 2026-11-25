@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import {
-  abrirConfiguracaoLocal, fecharConfiguracaoLocal, removerChaveAssistenteConfiguracaoLocal, salvarAssistenteConfiguracaoLocal,
+  abrirConfiguracaoLocal, fecharConfiguracaoLocal, removerChaveAssistenteConfiguracaoLocal, salvarAssinaturaConfiguracaoLocal, salvarAssistenteConfiguracaoLocal,
   salvarClienteConfiguracaoLocal, salvarContasConfiguracaoLocal, salvarLinksConfiguracaoLocal,
 } from "./acoes";
 import { CorpoConfiguracao } from "./corpo";
@@ -10,7 +10,7 @@ export function montar(container: HTMLElement) {
   return {
     abrirConfiguracaoLocal, fecharConfiguracaoLocal,
     salvarContasConfiguracaoLocal, salvarLinksConfiguracaoLocal,
-    salvarClienteConfiguracaoLocal, salvarAssistenteConfiguracaoLocal,
+    salvarClienteConfiguracaoLocal, salvarAssinaturaConfiguracaoLocal, salvarAssistenteConfiguracaoLocal,
     removerChaveAssistenteConfiguracaoLocal,
   };
 }

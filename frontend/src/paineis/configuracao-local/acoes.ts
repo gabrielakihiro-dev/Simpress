@@ -2,7 +2,8 @@
 // data-on-* do corpo. Os valores digitados são lidos do DOM na hora de salvar, como no código antigo.
 import { flushSync } from "react-dom";
 import { apiFetch } from "../../api";
-import { ler, mudar, mudarStatus, novaRevisao, type Cliente, type EstadoChave, type Leitura, type Secao } from "./estado";
+import { erroDoNome, normalizarNome } from "../../componentes/assinatura-medida";
+import { ler, mudar, mudarStatus, novaRevisao, type Cliente, type ConfigAssinatura, type EstadoChave, type Leitura, type Secao } from "./estado";
 
 // Funções da aplicação publicadas em window por frontend/src/aplicacao/app.ts.
 interface AppLegado {
@@ -21,6 +22,15 @@ const BOTAO_ID = "btn-configuracao-local";
 const FORMATO_CNPJ = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/;
 const CABECALHO_JSON = { "Content-Type": "application/json" };
 // As chaves não vêm da API como lista: o servidor só devolve o estado de cada uma pelo identificador.
+export const ESTILOS_ASSINATURA = [
+  { valor: "desenho", rotulo: "Desenho atual" },
+  { valor: "digitada", rotulo: "Digitada" },
+  { valor: "great-vibes", rotulo: "Great Vibes" },
+  { valor: "dancing-script", rotulo: "Dancing Script" },
+  { valor: "allura", rotulo: "Allura" },
+  { valor: "alex-brush", rotulo: "Alex Brush" },
+  { valor: "sacramento", rotulo: "Sacramento" },
+];
 export const CHAVES_IA = [
   { id: "openrouter", nome: "OpenRouter", ajuda: "Usada pelo Assistente quando não há chave do DeepSeek." },
   { id: "deepseek", nome: "DeepSeek", ajuda: "Se preenchida, vale no lugar do OpenRouter." },
@@ -42,6 +52,11 @@ function statusCliente(): void {
   else mudarStatus("cliente", "");
 }
 
+function statusAssinatura(): void {
+  if (!ler().assinatura) mudarStatus("assinatura", "Não foi possível ler a assinatura atual. Preencha os campos e salve.", "erro");
+  else mudarStatus("assinatura", "");
+}
+
 function alvoDoFoco(): string {
   const { leitura } = ler();
   const conta = leitura?.contas.find(item => !item.somente_leitura);
@@ -56,19 +71,21 @@ export async function abrirConfiguracaoLocal(): Promise<void> {
   abrindo = true;
   try {
     try {
-      const [leitura, cliente] = await Promise.all([
+      const [leitura, cliente, assinatura] = await Promise.all([
         apiFetch<Leitura>("/api/config/local", { errorMessage: "Não foi possível ler a configuração local." }),
         apiFetch<Cliente>("/api/config/cliente").catch(() => null),
+        apiFetch<ConfigAssinatura>("/api/assinatura-tecnico/config").catch(() => null),
       ]);
       // Desenha antes de abrir: abrirModalAcessivel procura o campo do foco no DOM.
       flushSync(() => {
         mudar({
-          leitura, cliente, carga: "", cargaErro: false, aberto: true,
+          leitura, cliente, assinatura, carga: "", cargaErro: false, aberto: true,
           atalhos: typeof app().abrirConfiguracaoContatoOrigem === "function",
-          revisao: novaRevisao("contas", "links", "cliente", "chaves"),
+          revisao: novaRevisao("contas", "links", "cliente", "assinatura", "chaves"),
         });
         statusContas(leitura);
         statusCliente();
+        statusAssinatura();
         // Contas e cliente têm aviso próprio; as outras seções começam sem recado antigo.
         mudarStatus("links", "");
         mudarStatus("assistente", "");
@@ -187,6 +204,26 @@ export function salvarClienteConfiguracaoLocal(): Promise<void> {
     statusCliente();
     app().carregarConfiguracaoTransferencia?.();
     return "Dados do cliente salvos.";
+  });
+}
+
+export function salvarAssinaturaConfiguracaoLocal(): Promise<void> {
+  return salvarSecao("assinatura", async () => {
+    const campoNome = el("cfg-local-assinatura-nome") as HTMLInputElement;
+    const estilo = (el<HTMLSelectElement>("cfg-local-assinatura-estilo") as HTMLSelectElement).value;
+    // O servidor é a autoridade; aqui só se evita a ida e volta com a mesma regra.
+    const nome = normalizarNome(campoNome.value);
+    const erro = erroDoNome(nome) || (estilo !== "desenho" && !nome ? "Informe o nome para esse estilo de assinatura." : "");
+    if (erro) throw new ErroDeCampo(erro, campoNome);
+    const gravado = await apiFetch<ConfigAssinatura>("/api/assinatura-tecnico/config", {
+      method: "PUT",
+      headers: CABECALHO_JSON,
+      body: JSON.stringify({ estilo, nome }),
+      errorMessage: "Não foi possível salvar a assinatura do técnico.",
+    });
+    mudar({ assinatura: gravado, revisao: novaRevisao("assinatura") });
+    statusAssinatura();
+    return "Assinatura do técnico salva.";
   });
 }
 

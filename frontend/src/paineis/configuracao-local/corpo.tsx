@@ -1,8 +1,10 @@
 // Corpo do modal Configuração local (#cfg-local-corpo). Cabeçalho e rodapé ficam no partial (frontend/partials/modais.html).
 // Os botões mantêm os data-on-* do HTML antigo: o action-dispatcher chama a ação em window, que passa pela ponte.
-import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
-import { CHAVES_IA } from "./acoes";
-import { assinar, ler, type Conta, type EstadoChave, type Link, type Secao, type Status } from "./estado";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { ehEstiloTexto, erroDoNome, LIMITE_NOME, medirAssinatura, normalizarNome, type MedidaAssinatura } from "../../componentes/assinatura-medida";
+import { AssinaturaTexto } from "../../componentes/assinatura-texto";
+import { CHAVES_IA, ESTILOS_ASSINATURA } from "./acoes";
+import { assinar, ler, type ConfigAssinatura, type Conta, type EstadoChave, type Link, type Secao, type Status } from "./estado";
 
 const classeSecao = (visivel: boolean) => (visivel ? "ckp-secao" : "ckp-secao hidden");
 
@@ -127,6 +129,65 @@ function CamposCliente() {
   );
 }
 
+// Prévia ao vivo: o mesmo SVG da folha do Termo sobre a linha e o rótulo. "desenho" não tem prévia aqui (é o arquivo do operador).
+function PreviaAssinatura({ nome, estilo }: { nome: string; estilo: string }) {
+  const [resultado, setResultado] = useState<{ chave: string; medida: MedidaAssinatura | null } | null>(null);
+  const normalizado = normalizarNome(nome);
+  const erro = erroDoNome(normalizado);
+  const medivel = ehEstiloTexto(estilo) && Boolean(normalizado) && !erro;
+  const chave = `${estilo}|${normalizado}`;
+  useEffect(() => {
+    if (!medivel) return;
+    let atual = true;
+    medirAssinatura(normalizado, estilo as Parameters<typeof medirAssinatura>[1]).then(
+      medida => atual && setResultado({ chave, medida }),
+      () => atual && setResultado({ chave, medida: null }),
+    );
+    return () => { atual = false; };
+  }, [chave, medivel]); // normalizado e estilo já estão em chave
+  const pronto = resultado?.chave === chave ? resultado : null;
+  const aviso = estilo === "desenho" ? "O desenho atual aparece no PDF; não há prévia dele aqui."
+    : erro || (!normalizado ? "Digite o nome para ver a prévia." : pronto && !pronto.medida ? "Não foi possível carregar a fonte desta assinatura." : "");
+  return (
+    <div className="ck-campo ckp-span">
+      <span className="ck-campo__rotulo" id="cfg-local-assinatura-previa-rotulo">Prévia no PDF</span>
+      <div className="cfg-assin-previa" role="group" aria-labelledby="cfg-local-assinatura-previa-rotulo" data-estado={medivel && pronto?.medida ? "pronta" : "vazia"}>
+        <div className="cfg-assin-previa__area">
+          <div className="cfg-assin-previa__bloco">
+            {medivel && pronto?.medida ? <AssinaturaTexto nome={normalizado} estilo={estilo as Parameters<typeof medirAssinatura>[1]} medida={pronto.medida} /> : null}
+            Assinatura do técnico responsável
+          </div>
+        </div>
+      </div>
+      <span className="ckp-meta" id="cfg-local-assinatura-previa-aviso" role="status" aria-live="polite">{aviso}</span>
+    </div>
+  );
+}
+
+// Campos da assinatura: o rascunho vive aqui (a prévia precisa dele); a ação lê os valores do DOM ao salvar. A chave
+// do componente muda a cada leitura ou gravação, e o rascunho volta ao valor do servidor.
+function CamposAssinatura({ inicial }: { inicial: ConfigAssinatura | null }) {
+  const [nome, setNome] = useState(inicial?.nome ?? "");
+  const [estilo, setEstilo] = useState(inicial?.estilo ?? "desenho");
+  return (
+    <div className="ckp-campos">
+      <div className="ck-campo">
+        <label className="ck-campo__rotulo" htmlFor="cfg-local-assinatura-nome">Nome do técnico</label>
+        <input className="ck-entrada" id="cfg-local-assinatura-nome" type="text" maxLength={LIMITE_NOME} autoComplete="off"
+          spellCheck="false" value={nome} onChange={evento => setNome(evento.target.value)} aria-describedby="cfg-local-assinatura-nome-ajuda" />
+        <span className="ckp-meta" id="cfg-local-assinatura-nome-ajuda">Só letras, espaço, ponto, apóstrofo e hífen. Vale para os dois termos.</span>
+      </div>
+      <div className="ck-campo">
+        <label className="ck-campo__rotulo" htmlFor="cfg-local-assinatura-estilo">Estilo da assinatura</label>
+        <select className="ck-entrada" id="cfg-local-assinatura-estilo" value={estilo} onChange={evento => setEstilo(evento.target.value)}>
+          {ESTILOS_ASSINATURA.map(item => <option key={item.valor} value={item.valor}>{item.rotulo}</option>)}
+        </select>
+      </div>
+      <PreviaAssinatura nome={nome} estilo={estilo} />
+    </div>
+  );
+}
+
 function BotaoSalvar({ secao, rotulo, ocupado }: { secao: Secao; rotulo: string; ocupado: boolean }) {
   return (
     <button type="submit" id={`cfg-local-salvar-${secao}`} className="ck-btn ck-btn--primario ck-btn--sm" aria-label={rotulo}
@@ -188,6 +249,19 @@ export function CorpoConfiguracao() {
           <div className="ckp-linha">
             <StatusSecao secao="cliente" status={status.cliente} />
             <BotaoSalvar secao="cliente" rotulo="Salvar dados do cliente" ocupado={ocupado} />
+          </div>
+        </div>
+      </form>
+
+      <form id="cfg-local-secao-assinatura" className={classeSecao(aberto)} data-on-submit="salvarAssinaturaConfiguracaoLocal"
+        aria-labelledby="cfg-local-titulo-assinatura" noValidate>
+        <Cabecalho secao="assinatura" titulo="Assinatura do técnico" opcional
+          desc="Como a assinatura sai nos PDFs do Termo de Entrega e do Termo de Devolução: o desenho atual, digitada ou uma de cinco cursivas." />
+        <div className="ckp-secao__corpo">
+          <CamposAssinatura key={revisao.assinatura} inicial={estado.assinatura} />
+          <div className="ckp-linha">
+            <StatusSecao secao="assinatura" status={status.assinatura} />
+            <BotaoSalvar secao="assinatura" rotulo="Salvar assinatura do técnico" ocupado={ocupado} />
           </div>
         </div>
       </form>

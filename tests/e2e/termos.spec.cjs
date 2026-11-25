@@ -26,6 +26,11 @@ async function interceptarImpressao(page) {
         classe: document.documentElement.classList.contains("termos-imprimindo"),
         blocos: blocos.length,
         marcas: [...folha.querySelectorAll("td.tp__marcas")].map(td => td.textContent),
+        textos: [...folha.querySelectorAll("svg.tp__assinatura-texto")].map(svg => ({
+          bloco: blocos.indexOf(svg.closest(".tp__assinatura")),
+          estilo: svg.dataset.estilo,
+          texto: svg.textContent,
+        })),
         imagens: [...folha.querySelectorAll("img")].map(img => ({
           bloco: blocos.indexOf(img.closest(".tp__assinatura")),
           rotulo: img.closest(".tp__assinatura").textContent,
@@ -161,8 +166,46 @@ for (const [termo, rotulo] of [["entrega", "Assinatura do técnico responsável"
     const impressao = await gerarPdf(page, termo);
     expect(impressao.blocos).toBe(2);
     expect(impressao.imagens).toEqual([{ bloco: 1, rotulo, carregada: true, alt: "", classe: "tp__assinatura-img" }]);
-    // Única requisição: GET sem query nem corpo, então nada do termo sai da página.
-    expect(pedidos).toEqual([{ metodo: "GET", url: new URL("/api/assinatura-tecnico", page.url()).href, corpo: null }]);
+    expect(impressao.textos).toEqual([]);
+    // Sequência exata: GET da configuração e, só no estilo desenho, GET do SVG; sem query nem corpo, então nada do termo sai da página.
+    expect(pedidos).toEqual(["/api/assinatura-tecnico/config", "/api/assinatura-tecnico"]
+      .map(rota => ({ metodo: "GET", url: new URL(rota, page.url()).href, corpo: null })));
+  });
+
+  // Assinatura por nome (estilos digitada e cursivas): SVG inline só no bloco do técnico; o desenho nem é pedido.
+  for (const estilo of ["digitada", "great-vibes"]) {
+    test(`PDF do termo de ${termo} com assinatura ${estilo}: SVG com o nome no bloco do técnico e um único GET`, async ({ page }) => {
+      const pedidos = [];
+      page.on("request", req => { if (req.url().includes("/api/assinatura-tecnico")) pedidos.push(`${req.method()} ${new URL(req.url()).pathname} ${req.postData()}`); });
+      await page.route("**/api/assinatura-tecnico/config", route => route.fulfill({ json: { estilo, nome: "Joaquim Gonçalves" } }));
+      await abrirTermos(page);
+      const impressao = await gerarPdf(page, termo);
+      expect(impressao.imagens).toEqual([]);
+      expect(impressao.textos).toEqual([{ bloco: 1, estilo, texto: "Joaquim Gonçalves" }]);
+      expect(pedidos).toEqual(["GET /api/assinatura-tecnico/config null"]);
+      // O SVG se apoia na linha do técnico (fundo a 3/21 da altura abaixo dela) e não empurra o layout.
+      await page.emulateMedia({ media: "print" });
+      const g = await page.evaluate(() => {
+        const svg = document.querySelector("#termos-impressao svg.tp__assinatura-texto");
+        const bloco = svg.closest(".tp__assinatura").getBoundingClientRect();
+        const r = svg.getBoundingClientRect();
+        return { posicao: getComputedStyle(svg).position, fundo: getComputedStyle(svg).backgroundColor, base: r.bottom - bloco.top, altura: r.height, largura: r.width, larguraBloco: bloco.width };
+      });
+      expect(g.posicao).toBe("absolute");
+      expect(g.fundo).toBe("rgba(0, 0, 0, 0)");
+      expect(Math.abs(g.largura - g.larguraBloco)).toBeLessThanOrEqual(1);
+      expect(Math.abs(g.base - g.altura * 3 / 21)).toBeLessThanOrEqual(1.5); // linha em y = 0 do viewBox
+    });
+  }
+
+  test(`PDF do termo de ${termo} sai com a linha em branco quando a fonte da assinatura não carrega`, async ({ page }) => {
+    await page.route("**/api/assinatura-tecnico/config", route => route.fulfill({ json: { estilo: "great-vibes", nome: "Joaquim Gonçalves" } }));
+    await page.route("**/great-vibes-*.woff2", route => route.abort());
+    await abrirTermos(page);
+    const impressao = await gerarPdf(page, termo);
+    expect(impressao.blocos).toBe(2);
+    expect(impressao.imagens).toEqual([]);
+    expect(impressao.textos).toEqual([]);
   });
 
   test(`folha impressa do termo de ${termo}: imagem de 14 mm sobre a linha do técnico, sem empurrar o layout`, async ({ page }) => {

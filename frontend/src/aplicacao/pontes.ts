@@ -114,8 +114,8 @@ const TABELA = {
     painel: "configuracao-local",
     assincronas: [
       "abrirConfiguracaoLocal", "fecharConfiguracaoLocal", "salvarContasConfiguracaoLocal",
-      "salvarLinksConfiguracaoLocal", "salvarClienteConfiguracaoLocal", "salvarAssistenteConfiguracaoLocal",
-      "removerChaveAssistenteConfiguracaoLocal",
+      "salvarLinksConfiguracaoLocal", "salvarClienteConfiguracaoLocal", "salvarAssinaturaConfiguracaoLocal",
+      "salvarAssistenteConfiguracaoLocal", "removerChaveAssistenteConfiguracaoLocal",
     ],
   },
   // Resumo (painel de ferramenta "comparacao"): ativos por regional, com filtro por categoria.

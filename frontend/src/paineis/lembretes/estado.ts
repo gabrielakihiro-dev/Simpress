@@ -5,6 +5,7 @@
 import { flushSync } from "react-dom";
 import { apiRota, type OpcoesRota } from "../../api";
 import type { Rotas } from "../../api-tipos.gerado";
+import type { AssinaturaFolha } from "../../componentes/assinatura-medida";
 import type { Lembrete } from "./lembretes-puro";
 import { TERMOS, type DadosTermo, type NomeTermo } from "./termos-puro";
 import { appAntigo } from "./tipos";
@@ -36,7 +37,7 @@ export interface Agenda {
 
 export interface Folha {
   dados: DadosTermo;
-  assinatura: HTMLImageElement | null;
+  assinatura: AssinaturaFolha | null;
 }
 
 export interface Estado {

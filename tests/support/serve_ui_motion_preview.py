@@ -862,6 +862,22 @@ FIXTURE_ASSINATURA_SVG = (
     b'<path d="M10 60 C 40 10, 70 70, 100 40 S 160 20, 190 50" fill="none" stroke="#000" stroke-width="3"/></svg>'
 )
 
+# Configuração da assinatura do técnico (GET e PUT /api/assinatura-tecnico/config): estado em memória, nomes fictícios.
+ASSINATURA_ESTILOS = ("desenho", "digitada", "great-vibes", "dancing-script", "allura", "alex-brush", "sacramento")
+assinatura_config = {"estilo": "desenho", "nome": ""}
+
+
+def assinatura_gravar(payload):
+    estilo, nome = payload.get("estilo"), " ".join(str(payload.get("nome", "")).split())
+    if estilo not in ASSINATURA_ESTILOS:
+        return {"detail": "Estilo de assinatura inválido.", "codigo": "assinatura_estilo_invalido"}, 422
+    if len(nome) > 80 or any(not (c.isalpha() or c in " .'-") for c in nome):
+        return {"detail": "Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.", "codigo": "assinatura_nome_invalido"}, 422
+    if estilo != "desenho" and not nome:
+        return {"detail": "Informe o nome para esse estilo de assinatura.", "codigo": "assinatura_nome_invalido"}, 422
+    assinatura_config.update(estilo=estilo, nome=nome)
+    return dict(assinatura_config), 200
+
 
 class Handler(BaseHTTPRequestHandler):
     def send(self, body, status=200, content_type="application/json; charset=utf-8"):
@@ -1129,6 +1145,8 @@ class Handler(BaseHTTPRequestHandler):
             lembretes_proxy(self, "GET", self.path)
         elif path == "/api/assinatura-tecnico":
             self.send(FIXTURE_ASSINATURA_SVG, content_type="image/svg+xml")
+        elif path == "/api/assinatura-tecnico/config":
+            self.send(dict(assinatura_config))
         elif path == "/api/endpoint/powershell/codigos":
             # The Home PowerShell form is always visible and loads the ready-made codes on the first selection.
             self.send({"codigos": [{"id": "demo", "titulo": "Listar serviços", "modo": "sistema", "comando": "Get-Service"}]})
@@ -1199,6 +1217,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 regional_changes[unquote(path.rsplit("/", 1)[-1])] = {key: str(payload.get(key, "")) for key in REGIONAL_FIELDS}
                 self.send(regional_config())
+            return
+        if path == "/api/assinatura-tecnico/config":
+            size = int(self.headers.get("Content-Length", "0"))
+            corpo, status = assinatura_gravar(json.loads(self.rfile.read(size) or b"{}"))
+            self.send(corpo, status)
             return
         if path == "/api/config/cliente":
             size = int(self.headers.get("Content-Length", "0"))

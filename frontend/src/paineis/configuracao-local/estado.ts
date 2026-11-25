@@ -36,7 +36,12 @@ export interface Cliente {
   cliente_fontes?: Record<string, string>;
 }
 
-export type Secao = "contas" | "links" | "cliente" | "assistente";
+export interface ConfigAssinatura {
+  estilo: string;
+  nome: string;
+}
+
+export type Secao = "contas" | "links" | "cliente" | "assinatura" | "assistente";
 export type TipoStatus = "" | "ok" | "erro";
 export interface Status {
   texto: string;
@@ -49,13 +54,15 @@ export interface Estado {
   cargaErro: boolean;
   leitura: Leitura | null;
   cliente: Cliente | null;
+  /** null = não foi possível ler a assinatura atual. */
+  assinatura: ConfigAssinatura | null;
   /** Seções visíveis (depois de uma leitura bem-sucedida). */
   aberto: boolean;
   atalhos: boolean;
   ocupado: boolean;
   status: Record<Secao, Status>;
   /** Revisão por grupo: muda quando os campos devem voltar ao valor do servidor (como o replaceChildren antigo). */
-  revisao: Record<"contas" | "links" | "cliente" | "chaves", number>;
+  revisao: Record<"contas" | "links" | "cliente" | "assinatura" | "chaves", number>;
 }
 
 const SEM_STATUS: Status = { texto: "", tipo: "" };
@@ -65,11 +72,12 @@ let estado: Estado = {
   cargaErro: false,
   leitura: null,
   cliente: null,
+  assinatura: null,
   aberto: false,
   atalhos: false,
   ocupado: false,
-  status: { contas: SEM_STATUS, links: SEM_STATUS, cliente: SEM_STATUS, assistente: SEM_STATUS },
-  revisao: { contas: 0, links: 0, cliente: 0, chaves: 0 },
+  status: { contas: SEM_STATUS, links: SEM_STATUS, cliente: SEM_STATUS, assinatura: SEM_STATUS, assistente: SEM_STATUS },
+  revisao: { contas: 0, links: 0, cliente: 0, assinatura: 0, chaves: 0 },
 };
 const ouvintes = new Set<() => void>();
 

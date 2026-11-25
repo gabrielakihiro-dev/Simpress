@@ -22,7 +22,9 @@ const criarTermos = require(path.join(root, "frontend/src/aplicacao/registro.ts"
 const arquivosDoPainel = fs.readdirSync(pasta).filter((nome) => /.tsx?$/.test(nome)).map((nome) => path.join(pasta, nome));
 const fonteDoPainel = arquivosDoPainel.map((arquivo) => fs.readFileSync(arquivo, "utf8"));
 const pontes = [fs.readFileSync(path.join(root, "frontend/src/aplicacao/pontes.ts"), "utf8")];
-const codigos = [...fonteDoPainel, ...pontes];
+// Mais o renderizador e a medida da assinatura por nome (frontend/src/componentes/): também sem storage, fetch nem rede.
+const componentes = ["assinatura-medida.ts", "assinatura-texto.tsx"].map((nome) => fs.readFileSync(path.join(root, "frontend/src/componentes", nome), "utf8"));
+const codigos = [...fonteDoPainel, ...pontes, ...componentes];
 
 test("termosFormatarData fatia aaaa-mm-dd sem passar por Date", () => {
   assert.equal(termosFormatarData("2026-11-09"), "09/11/2026");
@@ -115,19 +117,22 @@ test("ponte: se o React não carregou, a ação não rejeita nem escreve no cons
   assert.deepEqual(erros, []);
 });
 
-test("termos: nada é guardado nem enviado (sem storage, cookie, fetch nem innerHTML; só o GET fixo da assinatura)", () => {
+test("termos: nada é guardado nem enviado (sem storage, cookie, fetch nem innerHTML; só os GET fixos da assinatura)", () => {
   for (const proibido of [
     "localStorage", "sessionStorage", "indexedDB", "document.cookie", "fetch(", "innerHTML", "XMLHttpRequest", "sendBeacon",
     "http://", "https://", "new Image", "window.open", "location.", "WebSocket", "EventSource", "import(",
   ]) {
     codigos.forEach((codigo, i) => assert.ok(!codigo.includes(proibido), `${i < fonteDoPainel.length ? path.basename(arquivosDoPainel[i]) : "ponte"} não pode usar ${proibido}`));
   }
-  // Nos arquivos dos termos, a única rota citada é a da assinatura do técnico, constante, sem parâmetro nem concatenação,
-  // e a única URL atribuída (src/href) é essa constante. A API dos lembretes fica em lembretes-acoes.ts.
+  // Nos arquivos dos termos, as únicas rotas citadas são a configuração da assinatura do técnico (GET sem corpo) e, só no
+  // estilo "desenho", o SVG dela: constantes, sem parâmetro nem concatenação; a única URL atribuída (src/href) é a do SVG. A API dos lembretes fica em lembretes-acoes.ts.
   const dosTermos = ["termos-puro.ts", "termos-acoes.ts", "termos-forms.tsx", "folha.tsx"].map((nome) => fs.readFileSync(path.join(pasta, nome), "utf8"));
   dosTermos.push(pontes[0]);
   const todos = dosTermos.join("\n");
-  assert.deepEqual(todos.match(/["'`]\/api\/[^"'`]*["'`]/g), ['"/api/assinatura-tecnico"']);
+  assert.deepEqual(todos.match(/["'`]\/api\/[^"'`]*["'`]/g), ['"/api/assinatura-tecnico"', '"/api/assinatura-tecnico/config"']);
+  const acoes = fs.readFileSync(path.join(pasta, "termos-acoes.ts"), "utf8");
+  assert.equal(acoes.match(/apiFetch[<(]/g).length, 1, "um único GET por apiFetch: a configuração, sem corpo nem método");
+  assert.ok(!/method\s*:|body\s*:/.test(acoes));
   assert.deepEqual(todos.match(/\.(src|href)\s*=[^=;]*/g), [".src = URL_ASSINATURA"]);
 });
 

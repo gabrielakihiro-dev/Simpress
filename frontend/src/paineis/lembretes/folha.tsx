@@ -2,6 +2,8 @@
 // static/index.html). React só escreve texto, então nada digitado vira HTML. Os dados têm dado pessoal: não vão para log.
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import type { AssinaturaFolha } from "../../componentes/assinatura-medida";
+import { AssinaturaTexto } from "../../componentes/assinatura-texto";
 import type { Folha } from "./estado";
 import { termosFormatarData, type DadosTermo } from "./termos-puro";
 
@@ -45,9 +47,11 @@ function Tabela({ cabecalhos, linhas, classes = [], respostas }: { cabecalhos: s
 
 const marcas = (resposta: string) => `${resposta === "sim" ? "[X]" : "[ ]"} Sim   ${resposta === "nao" ? "[X]" : "[ ]"} Não`;
 
-// A imagem da assinatura já veio decodificada (termos-acoes.ts) e entra no início do lado do técnico, acima do rótulo;
-// entrar por aqui evita pedi-la de novo e imprimir antes de ela carregar. O lado do colaborador fica em branco.
-function Assinatura({ texto, imagem }: { texto: string; imagem?: HTMLImageElement | null }) {
+// A assinatura já veio pronta (termos-acoes.ts): a imagem decodificada do desenho ou o nome medido; entra no início do lado
+// do técnico, acima do rótulo. Entrar por aqui evita pedi-la de novo e imprimir antes de ela carregar. O lado do colaborador
+// fica em branco.
+function Assinatura({ texto, assinatura }: { texto: string; assinatura?: AssinaturaFolha | null }) {
+  const imagem = assinatura?.tipo === "desenho" ? assinatura.imagem : null;
   return (
     <div
       className="tp__assinatura"
@@ -55,12 +59,13 @@ function Assinatura({ texto, imagem }: { texto: string; imagem?: HTMLImageElemen
         if (no && imagem && !no.contains(imagem)) no.prepend(imagem);
       }}
     >
+      {assinatura?.tipo === "texto" && <AssinaturaTexto nome={assinatura.nome} estilo={assinatura.estilo} medida={assinatura.medida} />}
       {texto}
     </div>
   );
 }
 
-export function FolhaTermo({ dados, assinatura }: { dados: DadosTermo; assinatura: HTMLImageElement | null }) {
+export function FolhaTermo({ dados, assinatura }: { dados: DadosTermo; assinatura: AssinaturaFolha | null }) {
   const c = dados.campos;
   const entrega = dados.termo === "entrega";
   // Mesma estrutura nos dois termos; a devolução muda só os textos e a cor de destaque (tp--devolucao).
@@ -113,7 +118,7 @@ export function FolhaTermo({ dados, assinatura }: { dados: DadosTermo; assinatur
       </Secao>
       <div className="tp__assinaturas">
         <Assinatura texto="Assinatura do colaborador" />
-        <Assinatura texto={entrega ? "Assinatura do técnico responsável" : "Assinatura do Técnico"} imagem={assinatura} />
+        <Assinatura texto={entrega ? "Assinatura do técnico responsável" : "Assinatura do Técnico"} assinatura={assinatura} />
       </div>
     </article>
   );

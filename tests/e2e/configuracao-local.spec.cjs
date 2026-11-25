@@ -225,6 +225,89 @@ test("Configuração local: dados do cliente validam antes de enviar e Remover c
   expect(servidor.estado.requisicoes.at(-1)).toMatchObject({ metodo: "DELETE", url: "/api/config/local/assistente/deepseek" });
 });
 
+// Linhas da captura (PNG) entre a tinta mais baixa acima da linha e a própria linha: decodifica numa página em branco.
+async function distanciaDaTintaAteALinha(page, captura) {
+  const aux = await page.context().newPage();
+  try {
+    return await aux.evaluate(async base64 => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${base64}`;
+      await img.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const { data } = ctx.getImageData(0, 0, img.width, img.height);
+      const escura = (x, y) => data[(y * img.width + x) * 4] < 128;
+      const linhas = [];
+      for (let y = 0; y < img.height; y++) {
+        let escuros = 0;
+        for (let x = 0; x < img.width; x++) if (escura(x, y)) escuros++;
+        linhas.push(escuros);
+      }
+      const linha = linhas.findIndex(total => total > img.width * 0.5);
+      let baixo = -1;
+      for (let y = linha - 1; y >= 0; y--) if (linhas[y] > 0) { baixo = y; break; }
+      return { linha, baixo, distancia: baixo < 0 ? null : linha - baixo };
+    }, captura.toString("base64"));
+  } finally {
+    await aux.close();
+  }
+}
+
+test("Configuração local: assinatura do técnico valida, mostra a prévia ao vivo e grava só o gravado", async ({ page }) => {
+  test.setTimeout(60_000);
+  await simularApi(page);
+  const gravacoes = [];
+  let atual = { estilo: "desenho", nome: "" };
+  await page.route("**/api/assinatura-tecnico/config", route => {
+    if (route.request().method() === "PUT") {
+      gravacoes.push(route.request().postDataJSON());
+      atual = route.request().postDataJSON();
+    }
+    return route.fulfill({ json: atual });
+  });
+  await page.goto("/");
+  await abrirPainelDeProntidao(page);
+  await page.locator("#btn-configuracao-local").click();
+  await expect(page.getByRole("dialog", { name: "Configuração local" })).toBeVisible();
+
+  const nome = page.locator("#cfg-local-assinatura-nome");
+  const estilo = page.locator("#cfg-local-assinatura-estilo");
+  const aviso = page.locator("#cfg-local-assinatura-previa-aviso");
+  const previa = page.locator(".cfg-assin-previa");
+  await expect(estilo).toHaveValue("desenho");
+  await expect(aviso).toHaveText("O desenho atual aparece no PDF; não há prévia dele aqui.");
+  await expect(estilo.locator("option")).toHaveText(["Desenho atual", "Digitada", "Great Vibes", "Dancing Script", "Allura", "Alex Brush", "Sacramento"]);
+
+  // Cliente: nome inválido ou ausente não chega ao servidor.
+  await estilo.selectOption("allura");
+  await page.locator("#cfg-local-salvar-assinatura").click();
+  await expect(page.locator("#cfg-local-status-assinatura")).toHaveText("Informe o nome para esse estilo de assinatura.");
+  await expect(nome).toBeFocused();
+  await nome.fill("Ana 2");
+  await page.locator("#cfg-local-salvar-assinatura").click();
+  await expect(page.locator("#cfg-local-status-assinatura")).toHaveText("Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.");
+  expect(gravacoes).toEqual([]);
+
+  // Prévia ao vivo: cada estilo troca o SVG; a digitada fica rente à linha (tinta mais baixa a poucos pixels dela, sem tocá-la).
+  await nome.fill("  Joaquim   Gonçalves Pereira ");
+  await expect(previa.locator("svg")).toHaveAttribute("data-estilo", "allura");
+  await estilo.selectOption("digitada");
+  await expect(previa.locator("svg")).toHaveAttribute("data-estilo", "digitada");
+  await expect(previa.locator("svg text")).toHaveText("Joaquim Gonçalves Pereira");
+  await expect(previa.locator("svg text")).toHaveCSS("font-family", /Inter Variable/);
+  const medida = await distanciaDaTintaAteALinha(page, await previa.screenshot());
+  expect(medida.distancia, JSON.stringify(medida)).toBeGreaterThanOrEqual(1);
+  expect(medida.distancia, JSON.stringify(medida)).toBeLessThanOrEqual(4);
+
+  await page.locator("#cfg-local-salvar-assinatura").click();
+  await expect(page.locator("#cfg-local-status-assinatura")).toHaveText("Assinatura do técnico salva.");
+  expect(gravacoes).toEqual([{ estilo: "digitada", nome: "Joaquim Gonçalves Pereira" }]);
+  await expect(nome).toHaveValue("Joaquim Gonçalves Pereira");
+});
+
 test("Configuração local: o modal não gera rolagem horizontal de 320 a 2560 px nos dois temas", async ({ page }) => {
   test.setTimeout(60_000);
   await simularApi(page);

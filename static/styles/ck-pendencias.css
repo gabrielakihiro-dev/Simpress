@@ -188,6 +188,10 @@ select.ck-entrada { appearance: none; padding-right: 28px; background-image: lin
 .ckp-secao__status[data-status="ok"] { color: var(--cor-ok-texto); }
 .ckp-secao__status[data-status="erro"] { color: var(--cor-erro-texto); }
 .ckp-secao__status + .ck-btn { margin-left: auto; }
+/* Prévia da assinatura do técnico: papel branco, tinta preta, mesma geometria da folha (.tp__assinatura-texto em ck-termos.css). */
+.cfg-assin-previa { max-width: 26rem; padding: 0.5rem 1rem 0.75rem; border: 1px solid var(--cor-borda); border-radius: var(--raio-md, 6px); background: #fff; color: #000; }
+.cfg-assin-previa__area { container-type: inline-size; position: relative; padding-top: 20%; }
+.cfg-assin-previa__bloco { position: relative; padding-top: 3px; border-top: 1px solid #000; text-align: center; font-size: 4.1cqw; line-height: 1.35; }
 
 /* ---------- Página de demonstração ---------- */
 .ckp-palco { flex: 1; display: grid; place-items: center; padding: 40px 20px; color: var(--cor-texto-sutil); font-size: var(--fs-ui); text-align: center; }

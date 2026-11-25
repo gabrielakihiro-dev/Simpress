@@ -1,5 +1,7 @@
 // Ações dos termos de entrega e devolução: abas, leitura do formulário, PDF pela janela de impressão, limpar e
 // preencher (pelo lembrete e pela busca de série da Home). Os campos têm dado pessoal: nada vai para log nem storage.
+import { apiFetch } from "../../api";
+import { ehEstiloTexto, erroDoNome, medirAssinatura, normalizarNome, type AssinaturaFolha } from "../../componentes/assinatura-medida";
 import { avisar as avisarToast, formVazio, interno, ler, mudar, mudarAgora, porId, type AbaPainel, type FormTermo } from "./estado";
 import { TERMOS, termosDadosDoLembrete, termosLimparParte, termosNomeArquivo, type DadosTermo, type NomeTermo } from "./termos-puro";
 import { appAntigo, type EventoTecla, type Registro } from "./tipos";
@@ -7,6 +9,7 @@ import { appAntigo, type EventoTecla, type Registro } from "./tipos";
 export const ORDEM_ABAS: readonly AbaPainel[] = ["entrega", "devolucao", "lembretes"];
 export const AVISO_SEM_NOME = "Preencha o número de série e o nome do colaborador.";
 export const URL_ASSINATURA = "/api/assinatura-tecnico";
+export const URL_CONFIG_ASSINATURA = "/api/assinatura-tecnico/config";
 const TEMPO_ASSINATURA_MS = 3000;
 
 export const ehTermo = (valor: unknown): valor is NomeTermo => Object.hasOwn(TERMOS, valor as PropertyKey);
@@ -75,22 +78,39 @@ export function lerValidado(termo: string): DadosTermo | null {
   return dados;
 }
 
-// Carrega a assinatura numa <img> fora da página; qualquer falha (404, 422, imagem inválida, tempo) devolve null
-// e o PDF sai como antes, com a linha em branco.
-async function carregarAssinatura(): Promise<HTMLImageElement | null> {
-  const img = document.createElement("img");
-  img.className = "tp__assinatura-img";
-  img.alt = "";
-  img.src = URL_ASSINATURA;
-  let relogio: ReturnType<typeof setTimeout> | undefined;
+// Passos da assinatura: GET da configuração (sem corpo); no desenho, GET do SVG numa <img> fora da página; nos outros
+// estilos, carrega a fonte e mede o nome. Só o desenho faz o segundo GET.
+async function passosAssinatura(sinal: AbortSignal): Promise<AssinaturaFolha | null> {
+  const config = await apiFetch<{ estilo?: unknown; nome?: unknown }>(URL_CONFIG_ASSINATURA, { signal: sinal });
+  if (config.estilo === "desenho") {
+    const img = document.createElement("img");
+    img.className = "tp__assinatura-img";
+    img.alt = "";
+    img.src = URL_ASSINATURA;
+    await img.decode();
+    return { tipo: "desenho", imagem: img };
+  }
+  const nome = typeof config.nome === "string" ? normalizarNome(config.nome) : "";
+  if (!ehEstiloTexto(config.estilo) || !nome || erroDoNome(nome)) return null;
+  const medida = await medirAssinatura(nome, config.estilo);
+  return medida && { tipo: "texto", nome, estilo: config.estilo, medida };
+}
+
+// Um prazo só (3 s) para a cadeia inteira. Qualquer falha (404, 422, imagem inválida, fonte ausente, tempo) devolve null
+// e o PDF sai com a linha em branco; nunca se imprime em fonte do sistema como substituta.
+async function carregarAssinatura(): Promise<AssinaturaFolha | null> {
+  const controle = new AbortController();
+  const limite = new Promise<never>((_, rejeitar) => {
+    controle.signal.addEventListener("abort", () => rejeitar(new Error("tempo esgotado")));
+  });
+  const relogio = setTimeout(() => controle.abort(), TEMPO_ASSINATURA_MS);
   try {
-    const limite = new Promise<never>((_, rejeitar) => { relogio = setTimeout(rejeitar, TEMPO_ASSINATURA_MS); });
-    await Promise.race([img.decode(), limite]);
-    return img;
+    return await Promise.race([passosAssinatura(controle.signal), limite]);
   } catch {
     return null;
   } finally {
     clearTimeout(relogio);
+    controle.abort();
   }
 }
 

@@ -98,6 +98,7 @@ Opcional: vazia nunca deixa a prontidão Pendente (`domains/readiness.py` não a
 - 422 só com `detail` e `codigo` (`assinatura_nome_invalido`, `assinatura_estilo_invalido`, `assinatura_corpo_invalido`), sem repetir o nome. O log leva só `configuracao_local: assinatura_tecnico gravada`.
 - Mesma gravação atômica e backup das outras seções. Fontes das cursivas: `@fontsource/*` copiadas por `scripts/build/copy_ui_assets.cjs` para `static/vendor/fonts/` (declaradas em `static/vendor/fonts.css`).
 - Testes: `tests/test_assinatura_tecnico_config.py`.
+- Tela (25/11/2026): seção opcional "Assinatura do técnico" no modal (`frontend/src/paineis/configuracao-local/`), com `Nome do técnico` (até 80 caracteres), `Estilo da assinatura` (`Desenho atual`, `Digitada` e os cinco nomes das fontes), `Prévia no PDF` ao vivo (o mesmo SVG da folha do Termo, sobre a linha e o rótulo; `role="status"` no aviso; `desenho` não tem prévia) e `Salvar`. O modal lê `GET /api/assinatura-tecnico/config` ao abrir; se falhar, mostra erro na seção e deixa preencher. Antes do `PUT` o cliente aplica a mesma normalização e validação do servidor (mensagem no campo, sem requisição); o servidor continua a autoridade. Como a assinatura sai nos PDFs: `17-termos.md`, "Assinatura por nome". Testes: `tests/e2e/configuracao-local.spec.cjs`.
 
 ### Seções já existentes (só atalho)
 
