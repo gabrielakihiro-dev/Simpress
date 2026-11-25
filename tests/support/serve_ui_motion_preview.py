@@ -529,13 +529,16 @@ def reset_finalizar(sharepoint_falha=False, outro_tecnico=False):
 
 reset_finalizar()
 
-# Conflitos de edição do Dashboard (F5): fictional cells; /__fixture_automacao?conflitos=1 brings three (the 3rd accepts only SharePoint),
+# Conflitos de edição do Dashboard (F5): fictional cells, titles and requesters; /__fixture_automacao?conflitos=1 brings three (the 3rd accepts only SharePoint),
 # /__fixture_conflitos reads the last POST. Like the real route, the POST needs the version the GET gave (409) and refuses "site" on c3 (422).
 VERSAO_CONFLITOS = "versao-fixture-conflitos"
 CONFLITOS_FIXTURE = [
-    {"id": "c1", "tipo": "celula", "chamado": "UTIC-2026-9001", "coluna": "G", "sharepoint": "Título no SharePoint", "site": "Título no site", "aceita_site": True},
-    {"id": "c2", "tipo": "linha_apagada", "chamado": "UTIC-2026-9002", "aceita_site": True},
-    {"id": "c3", "tipo": "celula", "chamado": "linha:3", "coluna": "J", "sharepoint": "", "site": "INCIDENTE", "aceita_site": False},
+    {"id": "c1", "tipo": "celula", "chamado": "UTIC-2026-9001", "coluna": "G", "sharepoint": "Título no SharePoint", "site": "Título no site", "aceita_site": True,
+     "titulo": "Impressora do 2º andar sem toner", "solicitante": "Pessoa Fictícia Um"},
+    {"id": "c2", "tipo": "linha_apagada", "chamado": "UTIC-2026-9002", "aceita_site": True,
+     "titulo": "Notebook não liga", "solicitante": "Pessoa Fictícia Dois"},
+    {"id": "c3", "tipo": "celula", "chamado": "linha:3", "coluna": "J", "sharepoint": "", "site": "INCIDENTE", "aceita_site": False,
+     "titulo": "", "solicitante": ""},  # linha sem UTIC: o servidor não acha a linha e manda vazio
 ]
 conflitos_state = {}
 

@@ -1,7 +1,7 @@
 // Migração React, grupo G1 (Sebrae): conflitos de edição do Dashboard (Chamados, F5) e resumo do histórico (Automação).
-// O baseline de screenshots e os testes do invariante de envio foram gravados com o código antigo (JS puro),
-// antes da troca para React: a seção em React tem de sair igual (390 e 1366 px, claro e escuro) e mandar o
-// mesmo POST, só no clique. Comportamento portado de tests/frontend/test_sebrae_conflitos_ui.cjs e
+// Os testes do invariante de envio foram gravados com o código antigo (JS puro), antes da troca para React: a
+// seção em React manda o mesmo POST, só no clique. O baseline dos conflitos é o layout C (24/11/2026: lista e
+// resumo do envio, com título e solicitante), em 390 e 1366 px, claro e escuro. Comportamento portado de tests/frontend/test_sebrae_conflitos_ui.cjs e
 // test_sebrae_historico_ui.cjs (DOM falso e funções puras).
 const { test, expect } = require("@playwright/test");
 
@@ -57,7 +57,8 @@ async function contarAcoes(page, nomes) {
 }
 
 for (const tema of ["light", "dark"]) {
-  test(`baseline: conflitos de edição da fixture, tema ${tema}`, async ({ page, request }) => {
+  test(`baseline: conflitos de edição da fixture, tema ${tema}`, async ({ page, request, viewport }) => {
+    await page.setViewportSize({ width: viewport.width, height: 2000 }); // mesma largura; a seção inteira (com o resumo) cabe no print
     const secao = await abrirPainel(page, request, { tema, extra: "&conflitos=1" });
     await expect(secao.getByRole("group")).toHaveCount(3);
     await secao.scrollIntoViewIfNeeded();
@@ -90,7 +91,7 @@ test.describe("conflitos de edição: comportamento", () => {
 
   test("invariante: abrir a lista não envia nada; o POST sai só no clique, com escolhas, enviar e versao_importacao", async ({ page, request }) => {
     const chamadas = await rotaConflitos(page, {
-      get: { conflitos: [celula("a"), apagada("b")], escolhas: {}, criado_em: "2026-11-12T10:00:00", versao_importacao: "v-atual" },
+      get: { conflitos: [celula("a", { titulo: "Impressora sem toner ***.***.***-**", solicitante: "Pessoa Fictícia" }), apagada("b")], escolhas: {}, criado_em: "2026-11-12T10:00:00", versao_importacao: "v-atual" },
       post: { escolhas: { a: "site", b: "sharepoint" }, enviar: { iniciado: true, motivo: "" } },
     });
     await page.route("**/api/automacao/estado*", route => route.fulfill({ json: { estado: "em_andamento", rotina: "enviar", ultima: null } }));
@@ -98,9 +99,18 @@ test.describe("conflitos de edição: comportamento", () => {
     await expect(secao).toBeVisible();
     const grupos = secao.getByRole("group");
     await expect(grupos).toHaveCount(2);
-    await expect(grupos.first().locator("legend")).toHaveText('Chamado UTIC-2026-1, coluna G: SharePoint diz "A", site quer "B".');
-    await expect(grupos.nth(1).locator("legend")).toHaveText("Chamado UTIC-2026-2: linha apagada no SharePoint, mas editada no site.");
+    await expect(grupos.first().locator("legend")).toHaveText("UTIC-2026-1 · coluna G");
+    await expect(grupos.first()).toHaveAccessibleName("UTIC-2026-1 · coluna G"); // a legenda dentro do bloco (float) continua dando nome ao grupo
+    await expect(grupos.nth(1).locator("legend")).toHaveText("UTIC-2026-2 · linha apagada no SharePoint, editada no site");
     await expect(grupos.first().locator("label")).toHaveText(["Manter o do SharePoint", "Usar o do site"]);
+    // o valor de cada lado fica fora do nome do rádio, ligado por aria-describedby
+    await expect(grupos.first().getByRole("radio", { name: "Usar o do site", exact: true })).toHaveAccessibleDescription("B");
+    await expect(grupos.first().getByRole("radio", { name: "Manter o do SharePoint", exact: true })).toHaveAccessibleDescription("A");
+    await expect(grupos.nth(1).getByRole("radio", { name: "Usar o do site", exact: true })).not.toHaveAttribute("aria-describedby");
+    await expect(grupos.first().locator(".sebrae-conflito__dados dd")).toHaveText(["Impressora sem toner ***.***.***-**", "Pessoa Fictícia"]);
+    await expect(grupos.nth(1).locator(".sebrae-conflito__dados dd")).toHaveText(["—", "—"]); // sem título nem solicitante
+    const resumo = secao.locator("#sebrae-conflitos-resumo li");
+    await expect(resumo).toHaveText(["UTIC-2026-1 · G: falta escolher.", "UTIC-2026-2: falta escolher."]);
     const botao = secao.locator("#btn-sebrae-conflitos-enviar");
     const status = secao.locator("#sebrae-conflitos-status");
     await expect(botao).toBeDisabled();
@@ -111,6 +121,8 @@ test.describe("conflitos de edição: comportamento", () => {
     await grupos.nth(1).getByRole("radio", { name: "Manter o do SharePoint" }).check();
     await expect(botao).toBeEnabled();
     await expect(status).toHaveText("");
+    await expect(resumo).toHaveText(['UTIC-2026-1 · G: vira "B".', "UTIC-2026-2: a linha continua apagada."]);
+    await expect(grupos.first().locator(".sebrae-conflito__opcao--escolhida")).toHaveText(/Usar o do site/);
     expect(chamadas.filter(item => item.metodo === "POST")).toEqual([]);
     const contagem = await contarAcoes(page, ["atualizarEstadoAutomacao"]);
     await botao.click();
@@ -160,10 +172,13 @@ test.describe("conflitos de edição: comportamento", () => {
     const perigoso = '<img src=x onerror="alert(1)">';
     await rotaConflitos(page, { get: { conflitos: [celula("a", { sharepoint: perigoso }), celula("b", { site: "" }), celula("c", { site: "x".repeat(400) })], escolhas: {}, criado_em: "" } });
     const secao = await abrirPainel(page, request);
-    await expect(secao.getByRole("group").first().locator("legend")).toHaveText(`Chamado UTIC-2026-1, coluna G: SharePoint diz "${perigoso}", site quer "B".`);
+    await expect(secao.locator("#sebrae-conflito-0-sharepoint-valor")).toHaveText(perigoso);
     await expect(secao.locator("img")).toHaveCount(0);
-    await expect(secao.getByRole("group").nth(1).locator("legend")).toHaveText('Chamado UTIC-2026-1, coluna G: SharePoint diz "A", site quer (vazio).');
-    await expect(secao.getByRole("group").nth(2).locator("legend")).toHaveText(`Chamado UTIC-2026-1, coluna G: SharePoint diz "A", site quer "${"x".repeat(300)}…".`);
+    await expect(secao.locator("#sebrae-conflito-1-site-valor")).toHaveText("(vazio)");
+    await expect(secao.locator("#sebrae-conflito-2-site-valor")).toHaveText(`${"x".repeat(300)}…`);
+    await secao.getByRole("group").first().getByRole("radio", { name: "Manter o do SharePoint", exact: true }).check();
+    await expect(secao.locator("#sebrae-conflitos-resumo li").first()).toHaveText(`UTIC-2026-1 · G: fica "${perigoso}".`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true); // valor de 300 caracteres não cria rolagem lateral
   });
 
   test("sem conflito a seção fica escondida e o botão desligado; falha na consulta não mostra erro", async ({ page, request }) => {
