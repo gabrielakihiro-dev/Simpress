@@ -31,8 +31,10 @@ test("calcularMedida: nome longo encolhe para a largura; cursiva apoia a base na
   const longo = calcularMedida({ esq: 0, dir: 40000, asc: 150, desc: 60 }, "digitada");
   assert.ok(40000 * (longo.tamanho / 200) <= AREA.largura);
   const cursiva = calcularMedida({ esq: 0, dir: 500, asc: 100, desc: 400 }, "allura");
-  assert.equal(cursiva.y, 0);
-  assert.ok(400 * (cursiva.tamanho / 200) <= AREA.descida);
+  // cauda de 400 px a 200 px: a descida real (y + cauda) fica em 1,7 mm e o texto sobe o resto; sem cauda, y = 0
+  assert.ok(Math.abs(400 * (cursiva.tamanho / 200) + cursiva.y - 1.7) < 0.01);
+  assert.equal(calcularMedida({ esq: 0, dir: 500, asc: 100, desc: 5 }, "allura").y, 0);
+  assert.ok(-cursiva.y + 100 * (cursiva.tamanho / 200) <= AREA.subida);
   assert.equal(calcularMedida({ esq: 0, dir: 0, asc: 0, desc: 0 }, "allura"), null);
   assert.equal(calcularMedida({ esq: NaN, dir: 1, asc: 1, desc: 1 }, "allura"), null);
 });

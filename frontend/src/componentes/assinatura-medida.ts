@@ -33,6 +33,8 @@ const FOLGA_LARGURA = 0.94; // canvas e <text> do SVG rasterizam um pouco difere
 const FOLGA_ALTURA = 0.97;
 const FOLGA_DIGITADA = 0.03; // da própria fonte, entre a tinta mais baixa e a linha
 const TAMANHO_MAXIMO = { digitada: 5, cursiva: 9 };
+// Cursiva: o rótulo da folha começa ~2,1 mm abaixo da linha (borda + 3 px de respiro); a cauda não passa de 1,7 mm, o resto sobe o texto.
+const DESCIDA_CURSIVA = 1.7;
 
 export const LIMITE_NOME = 80;
 export const MENSAGEM_NOME = "Use até 80 caracteres: só letras, espaço, ponto, apóstrofo e hífen.";
@@ -58,26 +60,27 @@ export interface Tinta {
 const arredondar = (n: number) => Math.round(n * 1000) / 1000;
 
 // Digitada: a tinta mais baixa do texto exato fica rente à linha. Cursiva: linha de base sobre a linha (o corpo apoia,
-// as caudas passam), com a descida limitada para não cobrir o rótulo. Nome longo encolhe para caber na largura.
+// as caudas passam até 1,7 mm; cauda maior levanta o texto), para não cobrir o rótulo. Nome longo encolhe para caber na largura.
 export function calcularMedida({ esq, dir, asc, desc }: Tinta, estilo: EstiloTexto): MedidaAssinatura | null {
   const largura = esq + dir;
   if (![esq, dir, asc, desc].every(Number.isFinite) || !(largura > 0)) return null;
   const digitada = estilo === "digitada";
   const baixo = Math.max(0, desc);
   const altura = Math.max(0, asc) + (digitada ? baixo : 0);
-  // u = mm por pixel de referência; o menor limite vence.
+  const subida = AREA.subida * FOLGA_ALTURA;
+  // u = mm por pixel de referência; o menor limite vence. Cursiva: com a cauda levantando o texto, subida + cauda cabem juntas.
   const limites = [
     (digitada ? TAMANHO_MAXIMO.digitada : TAMANHO_MAXIMO.cursiva) / REFERENCIA_PX,
     (AREA.largura * FOLGA_LARGURA) / largura,
-    altura > 0 ? (AREA.subida * FOLGA_ALTURA) / altura : Infinity,
-    !digitada && baixo > 0 ? (AREA.descida * FOLGA_ALTURA) / baixo : Infinity,
+    altura > 0 ? subida / altura : Infinity,
+    !digitada && asc + baixo > 0 ? (subida + DESCIDA_CURSIVA) / (Math.max(0, asc) + baixo) : Infinity,
   ];
   const u = Math.min(...limites);
   const tamanho = u * REFERENCIA_PX;
   return {
     tamanho: arredondar(tamanho),
     x: arredondar(AREA.largura / 2 - ((dir - esq) / 2) * u),
-    y: digitada ? arredondar(-(baixo * u + FOLGA_DIGITADA * tamanho)) : 0,
+    y: digitada ? arredondar(-(baixo * u + FOLGA_DIGITADA * tamanho)) : arredondar(0 - Math.max(0, baixo * u - DESCIDA_CURSIVA)),
   };
 }
 
