@@ -74,6 +74,8 @@ _SECOES_ANOTAVEIS = {
     "mudancas_usuarios": "Mudanças de usuário logado",
 }
 _ID_ROTA = re.compile(r"^[^/?#\s]{1,128}$")
+# consultar_ultima_comparacao(): counts taken from the size of these lists in the history view, not from the stored summary.
+_LISTAS_CONTADAS_PELA_VISAO = ("ausentes_no_endpoint", "ausentes_em_detalhes", "sem_acesso_7_dias", "divergencias_local", "series_sem_mapeamento")
 
 # comparar_periodos(): examples per list and size of the answer. The chat cuts any result above
 # MAX_CARACTERES_RESPOSTA (6000, assistant_chat) in the middle, so the examples shrink first and the JSON stays whole.
@@ -1193,17 +1195,20 @@ class SimpressApi:
         return _aparar(_status_automacao(_dict(dados)))
 
     def consultar_ultima_comparacao(self) -> Dict[str, Any]:
-        ok, dados = self._chamar("GET", "/api/historico-comparacoes")
-        if not ok:
-            return {"erro": dados}
-        eventos = _dict(dados).get("eventos", [])
-        if not eventos:
-            return {"mensagem": "Nenhum histórico de comparação registrado até o momento."}
-        ultimo = _dict(eventos[0])
+        ultimo, detalhe, problema = self._ultimo_evento()
+        if problema is not None:
+            return problema
+        visao = _dict(_dict(detalhe).get("evento"))
+        resumo = {**_dict(_dict(ultimo).get("resumo")), **_dict(visao.get("resumo"))}
+        comparacao = _dict(visao.get("comparacao"))
+        # The stored summary is the raw import count; the list tools read the filtered view, so count the same lists.
+        for chave in _LISTAS_CONTADAS_PELA_VISAO:
+            if isinstance(comparacao.get(chave), list):
+                resumo[chave] = len(comparacao[chave])
         return {
-            "horario": ultimo.get("horario", ""),
-            "tipo": ultimo.get("tipo", ""),
-            "resumo_divergencias": ultimo.get("resumo", {}),
+            "horario": _dict(ultimo).get("horario", ""),
+            "tipo": _dict(ultimo).get("tipo", ""),
+            "resumo_divergencias": resumo,
         }
 
     def obter_painel(self) -> Dict[str, Any]:
