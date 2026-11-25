@@ -261,6 +261,15 @@ O conteúdo da aba `Automação` agora é desenhado pelo React (`frontend/src/pa
 6. Pedidos com `Origin` ou `Sec-Fetch-Site` de outro site recebem 403 nas rotas novas.
 7. `npm run verify` e `npm run test:ui:e2e` passam; nenhuma rotina real de OS ou inventários é executada nos testes.
 
+## Porta CDP 9333 sem autenticação (risco aceito, 25/11/2026)
+
+Decisão do usuário em 25/11/2026: o Chrome de automação (`scripts/automacao_rotinas_chrome.py`, perfil `~/.chrome-automation`) expõe o CDP em `127.0.0.1:9333` sem autenticação, e o risco está aceito.
+
+- Motivo: notebook de usuário único (sem outro usuário Windows nem RDP de terceiros). Páginas web não alcançam a porta porque o Simpress não usa `--remote-allow-origins`. Trocar para `--remote-debugging-pipe` quebraria o login/MFA persistente e a regra de não fechar o Chrome.
+- Alcance: os invariantes (sem Enter no PowerShell, `Duplicata` etc.) valem para o que o Simpress faz; não são barreira contra outro processo local que fale com a porta.
+- Guarda: `tests/test_cdp_sem_remote_allow_origins.py` falha se `--remote-allow-origins` aparecer em `scripts/`, `domains/`, `core/`, `routers/`, `security/` ou `main.py`.
+- Reavaliar se a máquina passar a ter outros usuários. Paralelo: risco aceito do cookie de sessão em `security/sessao_local.py` (08/11/2026).
+
 ## Rotina `login` (Abrir Chrome para login)
 
 Abre três abas no Chrome de automação e adianta tudo o que não é senha nem autenticador:
