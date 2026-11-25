@@ -96,6 +96,13 @@ function mensagemDoErro(erro: unknown, padrao: string) {
   return (lido?.status && lido?.message) || padrao;
 }
 
+const ERROS_ACAO: Record<string, string> = {
+  confirmar: "Não foi possível confirmar o backup.",
+  desfazer: "Não foi possível desfazer a confirmação.",
+  manter: "Não foi possível manter o backup.",
+  excluir: "Não foi possível excluir o backup.",
+};
+
 function liberar(botao: HTMLButtonElement) {
   focoDaAcao = null; // sem redesenho até aqui, a marca não pode puxar o foco depois
   soltar(botao);
@@ -105,14 +112,14 @@ async function aoClicar(evento: MouseEvent) {
   const botao = (evento.target as Element | null)?.closest<HTMLButtonElement>("[data-backup-acao]");
   if (!botao || emAndamento) return;
   const { backupAcao: acao, serie, cidade } = botao.dataset;
-  if ((acao !== "confirmar" && acao !== "desfazer") || !serie || !cidade) return;
+  if (!acao || !Object.hasOwn(ERROS_ACAO, acao) || !serie || !cidade) return;
   // Marca e `disabled` no mesmo clique, antes de qualquer await: o segundo clique de um duplo clique não manda outro POST.
   emAndamento = true;
   window.clearTimeout(reabrir);
   focoDaAcao = { ...botao.dataset };
   botao.disabled = true;
   botao.setAttribute("aria-busy", "true");
-  const errorMessage = acao === "confirmar" ? "Não foi possível confirmar o backup." : "Não foi possível desfazer a confirmação.";
+  const errorMessage = ERROS_ACAO[acao];
   try {
     const resposta = await apiFetch<{ removido?: boolean }>(`/api/backups-regionais/${acao}`, {
       method: "POST",
@@ -121,7 +128,7 @@ async function aoClicar(evento: MouseEvent) {
       errorMessage,
     });
     if (acao === "desfazer" && resposta?.removido === false) mostrarToast(`Não havia confirmação para desfazer: série ${serie}, ${cidade}.`, "warning");
-    else mostrarToast(acao === "confirmar" ? `Backup confirmado por 7 dias: série ${serie}, ${cidade}.` : `Confirmação desfeita: série ${serie}, ${cidade}.`, "success");
+    else mostrarToast(acao === "confirmar" ? `Backup confirmado: ${serie}` : acao === "manter" ? `Backup mantido: ${serie}` : acao === "excluir" ? `Backup excluído: ${serie}` : `Confirmação desfeita: série ${serie}, ${cidade}.`, "success");
     pedirPainel();
     // O redesenho troca o botão; se a leitura do painel falhar, ele volta a funcionar sozinho em 10 s.
     reabrir = window.setTimeout(() => liberar(botao), 10000);

@@ -209,7 +209,7 @@ Sexta aba do Resumo (`#resumo-aba-backups`, painel `#resumo-painel-backups` com 
 - Atualização de 23/11/2026 (pedido do usuário): o Resumo ganhou a sub-aba `Visão Geral` como primeira e padrão; um resultado novo sem alvo de linha volta à `Visão Geral` (com alvo, à aba da linha). A barra de abas ficou no topo e, abaixo de 768 px, as seis abas seguem em duas linhas de três (`.nf3-sub--abas .resumo-abas` com `flex-wrap`).
 - Depois de um redesenho, o foco volta ao mesmo botão, ao botão da mesma série e cidade (Confirmar vira Desfazer), ao resumo `N excluídos` que estava em foco ou, sem par, à aba Backups.
 - Nas sobras de regional fora das prioritárias, cada série mostra a origem (`marca` ou `confirmação`) e, se for confirmação, o próprio `Desfazer confirmação` (12/11/2026); nas sobras das prioritárias o botão fica só na tabela da regional.
-- Botões `Confirmar disponível por 7 dias` e `Desfazer confirmação`; a tela pede a atualização do painel depois de cada ação (`simpress:atualizar-notificacoes`).
+- Botões `Confirmar Backup` (desabilitado com o Endpoint indisponível), `Desfazer confirmação` e, quando aparece usuário novo num apelido manual, `Manter` e `Excluir` (`05-resumo-kpis.md`); a tela pede a atualização do painel depois de cada ação (`simpress:atualizar-notificacoes`).
 - O apelido aparece só na tela local: nunca em toast, `console`, região `aria-live` global, log nem Assistente. Todo texto vindo do campo é escapado.
 - Ao fim da automação de inventário, o botão `Ver backups no Resumo` (`#automacao-ver-backups`) abre essa sub-aba (`openPanel("comparacao","backups")`).
 - Cartão do sino (`#alerta-backups-regionais`): `docs/operacao/alertas-os-divergencias.md`, seção 5.

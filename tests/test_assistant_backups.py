@@ -4,6 +4,7 @@ Usa o router real do painel (o mesmo GET /api/painel da tela) como transporte, c
 ``build_backups_regionais`` e serviços falsos. Só dados sintéticos e pastas temporárias; nunca usa ``data/``.
 """
 
+import dataclasses
 import hashlib
 import json
 import tempfile
@@ -192,7 +193,29 @@ class ListarBackupsRegionaisTests(unittest.TestCase):
             for candidato in grupo["candidatos"]:
                 self.assertEqual(set(candidato), {"serie", "motivo", "dias_sem_verificacao"})
             for backup in grupo["backups"]:
-                self.assertEqual(set(backup), {"serie", "origem", "ultima_verificacao", "confirmado_ate"})
+                self.assertEqual(set(backup), {"serie", "origem", "ultima_verificacao", "confirmado_ate", "confirmado", "decisao_pendente"})
+
+    def test_listar_backups_regionais_sem_usuario_ref(self) -> None:
+        # Confirmação nova (sem prazo) em Cascavel e outra pendente de decisão (apelido manual + usuário novo) em Maringá.
+        self.equipamentos = [*self.equipamentos, notebook("NB9", "Maringá")]
+        ref = "sha256:" + hashlib.sha256(b"fulano").hexdigest()
+        self.endpoint = endpoint(("NB1", "PRNOTE-C01", AGORA - timedelta(days=1), "fulano"), ("NB9", "PRNOTE-M09", AGORA - timedelta(days=1), "ciclano"))
+        self.backups = dataclasses.replace(self.backups, series_apelido_manual=lambda: ["NB9"])
+        agora = AGORA.isoformat()
+        self.state.parent.mkdir(parents=True)
+        self.state.write_text(json.dumps({"esquema": 1, "confirmacoes": [
+            {"serie": "NB1", "cidade": "Cascavel", "confirmado_em": agora, "tipo": "backup", "usuario_ref": ref},
+            {"serie": "NB9", "cidade": "Maringá", "confirmado_em": agora, "tipo": "backup", "usuario_ref": ref},
+        ]}), encoding="utf-8")
+        resultado = self.executar()
+        saida = json.dumps(resultado, ensure_ascii=False)
+        for proibido in ("usuario_ref", "sha256:", ref, "fulano", "ciclano"):
+            self.assertNotIn(proibido, saida)
+        cascavel = self.regional(resultado, "Cascavel")
+        self.assertEqual([(b["serie"], b["origem"], b["confirmado"], b["confirmado_ate"]) for b in cascavel["backups"]], [("NB1", "confirmacao", True, None)])
+        self.assertEqual(self.regional(resultado, "Cascavel")["contados"], 1)
+        maringa = self.regional(resultado, "Maringá")
+        self.assertEqual([(b["serie"], b["decisao_pendente"]) for b in maringa["backups"]], [("NB9", True)])
 
     def test_cenario_cidade_a_cidade(self) -> None:
         resultado = self.executar()

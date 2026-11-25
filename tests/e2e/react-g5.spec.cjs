@@ -50,7 +50,7 @@ async function abrirBackups(page) {
 }
 
 const linha = (page, cidade) => page.locator(`${PAINEL} tbody tr`).filter({ has: page.locator(".ck-backups__cidade", { hasText: cidade }) });
-const botaoConfirmar = (page, serie, cidade) => page.getByRole("button", { name: `Confirmar disponível por 7 dias: série ${serie}, ${cidade}` });
+const botaoConfirmar = (page, serie, cidade) => page.getByRole("button", { name: `Confirmar ${serie} como backup de ${cidade}` });
 const botaoDesfazer = (page, serie, cidade) => page.getByRole("button", { name: `Desfazer confirmação: série ${serie}, ${cidade}` });
 
 // Painel com datas fixas e todos os casos do desenho: os quatro status (e um desconhecido), excedente, motivo desconhecido,
@@ -75,18 +75,18 @@ const BACKUPS_FIXOS = {
     { cidade: "Pato Branco", status: "ok", contados: 2, minimo: 1, excedente: 1,
       backups: [
         { serie: "TSTG50003", apelido: "Estacao Teste 3", origem: "marca", ultima_verificacao: "2026-10-23T08:30:00-03:00", confirmado_ate: null },
-        { serie: "TSTG50004", apelido: "Estacao Teste 4", origem: "confirmacao", ultima_verificacao: null, confirmado_ate: "2026-10-30T09:00:00-03:00" },
+        { serie: "TSTG50004", apelido: "Estacao Teste 4", origem: "confirmacao", ultima_verificacao: null, confirmado_ate: "2026-10-30T09:00:00-03:00", confirmacao: { estado: "vigente", tipo: "7_dias", expira_em: "2026-10-30T09:00:00-03:00" } },
       ],
       candidatos: [], conferencia: [], excluidos: [] },
     { cidade: "Maringá", status: "dados_insuficientes", contados: 0, minimo: 1, excedente: 0, backups: [], candidatos: [], conferencia: [], excluidos: [] },
     { cidade: "Ponta Grossa", status: "status_novo", contados: 1, minimo: 1, excedente: 0,
-      backups: [{ serie: "TSTG50007", apelido: "Estacao Teste 7", origem: "marca", ultima_verificacao: "2026-10-24T14:00:00-03:00", confirmado_ate: "2026-10-31T09:00:00-03:00" }],
+      backups: [{ serie: "TSTG50007", apelido: "Estacao Teste 7", origem: "marca", ultima_verificacao: "2026-10-24T14:00:00-03:00", confirmado_ate: "2026-10-31T09:00:00-03:00", confirmacao: { estado: "vigente", tipo: "7_dias", expira_em: "2026-10-31T09:00:00-03:00" } }],
       candidatos: [], conferencia: [], excluidos: [] },
   ],
   sobras: [
-    { cidade: "Pato Branco", quantidade: 1, series: ["TSTG50004"], itens: [{ serie: "TSTG50004", origem: "confirmacao", confirmado_ate: "2026-10-30T09:00:00-03:00" }], prioritaria: true },
+    { cidade: "Pato Branco", quantidade: 1, series: ["TSTG50004"], itens: [{ serie: "TSTG50004", origem: "confirmacao", confirmado_ate: "2026-10-30T09:00:00-03:00", confirmacao: { estado: "vigente", tipo: "7_dias", expira_em: "2026-10-30T09:00:00-03:00" } }], prioritaria: true },
     { cidade: "Curitiba", quantidade: 2, series: ["TSTG50008", "TSTG50009"], prioritaria: false,
-      itens: [{ serie: "TSTG50008", origem: "marca", confirmado_ate: null }, { serie: "TSTG50009", origem: "confirmacao", confirmado_ate: "2026-10-29T09:00:00-03:00" }] },
+      itens: [{ serie: "TSTG50008", origem: "marca", confirmado_ate: null, confirmacao: null }, { serie: "TSTG50009", origem: "confirmacao", confirmado_ate: "2026-10-29T09:00:00-03:00", confirmacao: { estado: "vigente", tipo: "7_dias", expira_em: "2026-10-29T09:00:00-03:00" } }] },
   ],
   outras_candidatos: [
     { cidade: "Foz do Iguaçu", candidatos: [{ serie: "TSTG50012", apelido: "Estacao Teste 12", motivo: "ausente_no_endpoint", dias_sem_verificacao: null, ultima_verificacao: null, confirmacao: null }] },
@@ -254,7 +254,7 @@ test.describe("comportamento (1366 px)", () => {
     await abrirBackups(page);
     await botaoConfirmar(page, "TSTBK0001", "Londrina").dblclick();
     await expect(linha(page, "Londrina").locator(".ck-badge")).toHaveText("Backup disponível");
-    await expect(page.locator("#toast-container")).toContainText("Backup confirmado por 7 dias: série TSTBK0001, Londrina.");
+    await expect(page.locator("#toast-container")).toContainText("Backup confirmado: TSTBK0001");
     expect(posts).toEqual([{ url: "/api/backups-regionais/confirmar", corpo: { serie: "TSTBK0001", cidade: "Londrina" } }]);
   });
 
