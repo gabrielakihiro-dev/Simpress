@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from uuid import uuid4
 
 from core.config import format_size_limit
-from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
+from core.errors import DomainConflictError, DomainError, DomainValidationError
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 from core.logging_setup import redact_reference
 from core.xlsx_safety import XlsxLimitExceeded, XlsxPackageError
@@ -193,7 +193,8 @@ def persist_ticket_annotation(
 ) -> bool:
     """Queue the annotation in the outbox (one transaction) and try to publish it; ``True`` when it was published.
 
-    Raises ``DomainValidationError`` (422), ``DomainConflictError`` (409) or ``DomainBusyError`` (503)."""
+    Raises ``DomainValidationError`` (422) or ``DomainConflictError`` (409); disk and lock failures
+    (``OSError``, ``FileBusyError``, ``FileTransactionError``) propagate for the caller to log and answer 503."""
     try:
         record = build_history_annotation_record(
             event_id=event_id,
@@ -212,26 +213,22 @@ def persist_ticket_annotation(
     pending_path = history_annotation_record_path(
         services.annotation_outbox_directory(), event_id, item_id, record["revisao_id"],
     )
-    try:
-        with transaction_factory(transaction_root, [pending_path]) as transaction:
-            try:
-                record = reuse_annotation_revision(services.annotation_directory(), record)
-            except ValueError as error:
-                raise DomainConflictError(str(error)) from None
-            if pending_path.exists():
-                existing = json.loads(pending_path.read_text(encoding="utf-8"))
-                if not same_annotation_revision(existing, record):
-                    raise DomainConflictError("A revisão já foi usada com outro conteúdo.")
-                record = existing
-            transaction.stage_bytes(
-                pending_path,
-                json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
-                lambda path: json.loads(path.read_text(encoding="utf-8")),
-            )
-            transaction.commit()
-    except (OSError, FileBusyError, FileTransactionError):
-        logger.exception("Não foi possível enfileirar a anotação do chamado %s.", redact_reference(serial))
-        raise DomainBusyError("Não foi possível salvar a anotação localmente.") from None
+    with transaction_factory(transaction_root, [pending_path]) as transaction:
+        try:
+            record = reuse_annotation_revision(services.annotation_directory(), record)
+        except ValueError as error:
+            raise DomainConflictError(str(error)) from None
+        if pending_path.exists():
+            existing = json.loads(pending_path.read_text(encoding="utf-8"))
+            if not same_annotation_revision(existing, record):
+                raise DomainConflictError("A revisão já foi usada com outro conteúdo.")
+            record = existing
+        transaction.stage_bytes(
+            pending_path,
+            json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
+            lambda path: json.loads(path.read_text(encoding="utf-8")),
+        )
+        transaction.commit()
 
     return sync_ticket_annotation(services, record)
 

@@ -349,14 +349,22 @@ def create_operations_router(
     def _ticket_timeline_with_annotations(snapshots: Sequence[Dict[str, Any]], serial: str) -> List[Dict[str, Any]]:
         return ticket_import.ticket_timeline_with_annotations(services, snapshots, serial)
 
-    def _persist_ticket_annotation(**values: Any) -> bool:
+    def _persist_ticket_annotation(
+        *, event_id: str, item_id: str, serial: str, event_time: str, row_hash: str, annotation: str,
+        revision_id: Optional[str] = None, base_revisions: Optional[List[str]] = None,
+    ) -> bool:
         try:
             return ticket_import.persist_ticket_annotation(
                 services, transaction_root=transaction_root(),
-                transaction_factory=lambda root, targets: AtomicFileTransaction(root, targets), **values,
+                transaction_factory=lambda root, targets: AtomicFileTransaction(root, targets),
+                event_id=event_id, item_id=item_id, serial=serial, event_time=event_time, row_hash=row_hash,
+                annotation=annotation, revision_id=revision_id, base_revisions=base_revisions,
             )
         except DomainError as error:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from None
+        except (OSError, FileBusyError, FileTransactionError):
+            logger.exception("Não foi possível enfileirar a anotação do chamado %s.", redact_reference(serial))
+            raise HTTPException(status_code=503, detail="Não foi possível salvar a anotação localmente.") from None
 
     @router.get("/api/operacoes/chamados")
     def get_ticket_report():
