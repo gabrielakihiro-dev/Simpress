@@ -1,6 +1,9 @@
 const { test, expect } = require("@playwright/test");
 
 // Seção "Pacote local" do modal Configuração local; rotas /api simuladas, só dados sintéticos.
+// Datas do mock têm fuso -03:00; fixar o fuso do navegador deixa "dd/mm/aaaa hh:mm" estável.
+test.use({ timezoneId: "America/Sao_Paulo" });
+
 const ARQ_EXP = "pacote-local-20261126-101500.zip";
 const ARQ_DES = "desfazer-20261125-083000.zip";
 const PACOTES = [
@@ -46,6 +49,7 @@ async function simular(page, { pacotes = PACOTES, previa = PREVIA } = {}) {
     putPasta: null, exportar: { arquivo: "pacote-local-20261126-110000.zip" } };
   const lista = () => ({ pasta: "data/pacotes_locais", pasta_padrao: true, pacotes: s.pacotes, erro_pasta: null });
   await page.route("**/api/prontidao", r => r.fulfill({ json: prontidao() }));
+  await page.route("**/api/modelos-chamado", r => r.fulfill({ json: { modelos: {} } })); // rota alheia à tela, evita 404 no console
   await page.route("**/api/config/local", r => r.fulfill({ json: leituraConfig() }));
   await page.route("**/api/config/cliente", r => r.fulfill({ json: { contrato: "", cnpj_faturamento: "", series_sebrae_fora: [], cliente_fontes: {}, cliente_configurado: true } }));
   await page.route("**/api/pacote-local**", route => {
@@ -115,7 +119,9 @@ test("Pacote local: lista com tabela no desktop e cartões a 375 px sem rolagem 
   expect(await semRolagemHorizontal(page)).toBe(true);
 
   await page.setViewportSize({ width: 375, height: 800 });
-  await expect(page.locator("#cfg-local-pacote-lista thead")).toBeHidden();
+  // Cartões: o cabeçalho fica só para leitor de tela (1 px) e a linha vira bloco.
+  expect((await page.locator("#cfg-local-pacote-lista thead").boundingBox()).width).toBeLessThanOrEqual(1);
+  await expect(linhas.first()).toHaveCSS("display", "block");
   const botao = page.locator(`button[data-pacote-restaurar="${ARQ_EXP}"]`);
   await expect(botao).toBeVisible();
   expect((await botao.boundingBox()).height).toBeGreaterThanOrEqual(44);
@@ -249,6 +255,7 @@ test("Pacote local: temas claro e escuro sem erro de console nem rolagem horizon
   test.setTimeout(40_000);
   const erros = [];
   page.on("pageerror", e => erros.push(e.message));
+  page.on("response", r => { if (r.status() === 404) erros.push(`404 ${r.url()}`); });
   page.on("console", m => { if (m.type() === "error") erros.push(m.text()); });
   await simular(page);
   await abrirSecao(page);
