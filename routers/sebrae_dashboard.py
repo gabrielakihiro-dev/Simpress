@@ -1401,8 +1401,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         blank); an off-list A/B it already has is kept. The title (G) goes only when typed, already masked.
 
         With ``exigir_encerramento``: D=FINALIZADO without a valid R (none sent, none stored) is refused (rule of 24/11/2026: the
-        closing date is always typed by the user, never the current time). A stored R without the time, not sent again, counts as
-        blank (26/11/2026): it never blocks an edit of A, B, J or S and, blank, it is never rewritten."""
+        closing date is always typed by the user, never the current time). A stored R that is not valid (e.g. without the time), not
+        sent again, counts as blank (26/11/2026): it never blocks an edit of A, B, J or S and, blank, it is never rewritten."""
         if not payload.edicoes:
             return {}
         abertos = {c.numero: c for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)}
@@ -1416,7 +1416,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             enviados = item.model_dump(exclude={"numero"})
             mesclados = {letra: str(enviados.get(letra) or "") or atual.valores.get(letra, "") for letra in MANUAIS}
             if not str(enviados.get("R") or "").strip() and not fin.encerramento_valido(mesclados.get("R")):
-                mesclados["R"] = ""  # regra de 25/11/2026: R guardado só com a data é falta de R; não trava a edição e não é regravado
+                mesclados["R"] = ""  # R gravado inválido (ex.: só a data, regra de 25/11/2026) é falta de R; não trava a edição e, em branco, não é regravado
             try:
                 validados = sebrae_novos.validar_manuais(mesclados, exigir=False)
                 sebrae_novos.validar_listas(validados, listas, atual.valores)
