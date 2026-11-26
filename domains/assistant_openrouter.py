@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import socket
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -229,6 +230,21 @@ def parse_web_result(body: Any) -> WebSearchResult:
         raise OpenRouterError("O OpenRouter devolveu uma resposta que o Simpress não entendeu.") from None
 
 
+def _ssl_context_compat() -> ssl.SSLContext:
+    """TLS context for corporate/Windows root CAs that omit X.509 keyUsage on Python 3.13+ (keeps cert + hostname checks)."""
+    ctx = ssl.create_default_context()
+    ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+    return ctx
+
+
+def _erro_key_usage(error: urllib.error.URLError) -> bool:
+    return (
+        hasattr(ssl, "VERIFY_X509_STRICT")
+        and isinstance(error.reason, ssl.SSLCertVerificationError)
+        and "key usage" in str(error.reason).lower()
+    )
+
+
 class OpenRouterClient:
     """Chat completions with tools through urllib. `sleep` is injectable so tests do not wait."""
 
@@ -317,6 +333,21 @@ class OpenRouterClient:
             "provider": {"data_collection": "deny", "sort": settings.routing_sort},
         }))
 
+    def _open_json(self, request: urllib.request.Request, timeout: float, context: Optional[ssl.SSLContext] = None) -> Any:
+        try:
+            kwargs: Dict[str, Any] = {"timeout": timeout}
+            if context is not None:
+                kwargs["context"] = context
+            with urllib.request.urlopen(request, **kwargs) as response:
+                raw = response.read(MAX_RESPONSE_BYTES + 1)
+        except urllib.error.URLError as error:
+            if context is None and _erro_key_usage(error):
+                return self._open_json(request, timeout, context=_ssl_context_compat())
+            raise
+        if len(raw) > MAX_RESPONSE_BYTES:
+            raise OpenRouterError("A resposta do OpenRouter veio grande demais.")
+        return json.loads(raw.decode("utf-8"))
+
     def _send(self, payload: Dict[str, Any], orcamento: Optional[float] = None) -> Any:
         request = self._request(payload)
         failure = "Não foi possível falar com o OpenRouter."
@@ -329,11 +360,7 @@ class OpenRouterClient:
                     raise OpenRouterError(failure if attempt > 1 else "O tempo desta resposta acabou antes de falar com o OpenRouter.")
                 timeout = min(timeout, restante)
             try:
-                with urllib.request.urlopen(request, timeout=timeout) as response:
-                    raw = response.read(MAX_RESPONSE_BYTES + 1)
-                if len(raw) > MAX_RESPONSE_BYTES:
-                    raise OpenRouterError("A resposta do OpenRouter veio grande demais.")
-                return json.loads(raw.decode("utf-8"))
+                return self._open_json(request, timeout)
             except urllib.error.HTTPError as error:
                 status = error.code
                 error.close()

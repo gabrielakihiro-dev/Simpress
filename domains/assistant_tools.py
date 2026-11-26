@@ -745,7 +745,8 @@ QUERY_TOOLS: List[Tool] = [
     ),
     _read(
         "obter_prontidao",
-        "Disponibilidade dos arquivos e recursos do Simpress (o que está pronto para uso).",
+        "Disponibilidade dos arquivos e recursos do Simpress (o que está pronto para uso, incluindo configuracao_local). "
+        "Só leitura; o Assistente não altera configurações locais.",
         lambda c, a: c.obter_prontidao(),
     ),
     _read(
@@ -1679,6 +1680,15 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     "recarregar": (r"\brecarreg|\brecarga\b|\bbase de dados", ("recarregar_base",)),
     "cobertura": (r"\bcobertura|\bfalt(?:a|ar|am|ara|ando)\b|\bvagas?\b|\bnecessidades?\b", ("listar_cobertura",)),
     "backups": (r"\bbackups?\b|\bbkp\b", ("listar_backups_regionais",)),
+    # Perguntas só sobre onde ficam telas/configurações/acesso sem ferramenta própria usam só o núcleo (~14 schemas em vez de ~70).
+    "telas_ajuda": (
+        r"\bconfiguracao local\b|\bchaves? d[ae] ia\b|\bopenrouter\b|\bdeepseek\b"
+        r"|\bacesso pelo celular\b|\bpelo celular\b|\btailscale\b|\bfora do wi-?fi\b"
+        r"|\btermo de entrega\b|\btermo de devolucao\b|\bprevia do pdf\b|\boutlook\b"
+        r"|\bdossie\b|\bmostrar senha\b|\bchamado manual\b|\bsalvar como padrao\b|\bver inteiro\b|\bvisao geral\b"
+        r"|\bresumo f3\b|\bsub-?abas?\b",
+        (),
+    ),
 }
 _PADROES_GRUPOS = {nome: re.compile(padrao) for nome, (padrao, _) in GRUPOS_FERRAMENTAS.items()}
 _SIGLA_OS = re.compile(r"\bOS\b")  # case-sensitive on purpose: "os" is the Portuguese article

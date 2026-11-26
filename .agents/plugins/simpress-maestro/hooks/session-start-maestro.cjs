@@ -18,9 +18,9 @@ function buildOutput() {
             "2) Resolva tarefas de 1 arquivo/busca/comando direto; para tarefas maiores, delegue com invoke_subagent(..., Model='inherit') " +
             "ou via /swarm (swarm-simpress) escolhendo exclusivamente Hydrogen (Low: batedor, leitor-logs, conferente-glossario, auditor-dependencias, testador-acessibilidade; " +
             "Medium/High para execucoes diretas como Sonnet: executor, testador, testador-e2e, depurador, front-react, refatorador, documentador, segunda-opiniao), " +
-            "Neon (High: revisor, implementador, auditor-seguranca, 1a passagem do arquiteto) " +
+            "Neon (Medium/High para /advisor antes de concluir, sintese, arquitetura e seguranca; High: revisor, implementador, auditor-seguranca, 1a passagem do arquiteto) " +
             "e Carbon (High/xHigh para arquiteto/impasse somente quando o Neon nao resolver). " +
-            "3) Antes de abrir #PR, passe o diff pelo revisor (Neon High) e corrija 'Corrigir antes'. " +
+            "3) Ponytail /review obrigatorio antes de abrir #PR: passe o diff pela revisao (Neon Medium para mudanca enxuta ou Neon High para complexa/critica via revisor) e corrija 'Corrigir antes'. " +
             "4) Em entregas prontas e verificadas (npm run verify verde) em branch de worktree, " +
             "faca commit, push e abra #PR automaticamente (gh pr create) sem pedir, acompanhe a #CI da #PR ate ficar verde, " +
             "faca o merge (gh pr merge) respeitando a fila numerica (gh pr list --state open) e depois git pull na main do checkout principal.",

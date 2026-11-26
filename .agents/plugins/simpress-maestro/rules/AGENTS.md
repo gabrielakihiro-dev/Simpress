@@ -19,14 +19,16 @@ Espelho operacional do fluxo do Claude Code (`CLAUDE.md`) adaptado ao Antigravit
   - **Hydrogen (Low)** *(equivalente Haiku 5.5)* — leitura, logs e checagens baratas: `batedor`, `leitor-logs`, `conferente-glossario`, `auditor-dependencias`, `testador-acessibilidade`.
   - **Hydrogen (Medium)** *(equivalente Sonnet 5.5 — execuções diretas padrão)*: `executor`, `testador`, `testador-e2e`, `front-react`, `refatorador`, `documentador`, `segunda-opiniao`.
   - **Hydrogen (High)** *(equivalente Sonnet 5.5 em esforço alto)*: `depurador` (causa raiz) e `executor` quando envolver vários arquivos ou lógica mais complexa.
-  - **Neon (High)** *(equivalente Opus 5.5 — uso cirúrgico)*: `revisor`, `implementador`, `auditor-seguranca` e primeira passagem do `arquiteto`.
+- **Neon (Medium / High) — `/advisor` e revisão:**
+    - **Advisor (`/advisor` equivalente ao Claude):** chame antes de concluir tarefas e para síntese, arquitetura, segurança ou revisões. Use **Neon Medium** para revisões padrão ou enxutas (ajuste pontual, prompt, docs, 1–3 arquivos) e **Neon High** para revisões complexas, multiarquivo, segurança/LGPD ou código crítico (portal/SharePoint/OS/Endpoint).
+    - **Subagentes:** `revisor`, `implementador`, `auditor-seguranca` e primeira passagem do `arquiteto` (High).
   - **Carbon (High / xHigh)** *(equivalente Fable 5.2 — escalonamento raro)*: `arquiteto` (ou impasse de `implementador`/`depurador`) **somente quando o Neon (High) não conseguir resolver**.
 - Estilo enxuto: reaproveite código e helpers já existentes antes de criar código novo, sem cortar validações, tratamento de erro, segurança, acessibilidade ou testes.
 - Em perguntas de arquitetura ou relação entre arquivos, se `graphify-out/GRAPH_REPORT.md` existir localmente, consulte-o ou use `graphify query "<pergunta>" --budget 1500` antes de abrir múltiplos arquivos.
 
-## 3. Revisão pré-PR, abertura automática de #PR, acompanhamento da #CI, merge e `git pull`
+## 3. Revisão pré-PR (Ponytail `/review`), abertura automática de #PR, acompanhamento da #CI, merge e `git pull`
 
-- **Antes de abrir #PR:** em alterações de código, passe o diff pelo subagente `revisor` (Neon High) e corrija tudo o que vier em **Corrigir antes**. Respostas de revisão saem em português (`O que esta mudança faz`, `Corrigir antes`, `Deveria corrigir`, `Opcional`, `Veredito`).
+- **Ponytail `/review` obrigatório antes de abrir #PR:** em qualquer alteração de código ou entrega, rode uma revisão independente no formato Ponytail (`O que esta mudança faz`, `Corrigir antes`, `Deveria corrigir`, `Opcional`, `Veredito`, em português, com arquivo, linha e cenário de falha), usando **Neon Medium** (revisão padrão/enxuta) ou **Neon High** (revisão complexa, segurança/LGPD ou código crítico — via subagente `revisor`). Corrija tudo o que vier em **Corrigir antes** antes do commit/PR.
 - **Ciclo completo automático no Antigravity (autorização do usuário em 25/11/2026):** em toda conversa no Antigravity que finalizar entrega em branch de worktree (nunca direto na `main`) com `npm run verify` verde (e `npm run test:ui:e2e` quando houver mudança de interface):
   1. Confira `git branch --show-current` e revise `git status` (nunca inclua `data/planilhas_entrada`, `data/state`, `.transactions` nem segredos).
   2. Faça commit, `git push -u origin <branch>` e abra o PR automaticamente com `gh pr create` (sem precisar pedir confirmação a cada vez).
