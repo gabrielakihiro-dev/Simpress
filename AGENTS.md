@@ -59,6 +59,7 @@ O usuário é leigo em back-end e front-end, mas conhece Git: resumo simples pri
 ## Git
 
 - Commit não autoriza push; informe se houve commit, push e sincronização. Depois de abrir ou atualizar um PR, leia a CI e diga se passou, falhou ou está pendente.
+- Fim de toda execução que muda o repositório (regra do usuário, 26/11/2026): depois de corrigir tudo o que as revisões apontaram e de a verificação passar, faça commit, push e abra o PR contra `main`, sem perguntar; nunca mescle.
 - Cada agente usa o próprio worktree: confira `git branch --show-current` antes de commitar. Sem `reset --hard`, `git clean` nem force push sem autorização.
 - Ao remover worktree, ao delegar a subagentes, ao planejar ou ao mesclar PRs em sequência (inclui Codex `$maestro-superpower`): leia `docs/desenvolvimento/regras-agentes.md`.
 
