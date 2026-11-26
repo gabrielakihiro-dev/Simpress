@@ -1950,10 +1950,10 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   async function carregarTendencias() {
     const atual = ++tendView.pedido;
     const periodo = tendView.periodo;
-    tendView.dados = null;
     tendView.velha = false;
     tendView.carregando = true;
-    tendView.corpo.replaceChildren(avisoTendencias("Carregando tendências…", "status"));
+    // Recarga silenciosa: com dado bom do mesmo período, os cartões ficam até a resposta nova chegar.
+    if (!tendView.dados) tendView.corpo.replaceChildren(avisoTendencias("Carregando tendências…", "status"));
     try {
       const dados = await apiFetch(`/api/relatorio-mensal/tendencias?dias=${periodo}`, { errorMessage: "Falha ao carregar as tendências." });
       if (atual !== tendView.pedido) return;
@@ -1964,6 +1964,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     } catch (error: Qualquer) {
       if (atual !== tendView.pedido) return;
       tendView.carregando = false;
+      tendView.dados = null;
       tendView.corpo.replaceChildren(avisoTendencias(error?.message || "Falha ao carregar as tendências.", "alert"));
     }
   }
@@ -1975,7 +1976,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       tendView.corpo = element("div", "nf8-tend__corpo");
       painel.append(montarCabecalhoTendencias(
         tendView.periodo,
-        dias => { tendView.periodo = dias; void carregarTendencias(); },
+        dias => { tendView.periodo = dias; tendView.dados = null; void carregarTendencias(); },
         () => { if (!tendView.dados && !tendView.carregando) void carregarTendencias(); }, // nova tentativa depois de erro
       ), tendView.corpo);
     }

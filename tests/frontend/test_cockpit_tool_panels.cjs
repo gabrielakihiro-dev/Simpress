@@ -1516,6 +1516,30 @@ test("Relatório mensal (F8): Tendências descarta resposta antiga (30 chegando 
   });
 });
 
+test("Relatório mensal (F8): recarga com a aba à vista mantém os cartões (sem Carregando…) e troca de período mostra Carregando…", async () => {
+  await comRelatorio(async ({ aba, painel, servidor, esperar, emite }) => {
+    const normal = servidor.tendencias;
+    aba("tendencias").click();
+    await esperar();
+    assert.match(textoDe(painel("tendencias")), /12,4 dias/);
+    let liberar;
+    servidor.tendencias = dias => new Promise(resolver => { liberar = () => resolver({ ...normal(dias), tempo_medio_os: { ...normal(dias).tempo_medio_os, media_dias: 7.5 } }); });
+    emite("simpress:chamados-atualizados");
+    await esperar();
+    assert.doesNotMatch(textoDe(painel("tendencias")), /Carregando tendências/);
+    assert.match(textoDe(painel("tendencias")), /12,4 dias/, "cartões antigos ficam enquanto a resposta está pendente");
+    liberar();
+    await esperar();
+    assert.match(textoDe(painel("tendencias")), /7,5 dias/);
+    painel("tendencias").querySelector('[data-rel-periodo="90"]').click();
+    await esperar();
+    assert.match(textoDe(painel("tendencias")), /Carregando tendências/, "troca de período mostra Carregando…");
+    liberar();
+    await esperar();
+    assert.doesNotMatch(textoDe(painel("tendencias")), /Carregando tendências/);
+  });
+});
+
 test("Relatório mensal (F8): OS importadas marcam as Tendências como velhas; recarregam na próxima abertura ou já, se a aba está à vista", async () => {
   await comRelatorio(async ({ aba, servidor, esperar, emite }) => {
     const buscas = () => servidor.pedidos.filter(url => url.startsWith("/api/relatorio-mensal/tendencias"));

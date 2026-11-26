@@ -522,6 +522,7 @@ def build_trends(
     mean, closed, undated = _window_average(oracle, start, today)
     previous_mean, previous_closed, _undated = _window_average(oracle, previous_start, start - timedelta(days=1))
     points: List[Tuple[datetime, Dict[str, Any]]] = []
+    oldest: Optional[date] = None
     for event in comparison_history:
         if not isinstance(event, dict) or is_restoration(event) or event.get("id") == PINNED_BASELINE_ID:
             continue
@@ -532,9 +533,11 @@ def build_trends(
         has_raw = isinstance(raw, int) and not isinstance(raw, bool)
         if moment is None or not (isinstance(listed, list) or has_raw):
             continue
-        in_window = start <= moment.date() <= today
+        oldest = moment.date() if oldest is None else min(oldest, moment.date())
+        if not start <= moment.date() <= today:
+            continue
         # Mesma regra do F3 e do sino (sem Backup e Administrador); evento antigo sem lista usa o resumo.
-        total = (len(filtrar_backup_e_administrador(listed)) if isinstance(listed, list) else raw) if in_window else 0
+        total = len(filtrar_backup_e_administrador(listed)) if isinstance(listed, list) else raw
         points.append((moment, {"horario": str(event.get("horario")), "data": moment.date().isoformat(), "total": total}))
     points.sort(key=lambda entry: entry[0])
     return {
@@ -546,8 +549,8 @@ def build_trends(
             "media_dias_anterior": previous_mean, "encerradas_anterior": previous_closed,
         },
         "sem_acesso_7_dias": {
-            "pontos": [point for moment, point in points if start <= moment.date() <= today],
-            "historico_desde": points[0][1]["data"] if points else None,
+            "pontos": [point for _moment, point in points],
+            "historico_desde": oldest.isoformat() if oldest else None,
         },
     }
 
