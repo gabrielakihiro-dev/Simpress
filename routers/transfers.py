@@ -1,4 +1,4 @@
-"""Transfer form schema and official workbook generation route."""
+"""Official transfer workbook generation route (the form schema lives in domains/transfers.py)."""
 
 import io
 import logging
