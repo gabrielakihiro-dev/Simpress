@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from domains import history_restore
 from routers.dashboard import long_unused_status
-from domains.history_export import _history_display_files, build_history_export_workbook, history_export_series
+from domains.history_export import history_display_files, build_history_export_workbook, history_export_series
 from domains.history_restore import HistoryRestoreError, comparison_event_type
 from domains.history_annotations import (
     MAX_ANNOTATION_LENGTH, AnnotationReadError, resolve_history_annotations,
@@ -433,8 +433,8 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
                 "id": evento.get("id"),
                 "horario": evento.get("horario"),
                 "tipo": comparison_event_type(evento),
-                "arquivos_enviados": _history_display_files(evento.get("arquivos_enviados")),
-                "arquivos_restaurados": _history_display_files(comparison.get("arquivos_restaurados")),
+                "arquivos_enviados": history_display_files(evento.get("arquivos_enviados")),
+                "arquivos_restaurados": history_display_files(comparison.get("arquivos_restaurados")),
                 "restauracao_de": comparison.get("restauracao_de", {}),
                 "restauravel": history_restore.event_has_restorable_backup(services, evento),
                 "resumo": _history_event_summary(evento),

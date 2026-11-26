@@ -40,7 +40,7 @@ from domains.inventory_comparison import normalize_reference_value
 from domains.os_marcas_finalizacao import NOME_ARQUIVO as NOME_ARQUIVO_MARCAS, FontesMarcas, alterar_marca, ler_marcas
 from domains.os_observacoes import ler_observacoes, salvar_observacao
 from domains.sebrae_vinculos import vinculos_da_finalizacao
-from domains.ticket_reconciliation import _serial_key, reconcile_ticket_workbooks
+from domains.ticket_reconciliation import serial_key, reconcile_ticket_workbooks
 from domains.ticket_reporting import (
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TICKET_SNAPSHOT_FIELDS,
@@ -666,14 +666,14 @@ def create_operations_router(
     # o servidor não refiltra, só limita às séries recebidas e mantém a ordem do GET. Busca, relação e atenção servem só ao Resumo.
     @router.post("/api/operacoes/chamados/exportar")
     def export_ticket_report_from_screen(payload: TicketExportPayload):
-        wanted = {key for key in map(_serial_key, payload.series) if key}
+        wanted = {key for key in map(serial_key, payload.series) if key}
         filters = {
             "relation": payload.relation, "search": payload.search, "stale_days": 3,
             "attention_only": payload.attention_only,
         }
         return _ticket_export_response(payload.snapshot_id, filters, lambda chamados: [
             ticket for ticket in filter_ticket_records(chamados, stale_days=3)
-            if _serial_key(ticket.get("serie")) in wanted
+            if serial_key(ticket.get("serie")) in wanted
         ])
 
     @router.post("/api/operacoes/chamados/importar")

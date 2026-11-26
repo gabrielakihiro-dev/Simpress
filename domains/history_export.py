@@ -36,7 +36,7 @@ def _export_text(value: Any) -> str:
     return str(value)[:32767]
 
 
-def _history_display_files(value: Any) -> Dict[str, str]:
+def history_display_files(value: Any) -> Dict[str, str]:
     if not isinstance(value, dict):
         return {}
     return {

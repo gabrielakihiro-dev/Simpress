@@ -33,9 +33,10 @@ from domains.dashboard_agendamento import INTERVALO_PADRAO, INTERVALOS_PERMITIDO
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial, normalize_reference_value
 from domains.regras_negocio import cadastro_e_macbook
-from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS
-from routers.local_setup import RepresentanteRegionalPayload
-from routers.transfers import TransferenciaPayload, formatar_telefone_brasileiro
+from domains.local_setup import (
+    REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS, RepresentanteRegionalPayload,
+)
+from domains.transfers import TransferenciaPayload, formatar_telefone_brasileiro
 
 logger = logging.getLogger(__name__)
 
