@@ -5,6 +5,7 @@ Rotinas e automação do Chrome. Valem junto com o `AGENTS.md` da raiz; o texto 
 ## Chrome de automação
 
 - Toda rotina usa o Chrome CDP 9333 e a trava `data/state/automacao_chrome.lock`; nenhuma automação fecha abas anteriores nem o Chrome por ociosidade (`SIMPRESS_CHROME_OCIOSO_S`, desligado por padrão). Doc: `docs/operacao/automacao-chrome.md`.
+- Porta CDP 9333 sem autenticação: risco aceito (decisão do usuário, 25/11/2026); nunca use `--remote-allow-origins` (`tests/test_cdp_sem_remote_allow_origins.py`); reavalie se a máquina tiver outros usuários. Doc: `docs/operacao/automacao-chrome.md`, seção "Porta CDP 9333".
 - Login, senha e MFA são do usuário; a rotina espera o login. A rotina `login` nunca digita senha nem o código do autenticador. Doc: o mesmo, seção "Rotina `login`".
 - Clique acidental: se a página sair do lugar, volte ao mesmo link com `goto`, nunca `reload` no Oracle e no UX, e retome até 3 vezes. Doc: o mesmo, seção "Clique acidental".
 - Cliques irreversíveis (`Salvar edições`, `Enviar` do chamado UX, `Finalizar` e `Enviar` do anexo, `Replace`, `Conectar`, `Duplicata`) nunca se repetem e só rodam depois de `aguardar_estabilidade_pre_clique`. Doc: o mesmo.
