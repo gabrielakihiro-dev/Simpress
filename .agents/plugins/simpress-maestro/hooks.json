@@ -1,0 +1,25 @@
+{
+  "simpress-maestro-session": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ./hooks/session-start-maestro.cjs",
+        "timeout": 10
+      }
+    ]
+  },
+  "simpress-protect-operational-data": {
+    "PreToolUse": [
+      {
+        "matcher": "edit_file|write_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./hooks/protect-operational-data.cjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
