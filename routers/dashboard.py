@@ -72,6 +72,8 @@ class DashboardServices:
     get_backups_regionais: Optional[Callable[[], Dict[str, Any]]] = None
     # Tickets the last SoftExpert finalization did not finalize (``falhas_da_finalizacao``): UTIC number and fixed code only.
     get_softexpert_finalization_failures: Optional[Callable[[], Dict[str, Any]]] = None
+    # Lembretes (Ferramentas) atrasados e de hoje: só contagens, sem texto de lembrete (aviso do sino).
+    get_lembretes_agendados: Optional[Callable[[], Dict[str, Any]]] = None
 
 
 # Reapplying the display rules to the two newest events dominated the panel time; the result
@@ -193,6 +195,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "divergencias_novas": _new_divergences_summary(services, history, history_signature),
         "sem_acesso_60_dias": _long_unused_summary(services, history, history_signature),
         "backups_regionais": _backups_regionais_summary(services),
+        "lembretes_agendados": _lembretes_agendados_summary(services),
     }
 
 
@@ -388,6 +391,37 @@ def _finalization_failures_summary(services: DashboardServices) -> Dict[str, Any
         # The alert is optional; the inventory summary must still load. Only the class is logged (no ticket data).
         logger.warning("Falha ao calcular o aviso de falhas ao finalizar no SoftExpert: %s.", type(error).__name__)
         return {"total": 0, "itens": [], "indisponivel": True}
+
+
+def _contagem_valida(valor: Any) -> int:
+    if isinstance(valor, bool) or not isinstance(valor, int) or valor < 0:
+        raise ValueError("contagem inválida")
+    return valor
+
+
+def _lembretes_agendados_allowlist(bruto: Any) -> Dict[str, Any]:
+    """Só as 4 chaves públicas; contagem inválida levanta (vira ``indisponivel``) e o total é recalculado."""
+    if not isinstance(bruto, dict):
+        raise TypeError("resumo de lembretes não é dict")
+    atrasados = _contagem_valida(bruto.get("atrasados"))
+    hoje = _contagem_valida(bruto.get("hoje"))
+    return {
+        "total": atrasados + hoje,
+        "atrasados": atrasados,
+        "hoje": hoje,
+        "indisponivel": bruto.get("indisponivel") is True,
+    }
+
+
+def _lembretes_agendados_summary(services: DashboardServices) -> Dict[str, Any]:
+    if services.get_lembretes_agendados is None:
+        return {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": False}
+    try:
+        return _lembretes_agendados_allowlist(services.get_lembretes_agendados())
+    except Exception as error:
+        # The alert is optional; the inventory summary must still load. Only the class is logged (no reminder text).
+        logger.warning("Falha ao calcular o aviso de lembretes agendados: %s.", type(error).__name__)
+        return {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": True}
 
 
 def _backups_regionais_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
