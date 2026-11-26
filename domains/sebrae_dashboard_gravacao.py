@@ -42,6 +42,7 @@ FORMULAS_DA_LINHA = ("Q", "T", "U", "V")
 MAX_CARACTERES_CELULA = 32_767
 LIMITE_H_LIDO = 2000  # ChamadoAberto.descricao (coluna H lida) é cortada aqui
 INDICE_DA_COLUNA_W = 23
+COLUNAS_A_ESQUERDA = ("F", "G", "H")  # ATENDIMENTO REALIZADO, TITULO, DESCRICAO CHAMADO: always left-aligned in the data rows
 
 _SHEET_TAG = re.compile(r"<sheet\b[^>]*/>")
 _ATRIBUTO = re.compile(r'([\w:]+)="([^"]*)"')
@@ -500,9 +501,10 @@ def _chave_da_linha(linha: _Linha, compartilhadas: Sequence[str]) -> Tuple[int, 
 
 
 def _assinatura(linha: _Linha) -> Tuple[Tuple[str, str], ...]:
-    """Cells A:W of a row as stored (value, formula, style), without the row number: what a sort must only move."""
+    """Cells A:W of a row as stored (value, formula, style), without the row number: what a sort must only move (the style of F, G, H is
+    ignored: ``_alinhar_a_esquerda`` rewrites it after the sort)."""
     return tuple(
-        (letra, re.sub(r' r="[A-Z]+\d+"', "", linha.celulas[letra], count=1))
+        (letra, re.sub(r' r="[A-Z]+\d+"' + (r'| s="\d+"' if letra in COLUNAS_A_ESQUERDA else ""), "", linha.celulas[letra], count=2 if letra in COLUNAS_A_ESQUERDA else 1))
         for letra in sorted(linha.celulas, key=_letra_para_indice) if _letra_para_indice(letra) <= INDICE_DA_COLUNA_W
     )
 
@@ -857,11 +859,70 @@ def _entregar(
     _conferir(conteudo, anteriores, novos, pacote, ordem, categorias)
     return conteudo, ordem.mapa
 
+_XF = re.compile(r"<xf\b[^>]*?/>|<xf\b[^>]*?>.*?</xf>", re.DOTALL)
+_CELULA_FGH = re.compile(r'<c r="([FGH])(\d+)"([^>]*?)(/?)>')
+
+
+def _xf_a_esquerda(xf: str) -> str:
+    """The ``cellXfs`` entry with ``horizontal="left"``; everything else (numFmt, font, fill, border, wrap, vertical...) is kept."""
+    abertura = re.match(r"<xf\b[^>]*?(?=/?>)", xf).group(0)  # type: ignore[union-attr]
+    corpo = xf[len(abertura):]
+    abertura = re.sub(r'\s+applyAlignment="[^"]*"', "", abertura) + ' applyAlignment="1"'
+    alinhamento = re.search(r"<alignment\b[^>]*?/?>", corpo)
+    if alinhamento is None:
+        corpo = '><alignment horizontal="left"/></xf>' if corpo == "/>" else corpo.replace(">", '><alignment horizontal="left"/>', 1)
+    else:
+        tag = alinhamento.group(0)
+        nova = re.sub(r'\bhorizontal="[^"]*"', 'horizontal="left"', tag) if "horizontal=" in tag else tag.replace("<alignment", '<alignment horizontal="left"', 1)
+        corpo = corpo.replace(tag, nova, 1)
+    return abertura + corpo
+
+
+def _alinhar_a_esquerda(pacote: _Pacote, folha: str) -> Tuple[str, Optional[bytes]]:
+    """F, G and H of the data rows of ``Tabela3`` (2 .. last; never the header) get a left-aligned style: gives the sheet and the new ``styles.xml``.
+
+    Only the ``s=`` of cells that already exist changes (no ``<c>`` is created) and only ``cellXfs`` grows, once per distinct source style."""
+    if "xl/styles.xml" not in pacote.partes:
+        return folha, None
+    estilos = pacote.texto("xl/styles.xml")
+    bloco = re.search(r"<cellXfs\b[^>]*>(.*?)</cellXfs>", estilos, re.DOTALL)
+    if bloco is None:
+        return folha, None
+    xfs = _XF.findall(bloco.group(1))
+    mapa: Dict[int, int] = {}
+
+    def novo_estilo(antigo: int) -> int:
+        if antigo not in mapa:
+            novo = _xf_a_esquerda(xfs[antigo])
+            if novo not in xfs:
+                xfs.append(novo)
+            mapa[antigo] = xfs.index(novo)
+        return mapa[antigo]
+
+    def trocar(achado: "re.Match[str]") -> str:
+        if not 2 <= int(achado.group(2)) <= pacote.tabela_ultima_linha:
+            return achado.group(0)
+        atributos = achado.group(3)
+        antigo = re.search(r'\bs="(\d+)"', atributos)
+        indice = int(antigo.group(1)) if antigo else 0
+        if indice >= len(xfs):
+            return achado.group(0)
+        novo = novo_estilo(indice)
+        atributos = re.sub(r'\bs="\d+"', f's="{novo}"', atributos) if antigo else atributos + f' s="{novo}"'
+        return f'<c r="{achado.group(1)}{achado.group(2)}"{atributos}{achado.group(4)}>'
+
+    inicio, fim = folha.find("<sheetData>"), folha.find("</sheetData>")
+    folha = folha[:inicio] + _CELULA_FGH.sub(trocar, folha[inicio:fim]) + folha[fim:]
+    if len(xfs) == len(_XF.findall(bloco.group(1))):
+        return folha, None
+    abertura = re.sub(r'\bcount="\d+"', f'count="{len(xfs)}"', re.match(r"<cellXfs\b[^>]*>", bloco.group(0)).group(0))  # type: ignore[union-attr]
+    return folha, (estilos[:bloco.start()] + abertura + "".join(xfs) + "</cellXfs>" + estilos[bloco.end():]).encode("utf-8")
+
 
 def _montar(
     pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str], sem_calc_chain: bool = False, categorias: bool = False,
 ) -> bytes:
-    """The workbook with the rewritten rows spliced into the sheet; every other part is copied as it was.
+    """The workbook with the rewritten rows spliced into the sheet; every other part is copied as it was (except ``xl/styles.xml``, which only gains left-aligned clones of the styles of F, G and H).
 
     ``sem_calc_chain``: rows moved, so the calculation chain (which lists cells by address) is dropped with its
     content type and relationship; Excel rebuilds it on load."""
@@ -882,6 +943,9 @@ def _montar(
         ):
             if nome in partes:
                 partes[nome] = re.sub(padrao, "", partes[nome].decode("utf-8")).encode("utf-8")
+    novo_texto, estilos = _alinhar_a_esquerda(pacote, novo_texto)  # single exit of atualizar, registrar_encerramentos and reaplicar
+    if estilos is not None:
+        partes["xl/styles.xml"] = estilos
     partes[pacote.aba] = novo_texto.encode("utf-8")
     partes["xl/workbook.xml"] = _recalcular_ao_abrir(pacote.texto("xl/workbook.xml")).encode("utf-8")
     if categorias:

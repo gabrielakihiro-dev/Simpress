@@ -1114,5 +1114,74 @@ class ReaplicarTest(unittest.TestCase):
         self.assertNotIn("Sem numero", str(erro.exception))
 
 
+def com_estilos(conteudo):
+    """``conteudo`` plus a ``styles.xml`` (xf 112 = wrap/top/numFmt 49, 60 = plain with font 4) and F2/H2 cells."""
+    simples = '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+    lista = [simples] * 113
+    lista[60] = '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0"/>'
+    lista[112] = '<xf numFmtId="49" fontId="1" fillId="2" borderId="3" xfId="0" applyNumberFormat="1"><alignment vertical="top" wrapText="1"/></xf>'
+    xfs = "".join(lista)
+    partes = partes_de(conteudo)
+    partes["xl/styles.xml"] = f'<styleSheet xmlns="x"><cellXfs count="113">{xfs}</cellXfs></styleSheet>'.encode()
+    folha = partes["xl/worksheets/sheet4.xml"].decode()
+    folha = folha.replace('<c r="G2"', texto("F2", "feito", 60) + '<c r="G2"', 1).replace('<c r="P2"', texto("H2", "desc", 112) + '<c r="P2"', 1)
+    partes["xl/worksheets/sheet4.xml"] = folha.encode()
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        for nome, dados in partes.items():
+            arquivo.writestr(nome, dados)
+    return saida.getvalue()
+
+
+def xfs_de(conteudo):
+    return re.findall(r"<xf\b[^>]*?/>|<xf\b[^>]*?>.*?</xf>", re.search(r"<cellXfs.*?</cellXfs>", partes_de(conteudo)["xl/styles.xml"].decode(), re.DOTALL).group(0))
+
+
+def estilo_de(conteudo, ref):
+    return int(re.search(r's="(\d+)"', celula_bruta(conteudo, ref)).group(1))
+
+
+class AlinhamentoAEsquerdaTest(unittest.TestCase):
+    def saidas(self):
+        base = com_estilos(tres())
+        gerado = G.atualizar(base, [], {"UTIC-2026-0001": {"J": "INCIDENTE"}}).conteudo
+        sharepoint = com_estilos(tres())
+        yield "atualizar", base, G.atualizar(base, [NOVA], {}).conteudo
+        yield "registrar_encerramentos", base, G.registrar_encerramentos(base, {"UTIC-2026-0001": "26/11/2026 10:00"})[0].conteudo
+        yield "reaplicar", sharepoint, G.reaplicar(base, gerado, sharepoint).conteudo
+
+    def test_f_g_h_das_linhas_de_dados_ficam_a_esquerda_e_o_resto_nao_muda(self):
+        for nome, antes, depois in self.saidas():
+            with self.subTest(nome):
+                xfs = xfs_de(depois)
+                for ref in ("F2", "G2", "H2", "G3", "G5"):
+                    self.assertIn('horizontal="left"', xfs[estilo_de(depois, ref)], ref)
+                self.assertEqual(linha_xml(depois, 1), linha_xml(antes, 1))  # header row untouched
+                for ref in ("A2", "D2", "P2", "Q2"):
+                    self.assertEqual(estilo_de(depois, ref), estilo_de(antes, ref), ref)
+                self.assertIn('wrapText="1"', xfs[estilo_de(depois, "H2")])  # wrap/vertical of the source xf survive
+                self.assertIn('vertical="top"', xfs[estilo_de(depois, "H2")])
+                self.assertIn('numFmtId="49" fontId="1" fillId="2" borderId="3"', xfs[estilo_de(depois, "H2")])
+                self.assertIn('numFmtId="0" fontId="4"', xfs[estilo_de(depois, "F2")])
+                self.assertIn('applyAlignment="1"', xfs[estilo_de(depois, "F2")])
+                self.assertEqual(re.search(r'<cellXfs count="(\d+)"', partes_de(depois)["xl/styles.xml"].decode()).group(1), str(len(xfs)))
+
+    def test_gravar_de_novo_nao_cria_mais_estilos(self):
+        base = com_estilos(tres())
+        uma = G.registrar_encerramentos(base, {"UTIC-2026-0001": "26/11/2026 10:00"})[0].conteudo
+        duas = G.registrar_encerramentos(uma, {"UTIC-2026-0002": "26/11/2026 11:00"})[0].conteudo
+        self.assertEqual(len(xfs_de(uma)), len(xfs_de(duas)))
+        self.assertEqual(xfs_de(uma), xfs_de(duas))
+        self.assertEqual(estilo_de(uma, "H2"), estilo_de(duas, "H2"))
+
+    def test_sem_celula_nova_e_sem_styles_nada_muda(self):
+        base = com_estilos(tres())
+        saida = G.registrar_encerramentos(base, {"UTIC-2026-0001": "26/11/2026 10:00"})[0].conteudo
+        self.assertEqual(linha_xml(saida, 2).count('r="F2"'), 1)
+        self.assertNotIn('<c r="F3"', linha_xml(saida, 3))  # absent cells are not created
+        sem = G.registrar_encerramentos(tres(), {"UTIC-2026-0001": "26/11/2026 10:00"})[0].conteudo
+        self.assertNotIn("xl/styles.xml", partes_de(sem))
+
+
 if __name__ == "__main__":
     unittest.main()
