@@ -1305,15 +1305,31 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(self.abas_do_registro(), [])
         self.assertSemEscrita()
 
-    def test_sem_confirmar_final_com_pdf_envia_o_anexo_mas_nao_finaliza(self):
+    def test_sem_confirmar_final_com_pdf_nao_envia_o_anexo_nem_finaliza(self):
+        # Conferência não escreve no SoftExpert: o PDF só sobe junto com o Finalizar.
         self.bancada.chamados = [chamado(1, finalizacao=True)]
         page = self.abrir_lista()
-        resultado = se.finalizar_chamado(
-            page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=self.novo_pdf(), confirmar_final=False
-        )
+        rotulos: list[str] = []
+        clicar_original = se.clicar
+
+        def espiar(alvo, rotulo, *args, **kwargs):
+            rotulos.append(rotulo)
+            return clicar_original(alvo, rotulo, *args, **kwargs)
+
+        with patch.object(se, "_anexar_pdf", side_effect=AssertionError("conferência não pode anexar")), \
+                patch.object(se, "clicar", side_effect=espiar):
+            resultado = se.finalizar_chamado(
+                page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=self.novo_pdf(), confirmar_final=False
+            )
         self.assertEqual(resultado["status"], "pronto", resultado)
-        self.assertEqual(self.bancada.eventos, ["anexo:UTIC-2026-0001:evidencia.pdf"])
+        self.assertEqual(resultado["detalhes"]["escritas"], [])
+        self.assertEqual(resultado["detalhes"]["pdf"], "evidencia.pdf")
+        self.assertTrue(resultado["detalhes"]["anexo_pendente"])
+        self.assertFalse([r for r in rotulos if "anexo" in r.lower() or r in ("Enviar", "Finalizar")], rotulos)
+        self.assertEqual(self.bancada.eventos, [])
         self.assertEqual(self.bancada.finalizados, [])
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
 
     def test_descricao_vazia_e_recusada_sem_abrir_nada(self):
         self.bancada.chamados = [chamado(1, finalizacao=True)]
@@ -1522,7 +1538,8 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         ok = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=self.novo_pdf())
         self.assertEqual(ok["detalhes"]["escritas"], ["anexo", "finalizar"])
         pronto = se.finalizar_chamado(page, "UTIC-2026-0002", self.DESCRICAO_FINAL, pdf=self.novo_pdf(), confirmar_final=False)
-        self.assertEqual(pronto["detalhes"]["escritas"], ["anexo"])
+        self.assertEqual(pronto["detalhes"]["escritas"], [])
+        self.assertEqual(self.bancada.eventos, ["anexo:UTIC-2026-0001:evidencia.pdf", "finalizar:UTIC-2026-0001"])
 
     def test_liberacao_de_escrita_nao_vaza_depois_da_finalizacao(self):
         self.bancada.chamados = [chamado(1, finalizacao=True)]
