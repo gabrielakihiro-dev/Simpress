@@ -365,7 +365,7 @@ const CARGA_CARTOES = {
   },
 };
 
-async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, chamadasOuApiFetch = null, apiFetchOverride = null) {
+async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, chamadasOuApiFetch = null, apiFetchOverride = null, janela = {}) {
   const doc = createFakeDocument();
   // O DOM falso não tem classList; só o `toggle` é usado (cor verde do Status FINALIZADO).
   const criar = doc.createElement;
@@ -375,7 +375,7 @@ async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, ch
     return no;
   };
   global.document = doc;
-  global.window = { setTimeout: () => 0, clearTimeout() {}, localStorage: armazenamento };
+  global.window = { setTimeout: () => 0, clearTimeout() {}, localStorage: armazenamento, ...janela };
   const ids = [["sebrae-novos-lista", "div"], ["sebrae-novos", "section"], ["sebrae-antigos-lista", "div"], ["sebrae-antigos", "section"], ["sebrae-finalizados-lista", "ul"], ["sebrae-finalizados", "section"], ["sebrae-sharepoint-aviso", "div"],
     ["sebrae-atualizar-status", "p"], ["sebrae-novos-resumo", "p"], ["sebrae-dashboard-status", "p"], ["btn-sebrae-atualizar", "button"],
     ["sebrae-destaques", "section"], ["sebrae-destaques-contagem", "span"], ["sebrae-destaques-resumo", "p"], ["sebrae-destaques-lista", "div"],
@@ -2884,4 +2884,125 @@ test("Atualizar Dashboard em lote: blocos só dos não encontrados e confirmar_o
     assert.equal(posts[0].finalizar_softexpert, true);
     assert.deepEqual(posts[0].confirmar_outro_tecnico, esperado);
   }
+});
+
+// ---- Recarga automática não apaga o que foi digitado e ainda não foi salvo (pedido do usuário, 26/11/2026) ----
+
+// Temporizadores na mão: 800 ms = salvamento automático; INTERVALO_FECHAR_MS (1500) = acompanhamento da finalização e da leitura dos antigos.
+function relogioManual() {
+  const fila = [];
+  return {
+    janela: { setTimeout: (fn, ms) => fila.push({ fn, ms }), clearTimeout: id => { if (fila[id - 1]) fila[id - 1].fn = null; } },
+    rodar(ms) { fila.forEach(t => { if (t.ms === ms && t.fn) { const fn = t.fn; t.fn = null; fn(); } }); },
+  };
+}
+
+function apiComRotinas(carga, chamadas, rotinas) {
+  return async (url, opcoes = {}) => {
+    chamadas.push({ url, metodo: opcoes.method || "GET", corpo: opcoes.body });
+    if (url === "/api/sebrae/finalizar-softexpert") return rotinas.fechar;
+    if (url === "/api/sebrae/antigos/ler") return rotinas.antigos;
+    if (opcoes.method === "PUT" && url.endsWith("/finalizacao")) return { descricao_finalizacao: JSON.parse(opcoes.body).descricao_finalizacao };
+    if (opcoes.method === "PUT" && url.endsWith("/observacao")) return rotinas.observacao ? rotinas.observacao(opcoes) : { observacao: JSON.parse(opcoes.body).observacao };
+    if (opcoes.method === "PUT" && url.endsWith("/descricao")) { const texto = JSON.parse(opcoes.body).descricao; return { descricao: texto, descricao_editada: texto }; }
+    return carga;
+  };
+}
+
+const cargaDoisNovos = () => cargaCom([novoDe("UTIC-2026-1500", "Camila", softexpertVazio(true)), novoDe("UTIC-2026-1501", "Paulo", softexpertVazio(true))]);
+const recargas = chamadas => chamadas.filter(c => c.url === "/api/sebrae/novos").length;
+
+test("descrição de finalização digitada sobrevive à recarga do fim de outra finalização, com foco e cursor no lugar, e o salvamento envia o texto", async () => {
+  const relogio = relogioManual();
+  const chamadas = [];
+  const rotinas = { fechar: { em_andamento: true, resultado: null }, antigos: { em_andamento: false, resultado: null } };
+  const { el, doc } = await renderizarCartoes(cargaDoisNovos(), null, apiComRotinas(cargaDoisNovos(), chamadas, rotinas), null, relogio.janela);
+  await esvaziarFila();
+  const criar = doc.createElement; // o DOM falso não tem seleção de texto
+  doc.createElement = tag => Object.assign(criar(tag), { setSelectionRange(inicio, fim) { this.selectionStart = inicio; this.selectionEnd = fim; } });
+  const antes = cartaoDe(el, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]");
+  antes.value = "Troquei o teclado.";
+  antes.dispatchEvent({ type: "input" });
+  antes.focus();
+  Object.assign(antes, { selectionStart: 7, selectionEnd: 7 });
+  const vistas = recargas(chamadas);
+  // outro chamado (1501) termina de ser finalizado: moverFinalizados recarrega a lista
+  rotinas.fechar = { em_andamento: false, resultado: { iniciado_em: "2026-11-26T10:00:00-03:00", terminado_em: new Date(Date.now() + 60000).toISOString(),
+    resultados: [{ numero: "UTIC-2026-1501", status: "ok", em: "2026-11-26T10:00:05-03:00" }] } };
+  relogio.rodar(1500);
+  for (let i = 0; i < 5; i += 1) await esvaziarFila();
+  assert.equal(recargas(chamadas), vistas + 1, "a lista foi recarregada uma vez");
+  const depois = cartaoDe(el, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]");
+  assert.notEqual(depois, antes, "a caixa foi refeita");
+  assert.equal(depois.value, "Troquei o teclado.");
+  assert.equal(cartaoDe(el, "UTIC-2026-1500").querySelector(".sebrae-chamado__feedback").textContent, "Alteração ainda não salva…");
+  assert.equal(doc.activeElement, depois, "o foco volta à mesma caixa");
+  assert.deepEqual([depois.selectionStart, depois.selectionEnd], [7, 7], "e o cursor à mesma posição");
+  assert.equal(puts(chamadas).length, 0);
+  relogio.rodar(800); // o salvamento agendado antes da recarga
+  await esvaziarFila();
+  assert.deepEqual(puts(chamadas).map(c => JSON.parse(c.corpo)), [{ descricao_finalizacao: "Troquei o teclado." }]);
+});
+
+test("observação do andamento e editor do lápis digitados sobrevivem à recarga do fim da leitura dos antigos, e o salvamento envia o texto", async () => {
+  const relogio = relogioManual();
+  const chamadas = [];
+  const rotinas = { fechar: { em_andamento: false, resultado: null }, antigos: { em_andamento: true, resultado: null } };
+  const { el } = await renderizarCartoes(cargaDoisNovos(), null, apiComRotinas(cargaDoisNovos(), chamadas, rotinas), null, relogio.janela);
+  await esvaziarFila();
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  const obs = cartao.querySelector('textarea[data-sebrae-observacao="UTIC-2026-1500"]');
+  obs.value = "Aguardando peça.";
+  obs.dispatchEvent({ type: "input" });
+  cartao.querySelector("button[data-sebrae-editar-descricao]").click();
+  const lapis = cartao.querySelector("textarea[data-sebrae-descricao-editada]");
+  lapis.value = "Travando. Teclado também.";
+  lapis.dispatchEvent({ type: "input" });
+  const vistas = recargas(chamadas);
+  rotinas.antigos = { em_andamento: false, resultado: { em: "2026-11-26T10:00:00-03:00", concluido: true, lidos: [], falhas: {} } };
+  relogio.rodar(1500);
+  for (let i = 0; i < 5; i += 1) await esvaziarFila();
+  assert.equal(recargas(chamadas), vistas + 1, "acompanharAntigos recarregou a lista");
+  const novo = cartaoDe(el, "UTIC-2026-1500");
+  assert.notEqual(novo, cartao);
+  const obsNova = novo.querySelector('textarea[data-sebrae-observacao="UTIC-2026-1500"]');
+  assert.equal(obsNova.value, "Aguardando peça.");
+  assert.equal(novo.querySelector(".sebrae-obs__feedback").dataset.estado, "pendente");
+  assert.equal(novo.querySelector(".sebrae-descricao__editor").hidden, false, "o editor do lápis continua aberto");
+  assert.equal(novo.querySelector("textarea[data-sebrae-descricao-editada]").value, "Travando. Teclado também.");
+  relogio.rodar(800);
+  await esvaziarFila();
+  assert.deepEqual(chamadas.filter(c => c.metodo === "PUT" && c.url.endsWith("/observacao")).map(c => JSON.parse(c.corpo)), [{ observacao: "Aguardando peça." }]);
+  assert.equal(obsNova.value, "Aguardando peça.");
+  assert.equal(novo.querySelector(".sebrae-obs__feedback").textContent, "Salva.");
+  novo.querySelector("button[data-sebrae-salvar-descricao]").click();
+  await esvaziarFila();
+  assert.deepEqual(chamadas.filter(c => c.metodo === "PUT" && c.url.endsWith("/descricao")).map(c => JSON.parse(c.corpo)), [{ descricao: "Travando. Teclado também." }]);
+});
+
+test("observação com envio em voo durante a recarga: a caixa nova mostra o texto e recebe o Salva., sem PUT repetido; sem rascunho vale o servidor", async () => {
+  const chamadas = [];
+  let responder;
+  const rotinas = { fechar: { em_andamento: false, resultado: null }, antigos: { em_andamento: false, resultado: null },
+    observacao: opcoes => new Promise(resolver => { responder = () => resolver({ observacao: JSON.parse(opcoes.body).observacao }); }) };
+  const carga = cargaDoisNovos();
+  const { el, feature } = await renderizarCartoes(carga, null, apiComRotinas(carga, chamadas, rotinas));
+  await esvaziarFila();
+  const obs = cartaoDe(el, "UTIC-2026-1500").querySelector('textarea[data-sebrae-observacao="UTIC-2026-1500"]');
+  obs.value = "Cobrar o fornecedor.";
+  obs.dispatchEvent({ type: "blur" });
+  await esvaziarFila();
+  await feature.carregarNovosSebrae(); // a lista ainda tem a observação antiga (vazia)
+  const obsNova = cartaoDe(el, "UTIC-2026-1500").querySelector('textarea[data-sebrae-observacao="UTIC-2026-1500"]');
+  assert.equal(obsNova.value, "Cobrar o fornecedor.");
+  responder();
+  await esvaziarFila();
+  assert.equal(cartaoDe(el, "UTIC-2026-1500").querySelector(".sebrae-obs__feedback").textContent, "Salva.");
+  obsNova.dispatchEvent({ type: "change" });
+  await esvaziarFila();
+  assert.equal(chamadas.filter(c => c.metodo === "PUT" && c.url.endsWith("/observacao")).length, 1, "o texto já salvo não é enviado de novo");
+  // sem nada pendente, a recarga traz o texto do servidor
+  carga.novos.formulario[0].observacao = "Atualizada em outra aba.";
+  await feature.carregarNovosSebrae();
+  assert.equal(cartaoDe(el, "UTIC-2026-1500").querySelector('textarea[data-sebrae-observacao="UTIC-2026-1500"]').value, "Atualizada em outra aba.");
 });

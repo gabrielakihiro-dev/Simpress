@@ -30,6 +30,9 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     fechar: { emAndamento: false, mensagemInicio: "", numeros: [], pulados: [], resultado: null, sharepoint: null, token: 0, recarregado: "" },
     antigos: { emAndamento: false, resultado: null, mensagem: "", token: 0, anteriorEm: null },
   };
+  // Rascunhos que sobrevivem a `renderizar`: editor do lápis aberto (número -> texto) e a finalização da recarga anterior (lida só durante `renderizar`).
+  const rascunhosLapis = new Map<string, string>();
+  let finalizarAnterior: Pick<EstadoSebrae, "soft" | "refs"> = { soft: {}, refs: new Map() };
 
   if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
     if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
@@ -717,6 +720,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
    * `aplicar(dados)` atualiza o item em memória (ficha e cartão); nome e cruzamento se refazem ao recarregar. */
   function blocoDescricaoEditavel(item: Registro, texto: string, aplicar: (dados: Registro) => unknown) {
     const numero = item.numero;
+    const rascunho = rascunhosLapis.get(numero);
     let atual = texto || "";
     let editada = Boolean(item.softexpert?.descricao_editada);
     const detalhe = blocoDetalhe("Descrição", atual, true);
@@ -768,14 +772,17 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       lapis.setAttribute("aria-expanded", String(aberto));
     };
     mostrarEstado();
+    if (rascunho !== undefined) { entrada.value = rascunho; abrirEditor(true); } // recarga com o editor aberto: volta como estava
     lapis.addEventListener("click", evento => {
       detalhe.open = true;
       entrada.value = atual;
+      rascunhosLapis.set(numero, atual);
       definirFeedback(feedback, "");
       abrirEditor(true);
       entrada.focus();
     });
-    cancelar.addEventListener("click", () => { abrirEditor(false); lapis.focus(); });
+    entrada.addEventListener("input", () => rascunhosLapis.set(numero, entrada.value));
+    cancelar.addEventListener("click", () => { rascunhosLapis.delete(numero); abrirEditor(false); lapis.focus(); });
     const enviar = async (novoTexto: string) => {
       [salvar, cancelar, restaurar].forEach(botao => { botao.disabled = true; });
       definirFeedback(feedback, "Salvando…", "salvando");
@@ -788,6 +795,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         editada = Boolean(dados.descricao_editada);
         paragrafo.textContent = atual || "Vazio";
         aplicar(dados);
+        rascunhosLapis.delete(numero);
         mostrarEstado();
         abrirEditor(false);
         definirFeedback(feedback, editada
@@ -1066,6 +1074,9 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const guardado = item.softexpert || {};
     // "Revisado." só entra se o servidor nunca guardou descrição (campo ausente); apagada depois, vira "" guardado e não volta
     const aplicarRevisado = novo && ehApiSebrae(item.linha?.I) && guardado.descricao_definida === false;
+    // recarga com texto ainda não salvo (ou com o envio em voo): vale o que a pessoa digitou, não o que veio do servidor
+    const antes = finalizarAnterior.refs.get(numero);
+    const rascunho = antes && antes.texto.value !== finalizarAnterior.soft[numero]?.enviado ? antes.texto.value as string : null;
     const soft = estado.soft[numero] = {
       descricao: aplicarRevisado ? DESCRICAO_API_SEBRAE : guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
       pdf: guardado.pdf || null, finalizacao: guardado.finalizacao || null, processando: false, novo,
@@ -1080,7 +1091,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     texto.rows = 4;
     texto.placeholder = " "; // o CSS usa :placeholder-shown para saber se a descrição está vazia (pendência e botão "pronto")
     texto.maxLength = MAX_DESCRICAO;
-    texto.value = soft.descricao;
+    texto.value = rascunho ?? soft.descricao;
     texto.dataset.sebraeDescricao = numero;
     const feedbackDescricao = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__feedback", `Salva automaticamente. Até ${MAX_DESCRICAO} caracteres.`);
     feedbackDescricao.setAttribute("role", "status");
@@ -1137,7 +1148,9 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     corpo.className = "sebrae-final__corpo";
     corpo.append(listaPendencias(), colTexto, colAnexo, rodape);
     area.appendChild(corpo);
-    estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, tentarRemover, feedbackPdf, botao, cancelar, resultado });
+    // mesmo objeto da recarga anterior: um envio em voo escreve o resultado nos elementos novos
+    estado.refs.set(numero, Object.assign(antes || {}, { texto, feedbackDescricao, arquivo, infoPdf, remover, tentarRemover, feedbackPdf, botao, cancelar, resultado }));
+    if (rascunho !== null && rascunho !== soft.enviado) definirFeedback(feedbackDescricao, "Alteração ainda não salva…", "pendente");
     texto.addEventListener("input", () => {
       contar();
       window.clearTimeout(estado.temporizadores[numero]);
@@ -1236,11 +1249,18 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     feedback.setAttribute("role", "status");
     feedback.dataset.estado = "";
 
-    estado.observacoes[numero] = {
-      enviado: observacaoInicial || "",
+    // Recarga: texto não salvo (ou com envio em voo) continua; sem ele, vale o do servidor. O mesmo registro segue para o envio em voo achar a caixa nova.
+    const anterior = estado.observacoes[numero];
+    const pendente = Boolean(anterior?.textarea) && anterior.textarea.value !== anterior.enviado;
+    if (pendente) {
+      textarea.value = anterior.textarea.value;
+      definirFeedback(feedback, "Alteração ainda não salva…", "pendente");
+    }
+    estado.observacoes[numero] = Object.assign(anterior || {}, {
+      enviado: pendente ? anterior.enviado : observacaoInicial || "",
       textarea,
       feedback,
-    };
+    });
 
     textarea.addEventListener("input", () => {
       window.clearTimeout(estado.temporizadoresObs[numero]);
@@ -2587,6 +2607,26 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     host.replaceChildren(dom.createTextElement("p", "ck-campo__ajuda", "Sem formulário (veja os motivos):"), lista);
   }
 
+  /** Recarga automática (fim de outra finalização, fim da leitura dos antigos): o campo em uso nas listas volta com foco e cursor no lugar. */
+  function lembrarFoco() {
+    const ativo = document.activeElement as HTMLTextAreaElement | null;
+    const lista = ["sebrae-novos-lista", "sebrae-antigos-lista", "sebrae-finalizados-lista"].map(el).find(no => ativo && no?.contains(ativo));
+    if (!ativo || !lista || !Object.keys(ativo.dataset || {}).length) return null;
+    return { lista, tag: ativo.tagName, dados: { ...ativo.dataset }, inicio: ativo.selectionStart, fim: ativo.selectionEnd, rolagem: ativo.scrollTop };
+  }
+
+  function devolverFoco(foco: ReturnType<typeof lembrarFoco>) {
+    if (!foco) return;
+    const chaves = Object.keys(foco.dados);
+    const alvo = [...foco.lista.querySelectorAll<HTMLTextAreaElement>(foco.tag)]
+      .find(no => Object.keys(no.dataset).length === chaves.length && chaves.every(chave => no.dataset[chave] === foco.dados[chave]));
+    if (!alvo) return;
+    for (let d = alvo.closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true; // o antigo volta recolhido
+    alvo.focus({ preventScroll: true });
+    if (foco.inicio != null && foco.fim != null && typeof alvo.setSelectionRange === "function") alvo.setSelectionRange(foco.inicio, foco.fim);
+    alvo.scrollTop = foco.rolagem || 0;
+  }
+
   function renderizar(dados: Registro, versaoDestaque = estado.destaqueVersao) {
     estado.rascunhoExterno = false;
     const importado = dados.importado;
@@ -2613,6 +2653,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     if (rascunho.conflitos.length) mostrarRascunho("Rascunho preservado com divergências; o arquivo importado prevalece nos campos já preenchidos.", "alerta", detalhesRascunho([], rascunho.conflitos));
     if (rascunho.pendentes.length) mostrarRascunho(`Rascunhos preservados sem correspondência nesta importação (${rascunho.pendentes.length}).`, "alerta", detalhesRascunho(rascunho.pendentes, rascunho.conflitos));
     if (Object.values(estado.naoSalvos).some(itens => Object.keys(itens).length)) mostrarRascunho("Há edições preservadas apenas nesta aba porque o navegador não conseguiu salvá-las. Copie os valores antes de recarregar.", "erro");
+    const foco = lembrarFoco();
+    finalizarAnterior = { soft: estado.soft, refs: new Map(estado.refs) };
     estado.soft = {};
     estado.refs.clear();
     const finalizados: Registro[] = importado?.finalizados || [];
@@ -2677,6 +2719,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     app.carregarResumoHistoricoSebrae?.();
     app.carregarConflitosSebrae?.();
     desenharDestaques(); // também reaplica aba, filtro e página sobre as listas novas
+    finalizarAnterior = { soft: {}, refs: new Map() };
+    devolverFoco(foco);
     carregarDestaques(); // sem await: os de fora das listas e as datas entram quando chegarem
     carregarFechar();
     carregarAntigos();
