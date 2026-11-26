@@ -32,7 +32,9 @@ NAO_VERIFICADO = "NAO VERIFICADO"
 AGENTES_CENTRAIS = ("batedor", "executor", "revisor", "segunda-opiniao", "arquiteto")
 MODELOS_ALIAS = {"haiku", "sonnet", "opus", "fable", "inherit"}
 PASTAS_COM_AGENTS = ("domains", "frontend", "routers", "scripts", "tests")
-# Usado so se o .bat nao puder ser lido; o normal e extrair de `instalar_primeira_vez.bat`.
+AGY_PLUGIN_DIR = Path(".agents") / "plugins" / "simpress-maestro"
+TOOLS_PROIBIDAS_AGY = {"invoke_subagent", "define_subagent", "Agent", "Task"}
+# Usado so se o .bat nao puder ser ser lido; o normal e extrair de `instalar_primeira_vez.bat`.
 PLUGINS_FALLBACK = ("ponytail@ponytail", "context7@claude-plugins-official", "custo-modelos@simpress")
 
 
@@ -378,11 +380,99 @@ def checar_instrucoes(raiz: Path) -> list[Resultado]:
     return res
 
 
+# --------------------------------------------------------- plugin Antigravity
+
+def checar_plugin_antigravity(raiz: Path) -> list[Resultado]:
+    """Confere o plugin simpress-maestro (manifest, regras, agentes, paridade e hooks)."""
+    area = "plugin-agy"
+    plugin_dir = raiz / AGY_PLUGIN_DIR
+    if not plugin_dir.is_dir():
+        return [Resultado(FALHA, area, AGY_PLUGIN_DIR.as_posix(), "pasta do plugin ausente")]
+    res: list[Resultado] = []
+
+    manifest = plugin_dir / "plugin.json"
+    if not manifest.is_file():
+        res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/plugin.json", "ausente"))
+    else:
+        dados, erro = _ler_json(manifest)
+        if erro or not isinstance(dados, dict) or not str(dados.get("name", "")).strip():
+            res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/plugin.json", erro or "name ausente"))
+        else:
+            res.append(Resultado(OK, area, f"{AGY_PLUGIN_DIR.as_posix()}/plugin.json", f"name {dados['name']}"))
+
+    regras = plugin_dir / "rules" / "AGENTS.md"
+    if regras.is_file() and regras.read_text(encoding="utf-8", errors="replace").strip():
+        res.append(Resultado(OK, area, f"{AGY_PLUGIN_DIR.as_posix()}/rules/AGENTS.md", "existe"))
+    else:
+        res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/rules/AGENTS.md", "ausente ou vazio"))
+
+    agents_dir = plugin_dir / "agents"
+    if not agents_dir.is_dir():
+        res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/agents", "pasta ausente"))
+    else:
+        claude_dir = raiz / ".claude" / "agents"
+        claude_agentes = {p.stem for p in claude_dir.glob("*.md")} if claude_dir.is_dir() else set()
+        for nome in sorted(set(AGENTES_CENTRAIS) | claude_agentes):
+            if not (agents_dir / f"{nome}.md").is_file():
+                res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/agents/{nome}.md", "agente ausente no plugin Antigravity"))
+        for arq in sorted(agents_dir.glob("*.md")):
+            item = f"{AGY_PLUGIN_DIR.as_posix()}/agents/{arq.name}"
+            fm = ler_frontmatter(arq)
+            if fm is None:
+                res.append(Resultado(FALHA, area, item, "frontmatter ausente ou sem fechamento"))
+                continue
+            problemas: list[str] = []
+            nome = _valor(fm, "name")
+            if not nome:
+                problemas.append("falta name")
+            elif nome != arq.stem:
+                problemas.append(f"name '{nome}' difere do arquivo")
+            if not _valor(fm, "description"):
+                problemas.append("falta description")
+            if _valor(fm, "subagent").lower() != "true":
+                problemas.append("subagent deve ser true")
+            if _valor(fm, "mainAgent").lower() != "false":
+                problemas.append("mainAgent deve ser false")
+            tools = _tools_lista(fm["tools"]) if "tools" in fm else []
+            if not tools:
+                problemas.append("falta tools")
+            elif any(t.split("(")[0].strip() in TOOLS_PROIBIDAS_AGY for t in tools):
+                problemas.append("tools contem ferramenta de delegacao proibida")
+            if problemas:
+                res.append(Resultado(FALHA, area, item, "; ".join(problemas)))
+            else:
+                res.append(Resultado(OK, area, item, f"{len(tools)} tool(s)"))
+
+    hooks_json = plugin_dir / "hooks.json"
+    if not hooks_json.is_file():
+        res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/hooks.json", "ausente"))
+    else:
+        dados_hooks, erro_hooks = _ler_json(hooks_json)
+        if erro_hooks or not isinstance(dados_hooks, dict):
+            res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/hooks.json", erro_hooks or "raiz nao e objeto"))
+        else:
+            vistos: set[str] = set()
+            for cmd in _comandos_de_hooks(dados_hooks):
+                for rel in scripts_citados(cmd):
+                    if rel in vistos:
+                        continue
+                    vistos.add(rel)
+                    if (plugin_dir / rel).is_file():
+                        res.append(Resultado(OK, area, f"{AGY_PLUGIN_DIR.as_posix()}/{rel}", "script existe"))
+                    else:
+                        res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/{rel}", "script citado no hook nao existe"))
+            if not vistos:
+                res.append(Resultado(FALHA, area, f"{AGY_PLUGIN_DIR.as_posix()}/hooks.json", "nenhum script de hook citado"))
+
+    return res
+
+
 # ------------------------------------------------------------------ geral
 
 def conferir_tudo(raiz: Path, instalado: bool = False) -> list[Resultado]:
     res = checar_skills(raiz, instalado=instalado)
     res += checar_agentes(raiz)
+    res += checar_plugin_antigravity(raiz)
     if instalado:
         res += checar_plugins(raiz)
     res += checar_mcp(raiz)

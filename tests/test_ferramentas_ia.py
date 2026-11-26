@@ -121,5 +121,83 @@ class RepoTemporarioTest(unittest.TestCase):
         self.assertEqual("%USERPROFILE%/x", conferir.mascarar(home + "/x"))
 
 
+class PluginAntigravityTest(unittest.TestCase):
+    def _criar_plugin_valido(self, raiz: Path, nomes: tuple[str, ...] = conferir.AGENTES_CENTRAIS) -> Path:
+        claude_agents = raiz / ".claude" / "agents"
+        claude_agents.mkdir(parents=True, exist_ok=True)
+        plugin = raiz / conferir.AGY_PLUGIN_DIR
+        (plugin / "agents").mkdir(parents=True, exist_ok=True)
+        (plugin / "rules").mkdir(parents=True, exist_ok=True)
+        (plugin / "hooks").mkdir(parents=True, exist_ok=True)
+        (plugin / "plugin.json").write_text('{"name": "simpress-maestro"}', encoding="utf-8")
+        (plugin / "rules" / "AGENTS.md").write_text("# Regras\n", encoding="utf-8")
+        (plugin / "hooks" / "ok.cjs").write_text("console.log('{}');\n", encoding="utf-8")
+        (plugin / "hooks.json").write_text(
+            '{"s":{"SessionStart":[{"type":"command","command":"node ./hooks/ok.cjs"}]}}',
+            encoding="utf-8",
+        )
+        for nome in nomes:
+            (claude_agents / f"{nome}.md").write_text(
+                f"---\nname: {nome}\ndescription: d\nmodel: sonnet\n---\n",
+                encoding="utf-8",
+            )
+            (plugin / "agents" / f"{nome}.md").write_text(
+                f"---\nname: {nome}\ndescription: d\nsubagent: true\nmainAgent: false\ntools: [read_file]\n---\n",
+                encoding="utf-8",
+            )
+        return plugin
+
+    def test_plugin_valido_passa(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            self._criar_plugin_valido(raiz)
+            self.assertEqual([], falhas(conferir.checar_plugin_antigravity(raiz)))
+
+    def test_falta_paridade_com_claude_da_falha(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            plugin = self._criar_plugin_valido(raiz)
+            (raiz / ".claude" / "agents" / "extra.md").write_text(
+                "---\nname: extra\ndescription: d\nmodel: haiku\n---\n",
+                encoding="utf-8",
+            )
+            motivos = falhas(conferir.checar_plugin_antigravity(raiz))
+            self.assertTrue(any("extra.md" in m for m in motivos), msg=f"{plugin}: {motivos}")
+
+    def test_tools_proibida_da_falha(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            plugin = self._criar_plugin_valido(raiz)
+            (plugin / "agents" / "batedor.md").write_text(
+                "---\nname: batedor\ndescription: d\nsubagent: true\nmainAgent: false\ntools: [read_file, invoke_subagent]\n---\n",
+                encoding="utf-8",
+            )
+            motivos = falhas(conferir.checar_plugin_antigravity(raiz))
+            self.assertTrue(any("proibida" in m for m in motivos))
+
+    def test_subagent_ou_main_agent_invalido_da_falha(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            plugin = self._criar_plugin_valido(raiz)
+            (plugin / "agents" / "batedor.md").write_text(
+                "---\nname: batedor\ndescription: d\nsubagent: false\nmainAgent: true\ntools: [read_file]\n---\n",
+                encoding="utf-8",
+            )
+            motivos = falhas(conferir.checar_plugin_antigravity(raiz))
+            self.assertTrue(any("subagent deve ser true" in m for m in motivos))
+            self.assertTrue(any("mainAgent deve ser false" in m for m in motivos))
+
+    def test_hook_inexistente_da_falha(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            plugin = self._criar_plugin_valido(raiz)
+            (plugin / "hooks.json").write_text(
+                '{"s":{"SessionStart":[{"type":"command","command":"node ./hooks/falta.cjs"}]}}',
+                encoding="utf-8",
+            )
+            motivos = falhas(conferir.checar_plugin_antigravity(raiz))
+            self.assertTrue(any("falta.cjs" in m for m in motivos))
+
+
 if __name__ == "__main__":
     unittest.main()
