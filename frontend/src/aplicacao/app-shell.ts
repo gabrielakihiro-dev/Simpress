@@ -129,6 +129,10 @@ export function createShell(context: ContextoApp): Acoes {
     botaoConfirmar.dataset.variant = destrutiva ? "danger" : "primary";
     document.getElementById("btn-confirmar-acao-cancelar")!.textContent = cancelar;
     app.abrirModalAcessivel("modal-confirmar-acao", "#btn-confirmar-acao-cancelar", "fecharConfirmacaoAcao");
+    // abrirModalAcessivel marca todo diálogo como role="dialog"; o foco vai a Cancelar, então a mensagem precisa ser lida ao abrir.
+    const dialogo = modal!.firstElementChild;
+    dialogo?.setAttribute("role", "alertdialog");
+    dialogo?.setAttribute("aria-describedby", "mensagem-confirmar-acao");
     return promise;
   }
 

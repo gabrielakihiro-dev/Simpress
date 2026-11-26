@@ -8,7 +8,7 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 
 - FastAPI local: `main.py`, `routers/` (HTTP), `domains/` (regras), `core/`, `security/`, `scripts/` (rotinas e automação); front em `static/` (JS antigo) e React em migração (`frontend/src/`, gerado em `static/dist/`; plano `docs/planos/migracao-react-vite.md`).
 - Só local (exceção opt-in: `iniciar_servidor_celular.bat`, `docs/guias/acesso-celular.md`), dados em `data/`, sem backend remoto nem Supabase; migrar para serviço externo começa por análise que não altera código nem dados; preserve auditoria, sincronização, restauração e reversibilidade.
-- `/api/*` só responde com o cookie `simpress_sessao_<porta>`, criado por `GET /bootstrap?t=<segredo>` (`security/sessao_local.py`); sem cookie, 401. Todo cliente interno novo precisa enviá-lo.
+- `/api/*` só responde com o cookie `simpress_sessao_<porta>`, criado por `GET /bootstrap?t=<segredo>` (`security/sessao_local.py`); sem ele, 401. Todo cliente interno novo precisa enviá-lo.
 
 ## Regras gerais
 
@@ -36,17 +36,17 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 ## Dados operacionais
 
 - Preserve `data/planilhas_entrada`, `data/state` e `.transactions` (planilhas, históricos, anotações, backups) fora do Git, salvo pedido explícito.
-- Arquivos "para a base do servidor local": use-os localmente, preserve os originais e valide com os dados reais.
+- Arquivos "para a base do servidor local": use-os localmente, preserve os originais, valide com dados reais.
 
 ## Verificação
 
 - Antes de concluir, rode `npm run verify`; em mudança de interface, também `npm run test:ui:e2e`.
-- Cada critério de aceite vem como `AC: <critério> — PROVEN BY <evidência>`; sem evidência, não está verificado. Teto de 3 ciclos de correção sobre a mesma falha; depois, pare e devolva o que foi tentado.
+- Cada critério de aceite vem como `AC: <critério> — PROVEN BY <evidência>`; sem evidência, não está verificado. Teto de 3 ciclos de correção sobre a mesma falha; depois, pare e devolva o que tentou.
 - Pedido vago ("verifique que funciona"): antes, escreva o que é observável, qual mecanismo prova, o escopo e o que fazer se falhar.
 
 ## Documentação de mudanças
 
-Mudou tela, rotina, endpoint, texto aprovado, dado gravado ou regra de segurança: no mesmo trabalho, atualize o `.md` da aba, alinhe backend, front-end, testes e Assistente (ferramentas, cartão de confirmação, máscara, testado com o assistente real), registre escrita em sistema externo ou dado local com autorização e data, e informe os `.md` alterados.
+Mudou tela, rotina, endpoint, texto aprovado, dado gravado ou regra de segurança: no mesmo trabalho, siga "Documentação de mudanças em qualquer aba" em `docs/desenvolvimento/regras-agentes.md`.
 
 ## Tamanho das regras
 
@@ -54,13 +54,14 @@ Ao editar `AGENTS.md`, `CLAUDE.md` ou `.cursor/rules/`, siga "Tamanho das regras
 
 ## Explicações para leigo
 
-O usuário é leigo em back-end e front-end, mas conhece Git: resumo simples primeiro, cada termo técnico com um exemplo; antes de mudar, objetivo, motivo e como verificar; depois, o que mudou e o que não foi verificado. Caminhos, comandos e erros exatos em blocos de código.
+O usuário é leigo em back-end e front-end, mas conhece Git: ao explicar, analisar ou instruir, e antes e depois de mudar código, siga "Explicações para leigo" em `docs/desenvolvimento/regras-agentes.md`.
 
 ## Git
 
 - Commit não autoriza push; informe se houve commit, push e sincronização. Depois de abrir ou atualizar um PR, leia a CI e diga se passou, falhou ou está pendente.
+- Fim de toda execução que muda o repositório (regra do usuário, 26/11/2026): depois de corrigir tudo o que as revisões apontaram e de a verificação passar, faça commit, push e abra o PR contra `main`, sem perguntar; nunca mescle.
 - Cada agente usa o próprio worktree: confira `git branch --show-current` antes de commitar. Sem `reset --hard`, `git clean` nem force push sem autorização.
-- Ao remover worktree, ao delegar a subagentes, ao planejar ou ao mesclar PRs em sequência (inclui Codex `$maestro-superpower`): leia `docs/desenvolvimento/regras-agentes.md`.
+- Ao remover worktree, delegar a subagentes, planejar ou mesclar PRs em sequência (inclui Codex `$maestro-superpower`): leia `docs/desenvolvimento/regras-agentes.md`.
 
 ## Índice
 

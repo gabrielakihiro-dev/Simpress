@@ -30,6 +30,9 @@ export function Formulario({ e }: { e: Estado }) {
       <p id="assistente-anexos-aviso" className="ck-assist__aviso" hidden={e.anexosAvisoOculto}>
         Atenção: imagens vão ao OpenRouter sem ocultar dados pessoais (CPF, nome, e-mail). Anexe só o que pode sair deste computador.
       </p>
+      <p id="assistente-gravar-aviso" className="ck-assist__aviso" hidden={!e.gravando}>
+        Atenção: a gravação vai ao OpenRouter sem ocultar dados pessoais (CPF, nome, e-mail). Evite dizer o que não pode sair deste computador.
+      </p>
       <p id="assistente-anexos-status" className="ck-assist__contador ck-assist__anexos-status" role="status" aria-live="polite"><Fragment key={e.anexosStatusSeq}>{e.anexosStatus}</Fragment></p>
       <div className="ck-assist__pilula">
         <button
@@ -50,7 +53,7 @@ export function Formulario({ e }: { e: Estado }) {
         </label>
         <button
           type="button" id="assistente-gravar" className={`ck-btn ck-btn--fantasma ck-assist__icone${e.gravando ? " ck-assist__icone--gravando" : ""}`}
-          title={e.rotuloGravar} aria-describedby="assistente-gravar-dica" disabled={e.gravarDesabilitado}
+          title={e.rotuloGravar} aria-describedby="assistente-gravar-dica assistente-gravar-aviso" disabled={e.gravarDesabilitado}
           onClick={() => acoes.alternarGravacaoAssistente()}
         >
           <Icone id={e.gravando ? "i-stop" : "i-mic"} />

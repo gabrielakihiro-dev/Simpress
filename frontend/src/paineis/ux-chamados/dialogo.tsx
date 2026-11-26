@@ -39,7 +39,7 @@ export function DialogoChamadoUX() {
       <p id="ux-chamado-status" role="status">{s.status}</p>
       <p id="ux-chamado-motivo" className="font-bold" hidden={!s.motivo}>{s.motivo}</p>
       <div className="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
-        <button type="button" className="ck-btn ck-btn--secundario" id="ux-chamado-fechar" onClick={fecharChamadoUX}>Fechar</button>
+        <button type="button" className="ck-btn ck-btn--secundario" id="ux-chamado-fechar" onClick={fecharChamadoUX} disabled={s.enviando}>Fechar</button>
         <button type="button" className="ck-btn ck-btn--secundario" id="ux-chamado-conferido" onClick={() => void conferirChamadoUX()} hidden={!s.conferido}>Conferi no UX; preparar de novo</button>
         <button type="button" className="ck-btn ck-btn--secundario" id="ux-chamado-simular" onClick={() => void executarChamadoUX(false)} aria-describedby="ux-chamado-motivo" disabled={!s.pronto} title={titulo}>Simular preenchimento</button>
         <button type="button" className="ck-btn ck-btn--primario" id="ux-chamado-enviar" onClick={() => void executarChamadoUX(true)} aria-describedby="ux-chamado-motivo" disabled={!s.pronto} title={titulo}>Revisar e enviar</button>

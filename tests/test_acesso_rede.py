@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from security import local_requests
+from security import network
 from security.network import is_direct_loopback_request
 
 
@@ -34,6 +35,25 @@ class AcessoRedeTests(unittest.TestCase):
                 self.assertIn(("192.168.15.9", 8000), local_requests.allowed_local_authorities(8000))
             os.environ.pop("SIMPRESS_ACESSO_REDE", None)
             self.assertNotIn(("192.168.15.9", 8000), local_requests.allowed_local_authorities(8000))
+
+
+class AcessoTailscaleTests(unittest.TestCase):
+    def test_tailnet_peer_only_when_tailscale_enabled(self):
+        with patch.dict(os.environ, {"SIMPRESS_ACESSO_TAILSCALE": "1"}):
+            self.assertTrue(is_direct_loopback_request(scope("100.101.102.103")))
+            self.assertFalse(is_direct_loopback_request(scope("192.168.15.20")))
+            self.assertFalse(is_direct_loopback_request(scope("100.128.0.1")))
+        with patch.dict(os.environ, {"SIMPRESS_ACESSO_REDE": "1"}):
+            self.assertFalse(is_direct_loopback_request(scope("100.101.102.103")))
+        os.environ.pop("SIMPRESS_ACESSO_TAILSCALE", None)
+        self.assertFalse(is_direct_loopback_request(scope("100.101.102.103")))
+
+    def test_tailscale_host_from_env_and_rejects_non_tailnet_ip(self):
+        with patch.dict(os.environ, {"SIMPRESS_ACESSO_TAILSCALE": "1", "SIMPRESS_IP_TAILSCALE": "100.70.1.2"}):
+            self.assertEqual(network.ip_tailscale(), "100.70.1.2")
+            self.assertIn(("100.70.1.2", 8000), local_requests.allowed_local_authorities(8000))
+        with patch.dict(os.environ, {"SIMPRESS_IP_TAILSCALE": "8.8.8.8"}):
+            self.assertIsNone(network.ip_tailscale())
 
 
 if __name__ == "__main__":

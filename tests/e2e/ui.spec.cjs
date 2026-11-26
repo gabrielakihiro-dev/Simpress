@@ -220,7 +220,7 @@ test("delete confirmation opens above the history dialog and cancelling keeps th
   const history = page.locator("#modal-historico-comparacoes");
   const deleteButton = history.getByRole("button", { name: /^Excluir atualização de/ }).first();
   await deleteButton.click();
-  const confirmation = page.getByRole("dialog", { name: "Excluir atualização?" });
+  const confirmation = page.getByRole("alertdialog", { name: "Excluir atualização?" });
   await expect(confirmation).toBeVisible();
   const zIndex = selector => page.locator(selector).evaluate(element => Number(getComputedStyle(element).zIndex));
   expect(await zIndex("#modal-confirmar-acao")).toBeGreaterThan(await zIndex("#modal-historico-comparacoes"));

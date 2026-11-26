@@ -2822,10 +2822,14 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       });
       estado.consulta += 1;
       renderizarPreservando(dados);
-      if (dados.saida_anterior_preservada) definirTexto("sebrae-dashboard-status", "Dashboard importado. A cópia atualizada anterior foi preservada em data/state/sebrae_dashboard_saida/preservados; confira essa cópia antes de enviar outra versão.");
+      // `aviso` (texto do servidor, opcional) entra no status e no toast junto da confirmação normal; só textContent.
+      const aviso = typeof dados.aviso === "string" ? dados.aviso.trim() : "";
+      const preservada = dados.saida_anterior_preservada ? "Dashboard importado. A cópia atualizada anterior foi preservada em data/state/sebrae_dashboard_saida/preservados; confira essa cópia antes de enviar outra versão." : "";
+      if (preservada) definirTexto("sebrae-dashboard-status", preservada);
+      if (aviso) definirTexto("sebrae-dashboard-status", [el("sebrae-dashboard-status")?.textContent, aviso].filter(Boolean).join(" "));
       entrada.value = "";
       entrada.dispatchEvent(new Event("change", { bubbles: true }));
-      app.showToast("Dashboard importado.", "success");
+      app.showToast(aviso ? `Dashboard importado. ${aviso}` : "Dashboard importado.", aviso ? "warning" : "success");
     } catch (falha) { const error = falha as ErroApi;
       definirTexto("sebrae-dashboard-status", error.message);
       app.showToast(error.message, "error");

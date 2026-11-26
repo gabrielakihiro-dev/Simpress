@@ -1227,6 +1227,9 @@ class SimpressApi:
         if isinstance(dados, dict) and "backups_regionais" in dados:
             # Long (alias and excluded lists) and may carry a person's name: only `listar_backups_regionais` reads it, by allowlist.
             dados = {k: AVISO_BACKUPS_NO_PAINEL if k == "backups_regionais" else v for k, v in dados.items()}
+        if isinstance(dados, dict) and "lembretes_agendados" in dados:
+            # Os Lembretes ficam fora do Assistente: a contagem do sino não é lida por ele.
+            dados = {k: v for k, v in dados.items() if k != "lembretes_agendados"}
         # The size cut happens after the privacy mask, in the conversation.
         return {"dados": _aparar(dados)}
 

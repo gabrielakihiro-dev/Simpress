@@ -686,7 +686,10 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   function clearComparisonResult(message: Qualquer, estado = "vazio") {
     byId("comparacao-planilhas-fontes").textContent = "";
     app.limparAbasResumo?.(abaPedidaAoAbrir);
-    renderEmpty(byId("comparacao-planilhas-conteudo"), message);
+    // O contêiner do Resumo não é região viva (lia a tabela inteira): só a mensagem de carregando/vazio é anunciada.
+    const aviso = element("p", "ck-lista__vazio", message);
+    aviso.setAttribute("role", "status");
+    byId("comparacao-planilhas-conteudo").replaceChildren(aviso);
     byId("comparacao-planilhas-conteudo").dataset.estado = estado;
   }
 

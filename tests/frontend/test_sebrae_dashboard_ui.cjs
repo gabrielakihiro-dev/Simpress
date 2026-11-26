@@ -3300,3 +3300,31 @@ test("PDF: o contador por chamado só destrava quando envio e remoção terminam
   for (let i = 0; i < 5; i++) await esvaziarFila();
   assert.deepEqual([botao.disabled, arquivo.disabled, el["btn-sebrae-atualizar"].disabled], [false, false, false], "erro também libera");
 });
+
+async function importarComResposta(resposta) {
+  const apiFetch = async (url, opcoes = {}) => (opcoes.method === "POST" && url === "/api/sebrae/dashboard" ? { ...CARGA_CARTOES, ...resposta } : CARGA_CARTOES);
+  const { el, feature, app } = await renderizarCartoes(CARGA_CARTOES, null, apiFetch);
+  const botao = global.document.createElement("button");
+  botao.setAttribute("id", "btn-sebrae-importar");
+  const entrada = global.document.createElement("input");
+  entrada.setAttribute("id", "sebrae-dashboard-file");
+  entrada.files = [{ name: "Dashboard-sintetico.xlsx" }];
+  global.document.body.append(botao, entrada);
+  const toasts = [];
+  app.showToast = (texto, tipo) => toasts.push([texto, tipo]);
+  await feature.importarDashboardSebrae({ preventDefault() {} });
+  return { toasts, status: el["sebrae-dashboard-status"].textContent };
+}
+
+test("importar o Dashboard com `aviso` na resposta mostra o texto no status e no toast (warning), junto da confirmação", async () => {
+  const aviso = "A importação apagaria 6 senhas guardadas de chamados que sumiram da coluna C (de 10 guardadas); essas não foram apagadas. Confira se a planilha está completa.";
+  const { toasts, status } = await importarComResposta({ aviso });
+  assert.equal(status, `Dashboard importado: Dashboard.xlsx (3 chamados já lançados). ${aviso}`);
+  assert.deepEqual(toasts, [[`Dashboard importado. ${aviso}`, "warning"]]);
+});
+
+test("importar o Dashboard sem `aviso` não acrescenta nada: toast success e status intactos", async () => {
+  const { toasts, status } = await importarComResposta({});
+  assert.equal(status, "Dashboard importado: Dashboard.xlsx (3 chamados já lançados).");
+  assert.deepEqual(toasts, [["Dashboard importado.", "success"]]);
+});
