@@ -2,71 +2,92 @@
 
 from __future__ import annotations
 
-import json
+import os
 import socket
 import subprocess
 import sys
+from pathlib import Path
 from urllib.error import HTTPError
-from urllib.request import ProxyHandler, build_opener
+from urllib.parse import quote
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 
 HOST = "127.0.0.1"
 FIRST_PORT = 8000
 LAST_PORT = 8099
-EXPECTED_TITLE = "Simpress Transferência de Equipamentos - SEBRAE/PR"
-EXPECTED_PATHS = {"/api/prontidao", "/api/stats"}
-# Routes added after the first releases; a Simpress answering without them is an old server.
-CURRENT_PATHS = {"/api/automacao/estado", "/api/automacao/executar"}
+# Route added after the first releases; a Simpress answering 404 for it is an old server.
+CURRENT_PATH = "/api/automacao/estado"
 PORT_PROBE_TIMEOUT = 0.1
 HTTP_PROBE_TIMEOUT = 0.75
 
 
+def _read_secret(port: int) -> str | None:
+    """Per-boot secret the server writes under the user's %LOCALAPPDATA% (security/sessao_local.py)."""
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    try:
+        return (Path(base) / "Simpress" / f"sessao_{port}.txt").read_text(encoding="ascii").strip() or None
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
 def _probe_simpress(port: int) -> dict | None:
-    """Return the OpenAPI document when a Simpress server answers on the port."""
+    """Return {"outdated": bool} when a Simpress answers on the port, else None.
+
+    /openapi.json is off by default, so identity is checked with the session secret: the server that
+    wrote sessao_<port>.txt answers /bootstrap?t=<secret> with 303 and a cookie carrying that secret.
+    This is not a strong proof (the secret is sent before any proof, so a process that echoes `t` in
+    Set-Cookie would pass); it fits the accepted single-user local risk (security/sessao_local.py).
+    The secret is never printed or logged. After the 303, any failure of the version check counts
+    as a running server (never None), so the .bat does not start a second copy.
+    """
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
             connection.settimeout(PORT_PROBE_TIMEOUT)
             if connection.connect_ex((HOST, port)) != 0:
-                return False
+                return None
     except OSError:
         return None
 
-    opener = build_opener(ProxyHandler({}))
+    secret = _read_secret(port)
+    if not secret:
+        return None
+    cookie_name = f"simpress_sessao_{port}"
+    cookie = {"Cookie": f"{cookie_name}={secret}"}
+    opener = build_opener(ProxyHandler({}), _NoRedirect)
     try:
         with opener.open(
-            f"http://{HOST}:{port}/openapi.json", timeout=HTTP_PROBE_TIMEOUT
-        ) as response:
-            document = json.load(response)
-        try:
-            with opener.open(
-                f"http://{HOST}:{port}/api/stats", timeout=HTTP_PROBE_TIMEOUT
-            ) as response:
-                stats = json.load(response)
-        except HTTPError as error:
-            # Current servers answer 401 without the local session cookie; that still identifies Simpress.
-            if error.code != 401:
-                raise
-            stats = {}
+            f"http://{HOST}:{port}/bootstrap?t={quote(secret, safe='')}", timeout=HTTP_PROBE_TIMEOUT
+        ):
+            return None  # a Simpress answers 303, never a plain 200
+    except HTTPError as error:
+        if error.code != 303 or f"{cookie_name}={secret}" not in (error.headers.get("Set-Cookie") or ""):
+            return None
     except Exception:
         return None
 
-    info = document.get("info", {})
-    paths = document.get("paths", {})
-    if (
-        info.get("title") == EXPECTED_TITLE
-        and EXPECTED_PATHS.issubset(paths)
-        and isinstance(stats, dict)
-    ):
-        return document
-    return None
+    # Identity checked: from here on, never None.
+    try:
+        with opener.open(
+            Request(f"http://{HOST}:{port}{CURRENT_PATH}", headers=cookie), timeout=HTTP_PROBE_TIMEOUT
+        ):
+            return {"outdated": False}
+    except HTTPError as error:
+        return {"outdated": error.code == 404}
+    except Exception:
+        return {"outdated": False}
 
 
 def _is_simpress_running(port: int) -> bool:
     return _probe_simpress(port) is not None
 
 
-def _is_outdated(document: dict) -> bool:
-    return not CURRENT_PATHS.issubset(document.get("paths", {}))
+def _is_outdated(result: dict) -> bool:
+    return bool(result.get("outdated"))
 
 
 def _listening_pid(port: int) -> str | None:
@@ -107,9 +128,9 @@ def main() -> int:
                 first_available_port = port
             continue
 
-        document = _probe_simpress(port)
-        if document is not None:
-            if _is_outdated(document):
+        result = _probe_simpress(port)
+        if result is not None:
+            if _is_outdated(result):
                 print(
                     f"AVISO: o servidor Simpress em execucao na {_describe_port(port)} esta desatualizado "
                     "(sem as rotas /api/automacao). Feche essa janela do servidor e abra o iniciar_servidor.bat de novo.",

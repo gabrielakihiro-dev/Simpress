@@ -2614,6 +2614,13 @@ class PanelRegionalToolTests(unittest.TestCase):
         dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()
         self.assertEqual(dados["dados"]["falhas_finalizacao_softexpert"]["itens"], [{"numero": "UTIC-2026-2001", "motivo": "tempo_esgotado"}])
 
+    def test_tool_never_returns_the_scheduled_reminders_summary(self) -> None:
+        painel = {"total_unidades": 4, "lembretes_agendados": {"total": 2, "atrasados": 1, "hoje": 1, "indisponivel": False}}
+        dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()
+        self.assertEqual(dados["dados"]["total_unidades"], 4)
+        self.assertNotIn("lembretes_agendados", dados["dados"])
+        self.assertIn("lembretes_agendados", painel)  # a resposta original não é alterada
+
     def test_tool_returns_the_long_unused_alert(self) -> None:
         painel = {"sem_acesso_60_dias": {"estado": "passou_60", "total_passou": 2, "total_limite": 1}}
         dados = SimpressApi(lambda method, path, params, body: (200, painel)).obter_painel()

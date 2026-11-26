@@ -1,4 +1,4 @@
-Regras do Simpress para o Claude Code; a fonte única é o `AGENTS.md` (Codex, Cursor e Antigravity leem o mesmo arquivo).
+Regras do Simpress para o Claude Code; a fonte única é o `AGENTS.md` (Codex, Cursor e Antigravity leem o mesmo).
 
 @AGENTS.md
 

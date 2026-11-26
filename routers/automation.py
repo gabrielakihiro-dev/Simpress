@@ -10,7 +10,7 @@ from typing import Callable, Literal
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictBool, model_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from core.errors import DomainError
@@ -35,10 +35,26 @@ class AgendamentoDashboardPayload(BaseModel):
     intervalo_minutos: Literal[30, 60, 90, 120] | None = None
 
 
+# Rotinas que gravam em sistema externo: "enviar" sobrescreve o Dashboard no SharePoint e só começa com confirmado: true
+# (depois do diálogo da tela); "fechar" finaliza chamados no SoftExpert e só roda por /api/sebrae/finalizar-softexpert,
+# que grava o pedido e confere versao_importacao antes (nunca por esta rota).
+ROTINAS_COM_CONFIRMACAO = frozenset({"enviar"})
+ROTINAS_SO_POR_ROTA_PROPRIA = frozenset({"fechar"})
+
+
 class RotinaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rotina: RotinaNome
+    confirmado: StrictBool = False
+
+    @model_validator(mode="after")
+    def _exigir_confirmacao(self):
+        if self.rotina in ROTINAS_SO_POR_ROTA_PROPRIA:
+            raise ValueError("Esta rotina só inicia pela rota própria do Sebrae.")
+        if self.rotina in ROTINAS_COM_CONFIRMACAO and not self.confirmado:
+            raise ValueError("Confirme a ação (confirmado: true) para iniciar esta rotina.")
+        return self
 
 
 @dataclass(frozen=True)
@@ -56,12 +72,13 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     @router.post("/api/automacao/ux-apelidos", status_code=202)
     async def atualizar_apelidos_ux(request: Request):
         """F7: mantém os bytes/nome do download e inicia a escrita explicitamente solicitada no UX."""
-        form = await request.form(max_files=1, max_fields=0)
+        form = await request.form(max_files=1, max_fields=1)
         try:
             campos = form.multi_items()
-            if len(campos) != 1 or campos[0][0] != "file" or not isinstance(campos[0][1], StarletteUploadFile):
-                raise DomainError("Envie exatamente um arquivo XLSX.", status_code=422)
-            file = campos[0][1]
+            arquivos = [valor for nome, valor in campos if nome == "file" and isinstance(valor, StarletteUploadFile)]
+            if len(campos) != 2 or len(arquivos) != 1 or [valor for nome, valor in campos if nome == "confirmado"] != ["true"]:
+                raise DomainError("Envie exatamente um arquivo XLSX e confirmado=true (escrita no UX Simpress).", status_code=422)
+            file = arquivos[0]
             content = await file.read(MAX_UX_ALIAS_BYTES + 1)
             return services.runner().start_ux_alias(file.filename or "", content)
         finally:
