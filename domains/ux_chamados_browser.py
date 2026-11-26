@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from importlib import import_module
+import logging
 import re
 from time import monotonic
 from typing import Any, Callable, Iterator
@@ -11,6 +12,7 @@ from urllib.parse import urlsplit
 from domains.ux_chamados import MSG_SEM_ENVIO, SERIES_SEM_ENVIO_REAL, ErroUX, envio_desativado
 
 automation = import_module("scripts.automacao_rotinas_chrome")
+logger = logging.getLogger(__name__)
 
 
 LeituraLista = tuple[list[tuple[int, str, int]], int, int, int]
@@ -303,8 +305,8 @@ class PortalUXChrome:
         if not refazer:
             try:
                 return self._validar(serial, modelo, aba)
-            except Exception:
-                pass  # a aba saiu do formulário: segue para o mesmo link abaixo
+            except Exception as erro:
+                logger.debug("Aba do chamado UX fora do formulário (%s).", type(erro).__name__)  # a aba saiu do formulário: segue para o mesmo link abaixo
         page = self._aba(aba, encerrada=True)
         rota = _rota(page.url)
         if page.get_by_text(TITULO_OS).filter(visible=True).count() or (
@@ -431,7 +433,8 @@ class PortalUXChrome:
                     for campo, valor in (solicitante or {}).items()
                 )
             )
-        except Exception:
+        except Exception as erro:
+            logger.debug("Falha ao conferir o formulário do chamado UX (%s).", type(erro).__name__)
             return False
 
     @staticmethod
