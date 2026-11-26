@@ -135,6 +135,7 @@ function javascriptFilesToCheck() {
     ...listFiles("config", ".cjs"),
     ...listFiles("scripts", ".cjs", { recursive: true, exclude: ["scripts/__pycache__"] }),
     ...listFiles(".claude/hooks", ".cjs"),
+    ...listFiles(".agents/plugins/simpress-maestro/hooks", ".cjs"),
   ];
 }
 
