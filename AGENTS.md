@@ -46,7 +46,7 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 
 ## Documentação de mudanças
 
-Mudou tela, rotina, endpoint, texto aprovado, dado gravado ou regra de segurança: no mesmo trabalho, atualize o `.md` da aba, alinhe backend, front-end, testes e Assistente (ferramentas, cartão de confirmação, máscara, testado com o assistente real), registre escrita em sistema externo ou dado local com autorização e data, e liste os `.md` alterados.
+Mudou tela, rotina, endpoint, texto aprovado, dado gravado ou regra de segurança: no mesmo trabalho, siga "Documentação de mudanças em qualquer aba" em `docs/desenvolvimento/regras-agentes.md`.
 
 ## Tamanho das regras
 
@@ -54,7 +54,7 @@ Ao editar `AGENTS.md`, `CLAUDE.md` ou `.cursor/rules/`, siga "Tamanho das regras
 
 ## Explicações para leigo
 
-O usuário é leigo em back-end e front-end, mas conhece Git: resumo simples primeiro, cada termo técnico com um exemplo; antes de mudar, objetivo, motivo e como verificar; depois, o que mudou e o que não foi verificado. Caminhos, comandos e erros exatos em blocos de código.
+O usuário é leigo em back-end e front-end, mas conhece Git: ao explicar, analisar ou relatar mudança, siga "Explicações para leigo" em `docs/desenvolvimento/regras-agentes.md`.
 
 ## Git
 
