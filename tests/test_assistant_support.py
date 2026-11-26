@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import ssl
 import tempfile
 import unittest
 import urllib.error
@@ -19,6 +20,7 @@ from domains.assistant_openrouter import (
     OpenRouterClient,
     OpenRouterError,
     OpenRouterSettings,
+    _ssl_context_compat,
     read_env_file,
 )
 
@@ -200,6 +202,42 @@ class ClientTests(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", return_value=FakeResponse(b"nao e json")):
             with self.assertRaises(OpenRouterError):
                 self.client.complete([], [])
+
+    def test_ssl_compat_context_keeps_cert_and_hostname_verification(self) -> None:
+        ctx = _ssl_context_compat()
+        self.assertTrue(ctx.check_hostname)
+        self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED)
+        strict = getattr(ssl, "VERIFY_X509_STRICT", 0)
+        if strict:
+            self.assertEqual(ctx.verify_flags & strict, 0)
+
+    def test_ssl_key_usage_error_retries_with_compat_context_only(self) -> None:
+        if not hasattr(ssl, "VERIFY_X509_STRICT"):
+            self.skipTest("Python sem VERIFY_X509_STRICT")
+        contexts: List[Any] = []
+
+        def fake_ok(request: Any, timeout: float, context: Any = None) -> FakeResponse:
+            contexts.append(context)
+            if context is None:
+                raise urllib.error.URLError(ssl.SSLCertVerificationError(1, "CA cert does not include key usage extension"))
+            return FakeResponse(ok_body("conectou"))
+
+        with mock.patch("urllib.request.urlopen", fake_ok):
+            self.assertEqual(self.client.complete([], []).content, "conectou")
+        self.assertEqual(len(contexts), 2)
+        self.assertIsNone(contexts[0])
+        self.assertIsNotNone(contexts[1])
+
+        other_contexts: List[Any] = []
+
+        def fake_other_ssl_err(request: Any, timeout: float, context: Any = None) -> FakeResponse:
+            other_contexts.append(context)
+            raise urllib.error.URLError(ssl.SSLCertVerificationError(1, "certificate has expired"))
+
+        with mock.patch("urllib.request.urlopen", fake_other_ssl_err):
+            with self.assertRaises(OpenRouterError):
+                self.client.complete([], [])
+        self.assertEqual(other_contexts, [None, None, None])
 
 
 class MaskTests(unittest.TestCase):
