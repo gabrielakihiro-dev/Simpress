@@ -2348,7 +2348,7 @@ def rodar_rotina_dashboard(context: "BrowserContext") -> int:
     importado = dados.get("importado") or {}
     log("Dashboard", f"Dashboard importado: {importado.get('arquivo', arquivo.name)} ({importado.get('total', '?')} chamados).")
     aviso = dados.get("aviso")
-    if aviso:  # o site guardou a cópia gerada e importou o SharePoint editado à mão
+    if aviso:  # avisos do site: SharePoint editado à mão (cópia guardada) e senhas de chamados que sumiram da coluna C não apagadas
         log("Dashboard", aviso)
         avisar("Dashboard Sebrae", aviso)
     verificar_cancelamento()
