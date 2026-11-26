@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter
+from pydantic import BaseModel, ConfigDict
 
 from domains.history_insights import PENDING_CATEGORIES, PINNED_BASELINE_ID, compare_updates
 from domains.inventory_comparison import (
@@ -678,6 +679,35 @@ def _long_unused_summary(
     return result
 
 
+# Formato da resposta de GET /api/painel (response_model_exclude_unset): só o topo é tipado; os blocos de alerta são
+# calculados por funções acima e ficam como vêm (Any), para a validação nunca cortar nem converter um campo.
+class _Saida(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class PainelResposta(_Saida):
+    base_importada: bool
+    total_equipamentos: int
+    total_unidades: int
+    por_categoria: List[Dict[str, Any]]
+    sem_categoria: int
+    cidades_principais: List[Dict[str, Any]]
+    cidades_por_categoria: Dict[str, List[Dict[str, Any]]]
+    total_cidades: int
+    sem_cidade: int
+    ultima_atualizacao: Any
+    arquivo_origem: Any
+    ultima_comparacao: Optional[Dict[str, Any]]
+    base_desatualizada: Optional[Dict[str, Any]]
+    os_paradas: Optional[Dict[str, Any]]
+    chamados_outro_tecnico: Dict[str, Any]
+    falhas_finalizacao_softexpert: Dict[str, Any]
+    divergencias_novas: Any
+    sem_acesso_60_dias: Any
+    backups_regionais: Optional[Dict[str, Any]]
+    lembretes_agendados: Dict[str, Any]
+
+
 @dataclass(frozen=True)
 class DashboardRouteExports:
     """Routes exposed to ``main`` for direct calls in tests and helpers."""
@@ -688,7 +718,7 @@ class DashboardRouteExports:
 def create_dashboard_router(services: DashboardServices) -> Tuple[APIRouter, DashboardRouteExports]:
     router = APIRouter()
 
-    @router.get("/api/painel")
+    @router.get("/api/painel", response_model=PainelResposta, response_model_exclude_unset=True)
     def obter_painel():
         """Resumo somente leitura da base para a página inicial."""
         return build_dashboard(services)
