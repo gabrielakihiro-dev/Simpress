@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence
 
+from core.errors import DomainBusyError
 from core.integrity import atomic_write_json, lock_paths
 from domains.sebrae_arquivo import STATUS_FINALIZADO
 from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
@@ -50,12 +51,15 @@ def extrair(*textos: Any) -> List[str]:
 
 
 def _ler_tudo(arquivo: Path) -> Dict[str, List[str]]:
+    """Arquivo ausente: ``{}``. Ilegível (OneDrive, antivírus) ou inválido: erro, para ninguém regravar o que sobrou."""
     try:
         dados = json.loads(arquivo.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except FileNotFoundError:
         return {}
+    except (OSError, ValueError) as error:
+        raise DomainBusyError("O registro de senhas dos chamados está ilegível e foi preservado. Tente de novo em instantes.") from error
     if not isinstance(dados, dict):
-        return {}
+        raise DomainBusyError("O registro de senhas dos chamados tem estrutura inválida e foi preservado. Restaure uma cópia válida.")
     return {str(n): [str(v) for v in vs] for n, vs in dados.items() if isinstance(vs, list)}
 
 

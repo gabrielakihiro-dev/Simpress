@@ -138,6 +138,22 @@ class LeituraTest(unittest.TestCase):
         self.assertEqual([c.numero for c in sebrae_novos.ler_novos(self.caminhos.novos)["chamados"]], ["UTIC-2026-0002"])
         self.assertTrue(self.aba.fechada)
 
+    def test_execucao_interrompida_preserva_os_novos_anteriores_e_a_completa_substitui(self):
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")
+        numeros = ("UTIC-2026-0002", "UTIC-2026-0003", "UTIC-2026-0004")
+        leituras = {n: ChamadoSoftExpert(n, titulo="antigo") for n in numeros}
+        self.rodar([item(n, "x") for n in numeros], leituras)
+        self.rotinas.cancelar_em = "UTIC-2026-0003"  # cai depois do 1º chamado
+        leituras = {n: ChamadoSoftExpert(n, titulo="relido") for n in numeros}
+        with self.assertRaises(KeyboardInterrupt):
+            self.rodar([item(n, "x") for n in numeros], leituras)
+        salvo = {c.numero: c.titulo for c in sebrae_novos.ler_novos(self.caminhos.novos)["chamados"]}
+        self.assertEqual(salvo, {"UTIC-2026-0002": "relido", "UTIC-2026-0003": "antigo", "UTIC-2026-0004": "antigo"})
+        self.rotinas.cancelar_em = ""
+        # completa: o 0004 saiu do SoftExpert e não volta
+        self.rodar([item(n, "x") for n in numeros[:2]], leituras)
+        self.assertEqual([c.numero for c in sebrae_novos.ler_novos(self.caminhos.novos)["chamados"]], list(numeros[:2]))
+
     def buscas(self):
         return [i for i in sebrae_historico.listar(self.caminhos.historico)["itens"] if i["tipo"] == "busca"]
 
@@ -214,6 +230,15 @@ class LeituraTest(unittest.TestCase):
 
     def antigos(self):
         return sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(self.caminhos))
+
+    def test_antigos_com_cache_ilegivel_para_no_comeco_sem_ler_nem_sobrescrever(self):
+        self.preparar_antigos("UTIC-2026-0010")
+        destino = sebrae_novos.caminho_antigos(self.caminhos)
+        destino.write_text("{ quebrado", encoding="utf-8")
+        mod = modulo([], {"UTIC-2026-0010": ChamadoSoftExpert("UTIC-2026-0010")}, self.aba)
+        with self.assertRaisesRegex(Rotinas.RotinaErro, "ilegível e foi preservado"):
+            sebrae_leitura.executar_antigos(None, self.rotinas, state_dir=self.dir, modulo=mod)
+        self.assertEqual((mod.chamadas, destino.read_text(encoding="utf-8")), ([], "{ quebrado"))
 
     def test_novos_nao_leem_antigos(self):
         self.preparar_antigos("UTIC-2026-0010")

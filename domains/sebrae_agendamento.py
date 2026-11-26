@@ -166,6 +166,14 @@ class AgendadorSebrae:
         chave = _iso(horario)
         if configuracao["ultimo_slot_disparado"] == chave:
             return None
+        # Claim the slot before starting: a failed write must never let the next tick start the routine again.
+        configuracao["ultimo_slot_disparado"] = chave
+        configuracao["ultimo_disparo"] = {"horario": chave, "resultado": "iniciando", "em": _iso(agora)}
+        try:
+            self._salvar(configuracao)
+        except (OSError, RuntimeError) as erro:  # FileBusyError and FileTransactionError are RuntimeErrors
+            logger.warning("O horário não pôde ser reservado; a sincronização agendada não iniciou (%s).", type(erro).__name__)
+            return None
         try:
             self._iniciar(ROTINA)
             resultado = RESULTADO_INICIADA
@@ -177,11 +185,10 @@ class AgendadorSebrae:
         except Exception as erro:  # a scheduler tick must never take the worker down
             logger.warning("A sincronização agendada falhou ao iniciar (%s).", type(erro).__name__)
             resultado = RESULTADO_ERRO
-        configuracao["ultimo_slot_disparado"] = chave
         configuracao["ultimo_disparo"] = {"horario": chave, "resultado": resultado, "em": _iso(agora)}
         try:
             self._salvar(configuracao)
-        except OSError:
+        except (OSError, RuntimeError):
             logger.warning("O registro do horário disparado não foi gravado.")
         return resultado
 

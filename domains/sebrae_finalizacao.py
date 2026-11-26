@@ -36,6 +36,7 @@ MAX_PDF_BYTES = 10 * 1024 * 1024
 MAX_FICHA = 64 * 1024
 MAX_FINALIZADOS_NO_DASHBOARD = 100  # o painel "Chamados finalizados" mostra só os mais recentes; o estado em disco guarda todos
 MAX_NOME_PDF = 100
+JOB_ORFAO = timedelta(minutes=2)  # a job still waiting this long with no routine running lost its routine (exit 2/3 before ``consumir_job``)
 JOB_VALIDADE = timedelta(hours=2)  # an old job is dropped: a forgotten file must never finalize tickets by surprise
 NOME_DASHBOARD = "Dashboard Operacional_SEBRAE.xlsx"
 
@@ -617,6 +618,23 @@ def job_pendente(state_dir: Path, agora: Optional[datetime] = None) -> bool:
     """A valid job is waiting for its routine to consume it (a second request would overwrite it)."""
     job = _ler_json(caminho_job(state_dir))
     return job is not None and _job_valido(job, agora)
+
+
+def descartar_job_orfao(state_dir: Path, agora: Optional[datetime] = None) -> Optional[int]:
+    """Para uso com o executor de rotinas livre: apaga o job com mais de ``JOB_ORFAO``; devolve quantos chamados ele tinha (``None`` se não apagou)."""
+    caminho = caminho_job(state_dir)
+    with lock_paths([caminho]):
+        job = _ler_json(caminho)
+        if job is None or not _job_valido(job, agora):
+            return None
+        criado = datetime.fromisoformat(str(job.get("criado_em")))
+        if criado.tzinfo is None:
+            criado = criado.replace(tzinfo=FUSO)
+        if (agora or agora_local()) - criado <= JOB_ORFAO:
+            return None
+        caminho.unlink(missing_ok=True)
+    numeros = job.get("numeros")
+    return len(numeros) if isinstance(numeros, list) else 0
 
 
 def gravar_resultado(state_dir: Path, resultado: Mapping[str, Any]) -> None:
