@@ -116,6 +116,85 @@ class ImportacaoApagaSenhaTest(RotasBase):
         self.assertTrue(any("OSError" in linha for linha in logs.output))
         self.assertFalse(any("Abc12345" in linha for linha in logs.output))
 
+    def test_limite_de_quantidade_na_importacao_pula_a_limpeza_e_avisa(self):
+        nums = tuple(f"UTIC-2026-{n:04d}" for n in range(1, 9))  # 8 abertos, todos com senha (+ NOVO = 9 guardadas)
+        for numero in nums:
+            sebrae_credenciais.guardar(self.pasta, numero, DESCRICAO)
+        self.assertEqual(self.importar(montar(chamados=nums, status=("EM ABERTO",) * 8, ultima=12)).status_code, 200)
+        resposta = self.importar(montar(chamados=("UTIC-2026-0099",), status=("EM ABERTO",)))  # a planilha "perdeu" os 8
+        self.assertEqual(resposta.status_code, 200)  # a importação segue
+        self.assertEqual(len(sebrae_credenciais.numeros(self.pasta)), 9)  # nenhuma apagada
+        aviso = resposta.json()["aviso"]
+        self.assertIn("encerraria 8 senhas", aviso)
+        self.assertIn("(de 9)", aviso)
+        self.assertNotIn("UTIC-2026", aviso)
+        self.assertNotIn("Abc12345", resposta.text)
+
+    def test_sem_aviso_quando_a_limpeza_esta_no_limite(self):
+        self.importar(montar())
+        resposta = self.importar(montar(chamados=("UTIC-2026-0003",), status=("EM ABERTO",)))  # 1 apagada (0001)
+        self.assertNotIn("aviso", resposta.json())
+
+
+class LimiteRemoverEncerradosTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+
+    def guardar(self, total):
+        nums = [f"UTIC-2026-{n:04d}" for n in range(1, total + 1)]
+        for numero in nums:
+            sebrae_credenciais.guardar(self.dir, numero, DESCRICAO)
+        return nums
+
+    def sair(self, nums):
+        """Os ``nums`` estavam abertos e a nova planilha não os traz (sem coluna C, por exemplo)."""
+        return sebrae_credenciais.remover_encerrados(self.dir, {}, [{"numero": n} for n in nums])
+
+    def test_mais_de_5_pula(self):
+        nums = self.guardar(100)
+        r = self.sair(nums[:6])
+        self.assertEqual((r.pulado, r.apagadas, r.previstas, r.guardadas), (True, 0, 6, 100))
+        self.assertEqual(len(sebrae_credenciais.numeros(self.dir)), 100)
+
+    def test_mais_de_50_por_cento_pula(self):
+        nums = self.guardar(4)
+        r = self.sair(nums[:3])
+        self.assertTrue(r.pulado)
+        self.assertEqual(len(sebrae_credenciais.numeros(self.dir)), 4)
+
+    def test_dentro_do_limite_apaga(self):
+        nums = self.guardar(4)
+        r = self.sair(nums[:2])  # 50% nao e mais de 50%
+        self.assertEqual((r.pulado, r.apagadas), (False, 2))
+        self.assertEqual(len(sebrae_credenciais.numeros(self.dir)), 2)
+        pasta2 = Path(tempfile.mkdtemp())
+        for n in range(1, 21):
+            sebrae_credenciais.guardar(pasta2, f"UTIC-2026-{n:04d}", DESCRICAO)
+        r = sebrae_credenciais.remover_encerrados(pasta2, {}, [{"numero": f"UTIC-2026-{n:04d}"} for n in range(1, 6)])
+        self.assertEqual((r.pulado, r.apagadas), (False, 5))  # 5 de 20
+
+    def test_um_de_um_apaga(self):
+        nums = self.guardar(1)
+        r = self.sair(nums)
+        self.assertEqual((r.pulado, r.apagadas), (False, 1))
+        self.assertEqual(sebrae_credenciais.numeros(self.dir), frozenset())
+
+    def test_conta_so_quem_tem_senha(self):
+        nums = self.guardar(6)
+        saindo = nums[:3] + [f"UTIC-2026-9{n:03d}" for n in range(20)]  # 20 abertos sem senha saem junto: nao contam
+        r = self.sair(saindo)
+        self.assertEqual((r.pulado, r.previstas), (False, 3))
+
+    def test_planilha_sem_coluna_c_nao_apaga_nada(self):
+        nums = self.guardar(3)
+        r = self.sair(nums)  # mapa vazio: todo aberto "saiu"
+        self.assertTrue(r.pulado)
+        self.assertEqual(len(sebrae_credenciais.numeros(self.dir)), 3)
+
+    def test_arquivo_ausente_nao_pula(self):
+        r = self.sair(["UTIC-2026-0001"])
+        self.assertEqual((r.pulado, r.apagadas, r.guardadas), (False, 0, 0))
+
 
 class RotaCredenciaisTest(RotasBase):
     def test_lista_so_traz_o_sinal_e_a_rota_traz_o_valor_sem_cache(self):

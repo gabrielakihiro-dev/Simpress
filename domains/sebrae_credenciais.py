@@ -5,7 +5,7 @@ Só os valores que ``omitir_credenciais`` esconde são guardados, por chamado, e
 do Dashboard, histórico, logs e Assistente. A tela só recebe o valor quando o usuário clica em "Mostrar senha"
 (``GET /api/sebrae/chamados/{numero}/credenciais``). A entrada é apagada quando a rotina ``fechar`` finaliza o chamado
 no SoftExpert (``ok``) e, na importação do Dashboard, quando o chamado vem com D ``FINALIZADO`` ou sai da coluna C depois
-de estar aberto (``remover_encerrados``). Finalizado por outro técnico não apaga (preserva o Desfazer finalização;
+de estar aberto (``remover_encerrados``, com trava de quantidade). Finalizado por outro técnico não apaga (preserva o Desfazer finalização;
 decisão do usuário 25/11/2026). Chamado novo, ainda fora da coluna C, e chamado aberto mantêm a senha.
 """
 
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence
 
@@ -23,6 +24,8 @@ from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
 ARQUIVO = "sebrae_credenciais.json"
 MAX_VALORES = 10
 MAX_VALOR = 200
+LIMITE_SENHAS_APAGADAS = 5  # a importação nunca apaga mais que isso de uma vez (decisão do usuário, 26/11/2026)
+LIMITE_FRACAO_APAGADAS = 0.5  # nem mais que esta fração das guardadas (só vale com 2 ou mais a apagar)
 
 
 def caminho(state_dir: Path) -> Path:
@@ -115,14 +118,34 @@ def remover(state_dir: Path, *numeros: str) -> None:
             atomic_write_json(arquivo, dados)
 
 
+@dataclass(frozen=True)
+class ResultadoLimpeza:
+    """O que ``remover_encerrados`` fez: só contagens, nunca números de chamado nem valores."""
+
+    apagadas: int
+    pulado: bool
+    previstas: int
+    guardadas: int
+
+
 def remover_encerrados(
     state_dir: Path, mapa: Mapping[str, Mapping[str, str]], abertos_antes: Sequence[Mapping[str, Any]],
-) -> None:
+) -> ResultadoLimpeza:
     """Na importação do Dashboard: apaga a senha de quem tem D ``FINALIZADO`` no ``mapa`` (número -> status do novo
     Dashboard) ou estava em ``abertos_antes`` e sumiu da coluna C (mesma regra de ``sebrae_arquivo.registrar_saidas``).
-    Chamado ausente do ``mapa`` que não estava aberto antes é novo e mantém a senha."""
+    Chamado ausente do ``mapa`` que não estava aberto antes é novo e mantém a senha.
+
+    Trava (26/11/2026): planilha errada (ex.: sem a coluna C) faria todo chamado aberto "sair". Se as senhas a apagar
+    (``alvo``, só as que existem no arquivo) passam de ``LIMITE_SENHAS_APAGADAS`` ou de ``LIMITE_FRACAO_APAGADAS`` das
+    guardadas, nenhuma é apagada (``pulado``). A fração só vale com 2 ou mais a apagar: apagar a única senha guardada
+    (1 de 1) é normal."""
+    guardadas = numeros(state_dir)
     saiu = {str(a.get("numero") or "") for a in abertos_antes} - set(mapa)
     encerrados = saiu | {numero for numero, atual in mapa.items() if atual.get("status") == STATUS_FINALIZADO}
-    alvo = sorted(encerrados & numeros(state_dir))
+    alvo = sorted(encerrados & guardadas)
+    previstas, total = len(alvo), len(guardadas)
+    if previstas > LIMITE_SENHAS_APAGADAS or (previstas >= 2 and previstas > total * LIMITE_FRACAO_APAGADAS):
+        return ResultadoLimpeza(apagadas=0, pulado=True, previstas=previstas, guardadas=total)
     if alvo:
         remover(state_dir, *alvo)
+    return ResultadoLimpeza(apagadas=previstas, pulado=False, previstas=previstas, guardadas=total)

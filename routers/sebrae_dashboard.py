@@ -586,8 +586,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             mapa = _arquivar_encerrados(conteudo, anteriores)
             _registrar_marcas(arquivo_marcas, mapa, anteriores)
             preservada = _guardar_importado(conteudo, numeros, nome)
-            _apagar_senhas_encerradas(mapa, anteriores)  # after the new base is stored: a failed import prunes nothing
             avisos = []
+            aviso_senhas = _apagar_senhas_encerradas(mapa, anteriores)  # after the new base is stored: a failed import prunes nothing
+            if aviso_senhas:
+                avisos.append(aviso_senhas)
             aviso_linhas = _acompanhar_chaves_de_linha(anteriores)  # after the new base is stored: a retry never moves keys twice
             historico_ok = _registrar_historico(conteudo, nome, anteriores)
             # ia=False: the optional AI call (network, up to ~8 s) must not hold the file lock; the next GET fills the suggestions
@@ -650,12 +652,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             ) from None
         return mapa
 
-    def _apagar_senhas_encerradas(mapa: Mapping[str, Mapping[str, str]], anteriores: Optional[Mapping[str, Any]]) -> None:
-        """Stored F5 password of a ticket closed (D FINALIZADO) or gone from column C in this import; never blocks the import."""
+    def _apagar_senhas_encerradas(mapa: Mapping[str, Mapping[str, str]], anteriores: Optional[Mapping[str, Any]]) -> str:
+        """Stored F5 password of a ticket closed (D FINALIZADO) or gone from column C in this import; never blocks the import.
+        Returns a warning (counts only, no ticket numbers) when the cleanup was skipped for deleting too many at once, else ''."""
         try:
-            sebrae_credenciais.remover_encerrados(_pasta_estado(), mapa, anteriores["abertos"] if anteriores else [])
+            resultado = sebrae_credenciais.remover_encerrados(_pasta_estado(), mapa, anteriores["abertos"] if anteriores else [])
         except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
             logger.warning("Senhas guardadas dos chamados encerrados não apagadas (%s).", type(erro).__name__)
+            return ""
+        if not resultado.pulado:
+            return ""
+        return (
+            f"A importação encerraria {resultado.previstas} senhas guardadas de uma vez (de {resultado.guardadas}); "
+            "nenhuma foi apagada. Confira se a planilha está completa."
+        )
 
     def _resolvedor_os(abertos: Sequence[Mapping[str, Any]]) -> marcas.Resolvedor:
         """Link UTIC -> OS for the mark of the OS tab: manual wins over the one derived from ``abertos``; several OS give the highest."""
