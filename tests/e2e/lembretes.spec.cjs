@@ -1134,6 +1134,7 @@ test("sino: lembretes atrasados mostram o cartão urgente, contam 1 aviso e abre
     await expect(page.locator('[data-cockpit-tool-panel="lembretes"]')).toBeVisible();
     await expect(page.locator("#termos-painel-lembretes")).toBeVisible();
   } finally {
+    await page.request.get("/__fixture_backups?estado=padrao");
     await page.request.get("/__fixture_lembretes?itens=0");
   }
 });
@@ -1290,8 +1291,10 @@ test("mutação com sucesso: editar a data agendada pede o painel exatamente 1 v
     await pendentes(page).first().getByRole("button", { name: "Editar lembrete" }).click();
     await page.locator("#lembretes-edicao-data").fill(amanha);
     painel.zerar();
+    // Sinal de sucesso independente da vista ativa: a resposta 200 do PATCH.
+    const resposta = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/lembretes\//.test(r.url()));
     await page.getByRole("button", { name: "Salvar", exact: true }).click();
-    await expect(pendentes(page).filter({ hasText: "Lembrete sintético 1" })).toHaveCount(0); // saiu da vista Hoje
+    expect((await resposta).status()).toBe(200);
     await exigirUmPainel(page, painel);
     expect(await apiLembretes(page)).toMatchObject([{ data_agendada: amanha }]);
   } finally {
