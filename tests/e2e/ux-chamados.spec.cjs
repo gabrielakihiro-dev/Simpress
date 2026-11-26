@@ -33,7 +33,7 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
   await modal.getByRole("button", { name: "Simular preenchimento" }).click();
   await expect(modal.getByRole("status")).toContainText("Nenhuma solicitação foi enviada");
   await modal.getByRole("button", { name: "Revisar e enviar" }).click();
-  const confirmacao = page.getByRole("dialog", { name: "Confirmar chamado no UX" });
+  const confirmacao = page.getByRole("alertdialog", { name: "Confirmar chamado no UX" });
   await expect(confirmacao).toContainText("O teclado do notebook não funciona.");
   expect(requests.filter(({ body }) => body.enviar === true)).toHaveLength(0);
   await confirmacao.getByRole("button", { name: "Enviar solicitação" }).click();
@@ -117,7 +117,7 @@ test("Home keeps the UX ticket dialog open while a confirmed submission is in fl
   const modal = page.getByRole("dialog", { name: "Abrir chamado no UX" });
   await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
   await modal.getByRole("button", { name: "Revisar e enviar" }).click();
-  await page.getByRole("dialog", { name: "Confirmar chamado no UX" }).getByRole("button", { name: "Enviar solicitação" }).click();
+  await page.getByRole("alertdialog", { name: "Confirmar chamado no UX" }).getByRole("button", { name: "Enviar solicitação" }).click();
   await expect(modal.getByRole("status")).toContainText("Enviando a solicitação ao UX");
   const fechar = modal.locator("#ux-chamado-fechar");
   await expect(fechar).toBeDisabled();

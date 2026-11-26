@@ -90,6 +90,8 @@ Cada linha mostra:
 
 A linha em andamento recebe fundo `var(--color-accent-900)`.
 
+Leitor de tela (26/11/2026, pedido do usuário): o console `#cockpit-automation-events` tem `aria-live="off"` (recebe linha a cada 1,5 s); as mudanças de estado (Livre, Em andamento, concluída) são anunciadas por `#automacao-estado` (`role="status"`).
+
 #### Parse do log
 
 - Faça o parse do log existente (`#automacao-log`) em eventos estruturados.

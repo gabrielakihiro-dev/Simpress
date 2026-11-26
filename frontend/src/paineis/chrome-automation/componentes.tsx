@@ -445,7 +445,7 @@ export function Console() {
         <label className="ck-campo ck-console__linhas"><span className="ck-campo__rotulo">Linhas do log</span><select className="ck-entrada ck-entrada--sm" id="automacao-log-limite" data-on-change="alterarLimiteLogAutomacao" defaultValue="200"><option value="100">100</option><option value="200">200</option><option value="500">500</option></select></label>
         <button type="button" className="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-log-ao-vivo" data-on-click="voltarAoVivoAutomacao" hidden={!visao.historico}>Voltar ao vivo</button>
       </div>
-      <ol id="cockpit-automation-events" className="ck-log" role="list" aria-live="polite" aria-relevant="additions text" aria-label="Eventos da execução" tabIndex={0}>
+      <ol id="cockpit-automation-events" className="ck-log" role="list" aria-live="off" aria-label="Eventos da execução" tabIndex={0}>
         {visao.eventos.map((evento, indice) => (
           <li key={indice} className="ck-log__linha" data-state={evento.estado}>
             <span className="ck-log__hora">{evento.hora}</span><span className="ck-log__origem">{evento.origem}</span><span className="ck-log__msg">{evento.mensagem}</span><span className="ck-nivel" data-status={evento.nivel}>{evento.status}</span>

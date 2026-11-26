@@ -21,6 +21,7 @@ export function createComparisonResult(context: ContextoApp): Acoes {
         const nota = document.createElement("p");
         nota.className = "ck-nota ck-nota--erro";
         nota.textContent = "Não foi possível abrir a comparação.";
+        nota.setAttribute("role", "status");
         conteudo.replaceChildren(nota);
         conteudo.dataset.estado = "erro";
       }
