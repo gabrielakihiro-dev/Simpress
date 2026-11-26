@@ -827,5 +827,51 @@ class ResumoAgendadosTests(unittest.TestCase):
         self.assertEqual((resumo["atrasados"], resumo["hoje"]), (0, 1))
 
 
+class PainelRealLeLembretesDaApiTests(unittest.TestCase):
+    """O ``/api/painel`` do ``main.app`` real lê o mesmo ``lembretes.json`` que a API de Lembretes grava."""
+
+    def test_painel_conta_os_lembretes_gravados_pela_api_no_state_dir(self):
+        from security import sessao_local
+
+        # O roteador de Lembretes do main fixa o caminho na importação: dele sai o nome do arquivo no STATE_DIR.
+        def rotas(lista):
+            for r in lista:  # FastAPI novo agrupa os roteadores incluídos em ``_IncludedRouter``
+                filho = getattr(r, "original_router", None) or getattr(r, "router", None)
+                yield from rotas(filho.routes) if filho is not None else [r]
+
+        rota = next(r for r in rotas(main.app.routes) if getattr(r, "path", None) == "/api/lembretes" and "GET" in r.methods)
+        arquivo_do_main = next(
+            c.cell_contents for c in rota.endpoint.__closure__ if isinstance(c.cell_contents, Lembretes)
+        ).arquivo
+        relativo = arquivo_do_main.relative_to(main.STATE_DIR)
+
+        with tempfile.TemporaryDirectory() as pasta:
+            estado = Path(pasta)
+            app_api = FastAPI()
+            app_api.include_router(create_lembretes_router(estado / relativo))
+            descricao = "descricao-sintetica-painel-omega"
+            hoje = datetime.now(FUSO).date().isoformat()
+            with TestClient(app_api) as api:
+                for data in ("2000-01-01", hoje):
+                    criado = api.post("/api/lembretes", json={"descricao": descricao, "data_agendada": data})
+                    self.assertEqual(criado.status_code, 201, criado.text)
+            self.assertTrue((estado / relativo).exists())
+
+            with (
+                mock.patch.object(main, "STATE_DIR", estado),
+                TestClient(
+                    main.app, base_url=f"http://localhost:{main.SERVER_PORT}", client=("127.0.0.1", 50000),
+                    headers={"Cookie": sessao_local.cabecalho_cookie(main.SERVER_PORT)},
+                ) as cliente,
+            ):
+                resposta = cliente.get("/api/painel")
+
+        self.assertEqual(resposta.status_code, 200, resposta.text[:300])
+        self.assertEqual(
+            resposta.json()["lembretes_agendados"], {"total": 2, "atrasados": 1, "hoje": 1, "indisponivel": False},
+        )
+        self.assertNotIn(descricao, resposta.text)
+
+
 if __name__ == "__main__":
     unittest.main()
