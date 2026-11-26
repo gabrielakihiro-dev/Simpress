@@ -2230,28 +2230,48 @@ def _equipment_dossier_header(serial: str) -> Optional[Dict[str, Any]]:
         return None if equipment is None else {"serie": clean_serial, "modelo": str(equipment.get("modelo") or "")}
 
 
-def _sebrae_ticket_numbers() -> Dict[str, List[str]]:
-    """Números UTIC das listas do F5 (novos, antigos, finalizados), só o número; fonte ausente ou ilegível vira lista vazia."""
+def _sebrae_tickets() -> Dict[str, List[Tuple[str, Dict[str, str]]]]:
+    """Chamados das listas do F5 (novos, antigos, finalizados) como ``(número, {titulo, solicitante})``: só o que o filtro do F5 procura; fonte ausente ou ilegível vira lista vazia."""
     caminhos = sebrae_novos.caminhos_padrao(STATE_DIR)
 
-    def ler(leitor: Callable[[], List[str]]) -> List[str]:
+    def ler(leitor: Callable[[], List[Tuple[str, Dict[str, str]]]]) -> List[Tuple[str, Dict[str, str]]]:
         try:
             return leitor()
         except (OSError, ValueError) as error:  # ArquivoIlegivel is a ValueError; log only the type, never the term
             logger.warning("Fonte de chamados da busca indisponível (%s).", type(error).__name__)
             return []
 
-    def antigos() -> List[str]:
-        return [str(a.get("chamado") or "") for a in (sebrae_novos.ler_existentes(caminhos.existentes) or {}).get("abertos", [])]
+    try:
+        importado: Optional[Dict[str, Any]] = sebrae_novos.ler_existentes(caminhos.existentes) or {}  # one read for novos and antigos
+    except (OSError, ValueError) as error:
+        logger.warning("Fonte de chamados da busca indisponível (%s).", type(error).__name__)
+        importado = None
 
-    def novos() -> List[str]:
-        lancados = (sebrae_novos.ler_existentes(caminhos.existentes) or {}).get("numeros", ())
-        return [c.numero for c in (sebrae_novos.ler_novos(caminhos.novos, ja_lancados=lancados) or {}).get("chamados", [])]
+    def antigos() -> List[Tuple[str, Dict[str, str]]]:
+        return [] if importado is None else [(str(a.get("chamado") or ""), {"titulo": str(a.get("titulo") or ""), "solicitante": str(a.get("usuario") or ""),
+                                                 "descricao": str(a.get("descricao") or "")})
+                for a in importado.get("abertos", [])]
 
-    return {
-        "novos": ler(novos), "antigos": ler(antigos),
-        "finalizados": ler(lambda: [str(f["numero"]) for f in sebrae_finalizacao.finalizados_no_dashboard(STATE_DIR)]),
-    }
+    def novos() -> List[Tuple[str, Dict[str, str]]]:
+        if importado is None:
+            return []
+        lidos = sebrae_novos.ler_novos(caminhos.novos, ja_lancados=importado.get("numeros", ())) or {}
+        return [(c.numero, {"titulo": c.titulo, "solicitante": c.solicitante, "descricao": c.descricao}) for c in lidos.get("chamados", [])]
+
+    def finalizados() -> List[Tuple[str, Dict[str, str]]]:
+        achados = []
+        for f in sebrae_finalizacao.finalizados_no_dashboard(STATE_DIR):
+            ficha = f.get("ficha") or {}
+            descricao = next((str(v) for r, v in ficha.get("detalhes") or [] if r == "Descrição"), "")  # `detalhes` guarda pares [rótulo, valor]
+            achados.append((str(f["numero"]), {"titulo": str(ficha.get("titulo") or ""), "solicitante": str(ficha.get("solicitante") or ""), "descricao": descricao}))
+        return achados
+
+    return {"novos": ler(novos), "antigos": ler(antigos), "finalizados": ler(finalizados)}
+
+
+def _equipment_series_for_term(q: str) -> List[str]:
+    """Séries dos equipamentos que a busca da Home acha para o termo (série, hostname, apelido, usuário, nome), até 15."""
+    return [str(item.get("serie") or "") for item in _buscar_equipamentos_por_termo(q)[:15]]
 
 
 operations_router = create_operations_router(
@@ -2270,7 +2290,8 @@ operations_router = create_operations_router(
     ticket_os_marks_file=lambda: os_marcas_finalizacao.caminho_marcas(STATE_DIR),
     ticket_os_marks_sources=_marcas_fontes,
     equipment_header=_equipment_dossier_header,
-    sebrae_ticket_numbers=_sebrae_ticket_numbers,
+    sebrae_tickets=_sebrae_tickets,
+    equipment_series_for_term=_equipment_series_for_term,
 )
 app.include_router(operations_router)
 

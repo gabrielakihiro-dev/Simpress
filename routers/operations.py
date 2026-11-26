@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Sequence
+from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -16,7 +16,7 @@ from core.errors import DomainBusyError, DomainError
 from core.logging_setup import redact_reference
 from domains import ticket_import
 from domains.alias_changes import validate_equipment_serial
-from domains.busca_chamados_os import buscar_chamados, buscar_os, termo_de_chamado, termo_de_os
+from domains.busca_chamados_os import buscar_chamados, buscar_os, descricoes_oracle
 from domains.equipment_dossier import build_os_section, current_orders, empty_os_section
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.history_annotations import (
@@ -129,6 +129,7 @@ class TicketExportPayload(BaseModel):
 class BuscaChamadoItem(BaseModel):
     numero: str
     aba: Literal["novos", "antigos", "finalizados"]
+    campo: Literal["numero", "titulo", "descricao", "solicitante", "os_vinculada"]
 
 
 class BuscaOsItem(BaseModel):
@@ -137,6 +138,7 @@ class BuscaOsItem(BaseModel):
     serie: str
     status: str
     utic: Optional[str]
+    campo: Literal["os", "serie", "equipamento", "descricao", "chamado_vinculado"]
 
 
 class BuscaChamadosOsResposta(BaseModel):
@@ -161,14 +163,16 @@ def create_operations_router(
     ticket_os_marks_file: Optional[Callable[[], Path]] = None,
     ticket_os_marks_sources: Optional[Callable[[], FontesMarcas]] = None,
     equipment_header: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
-    sebrae_ticket_numbers: Optional[Callable[[], Dict[str, List[str]]]] = None,
+    sebrae_tickets: Optional[Callable[[], Dict[str, List[Tuple[str, Dict[str, str]]]]]] = None,
+    equipment_series_for_term: Optional[Callable[[str], List[str]]] = None,
 ):
     """Build the operations routes; ``ticket_import_services`` shares the import with the inbox.
 
     ``dashboard_vinculos(report)`` proposes links derived from the Sebrae Dashboard (``origem: "dashboard"``).
     ``ticket_os_marks_sources()`` gives what the server knows now for the marks of finalized OS (``FontesMarcas``).
     ``equipment_header(serial)`` gives ``{"serie", "modelo"}`` of a registered equipment, else ``None`` (dossier route).
-    ``sebrae_ticket_numbers()`` gives ``{"novos"|"antigos"|"finalizados": [UTIC numbers]}`` (search route; none: no tickets)."""
+    ``sebrae_tickets()`` gives ``{"novos"|"antigos"|"finalizados": [(UTIC number, {"titulo", "solicitante"})]}`` (search route; none: no tickets).
+    ``equipment_series_for_term(term)`` gives the series of the equipment the Home search finds for the term (search route)."""
     router = APIRouter()
 
     @router.get("/api/operacoes/pendencias")
@@ -573,23 +577,27 @@ def create_operations_router(
 
     @router.get("/api/buscar/chamados-os", response_model=BuscaChamadosOsResposta)
     def buscar_chamados_os(q: str = Query(..., min_length=2, max_length=200)):
-        """Read-only: Sebrae tickets and OS of the latest import that contain the term; the term is never logged."""
-        chamados: List[Dict[str, str]] = []
-        if termo_de_chamado(q) and sebrae_ticket_numbers is not None:
-            chamados = buscar_chamados(sebrae_ticket_numbers(), q)
+        """Read-only: Sebrae tickets and OS found by number, series, equipment or text; only ``campo`` says where, the term is never logged."""
         ordens: List[Dict[str, Any]] = []
-        if termo_de_os(q):
-            try:
-                snapshots = displayed_ticket_snapshots(load_ticket_report())
-                manual = read_ticket_os_links(ticket_os_links_path())["vinculos"]
-                links = {
-                    **{ticket_os_link_key(item["fonte"], item["serie"], item["os"]): item for item in derived_ticket_os_links(manual)},
-                    **manual,
-                }
-                rows = snapshots[-1].get("chamados", []) if snapshots else []
-                ordens = buscar_os(current_orders(rows, links, ticket_os_link_key), q)
-            except HTTPException as error:
-                logger.warning("Busca de OS: fonte indisponível (HTTP %s).", error.status_code)
+        try:
+            snapshots = displayed_ticket_snapshots(load_ticket_report())
+            manual = read_ticket_os_links(ticket_os_links_path())["vinculos"]
+            links = {
+                **{ticket_os_link_key(item["fonte"], item["serie"], item["os"]): item for item in derived_ticket_os_links(manual)},
+                **manual,
+            }
+            rows = snapshots[-1].get("chamados", []) if snapshots else []
+            series: List[str] = []
+            if equipment_series_for_term is not None:
+                try:
+                    series = equipment_series_for_term(q)
+                except Exception as error:  # the search of equipment is optional; log only the type
+                    logger.warning("Busca de OS: equipamentos indisponíveis (%s).", type(error).__name__)
+            ordens = buscar_os(current_orders(rows, links, ticket_os_link_key), q, None, series, descricoes_oracle(rows))
+        except HTTPException as error:
+            logger.warning("Busca de OS: fonte indisponível (HTTP %s).", error.status_code)
+        chamados = buscar_chamados(sebrae_tickets() if sebrae_tickets is not None else {}, q, None, ordens)
+        ordens, chamados = ordens[:5], chamados[:5]
         return {"chamados": chamados, "os": ordens}
 
     @router.get("/api/equipamento/{serial}/dossie")

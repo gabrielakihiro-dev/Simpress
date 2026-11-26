@@ -90,6 +90,7 @@ export type Body_previsualizar_planilhas_endpoint_api_planilhas_previsualizar_po
 export type BuscaChamadoItem = {
   "numero": string;
   "aba": "novos" | "antigos" | "finalizados";
+  "campo": "numero" | "titulo" | "descricao" | "solicitante" | "os_vinculada";
 };
 
 export type BuscaChamadosOsResposta = {
@@ -103,6 +104,7 @@ export type BuscaOsItem = {
   "serie": string;
   "status": string;
   "utic": string | null;
+  "campo": "os" | "serie" | "equipamento" | "descricao" | "chamado_vinculado";
 };
 
 export type BuscaWebPayload = {
