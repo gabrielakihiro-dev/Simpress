@@ -282,7 +282,7 @@ test.describe("comportamento (1366 px)", () => {
     const { chamadas, modal } = await abrirTicket(page);
     await modal.getByLabel("Registro").fill(REGISTRO_OK);
     await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
-    const confirmacao = page.getByRole("dialog", { name: "Finalizar ticket no UX" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Finalizar ticket no UX" });
     await expect(confirmacao).toBeVisible();
     await expect(confirmacao).toContainText(REGISTRO_OK);
     await page.waitForTimeout(300);
@@ -301,7 +301,7 @@ test.describe("comportamento (1366 px)", () => {
     const { chamadas, modal } = await abrirTicket(page);
     await modal.getByLabel("Registro").fill(REGISTRO_OK);
     await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
-    const confirmacao = page.getByRole("dialog", { name: "Finalizar ticket no UX" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Finalizar ticket no UX" });
     await expect(confirmacao).toBeVisible();
     await confirmacao.getByRole("button", { name: "Cancelar" }).click();
     await expect(confirmacao).toBeHidden();
@@ -319,7 +319,7 @@ test.describe("comportamento (1366 px)", () => {
     });
     await modal.getByLabel("Registro").fill(REGISTRO_OK);
     await modal.getByRole("button", { name: "Revisar e finalizar" }).dblclick();
-    const confirmacao = page.getByRole("dialog", { name: "Finalizar ticket no UX" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Finalizar ticket no UX" });
     await expect(confirmacao).toBeVisible();
     await confirmacao.getByRole("button", { name: "Finalizar ticket" }).dblclick();
     await expect.poll(() => enviosReais(chamadas).length).toBe(1);
@@ -345,7 +345,7 @@ test.describe("comportamento (1366 px)", () => {
       recusa = motivo;
       const antes = enviosReais(chamadas).length;
       await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
-      await page.getByRole("dialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
+      await page.getByRole("alertdialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
       await expect(modal.getByRole("alert")).toHaveText(motivo);
       await expect(page.locator("#ux-ticket-estado")).toHaveText("Erro");
       await expect(modal.getByRole("status")).not.toContainText("Ticket nº");
@@ -362,7 +362,7 @@ test.describe("comportamento (1366 px)", () => {
     ));
     await modal.getByLabel("Registro").fill(REGISTRO_OK);
     await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
-    await page.getByRole("dialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
+    await page.getByRole("alertdialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
     await expect(page.locator("#ux-ticket-estado")).toHaveText("Incerto — confira no UX");
     await expect(modal.getByRole("status")).not.toContainText("Ticket nº");
     await expect(page.locator("#toast-container")).not.toContainText("Ticket enviado");
@@ -638,7 +638,7 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
     await modal.getByLabel("Registro").fill(REGISTRO_OK);
     await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
-    await page.getByRole("dialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
+    await page.getByRole("alertdialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
     await expect(page.locator("#ux-ticket-estado")).toHaveText("Incerto — confira no UX");
     await expect(modal.getByRole("button", { name: "Revisar e finalizar" })).toBeDisabled();
     await expect(modal.getByLabel("Registro")).toBeDisabled();
@@ -725,7 +725,7 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
       await expect(modal.getByRole("status")).toContainText("Pronto para simular ou finalizar");
       await modal.getByLabel("Registro").fill(REGISTRO_OK);
       await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
-      await page.getByRole("dialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
+      await page.getByRole("alertdialog", { name: "Finalizar ticket no UX" }).getByRole("button", { name: "Finalizar ticket" }).click();
       await expect.poll(() => enviosReais(chamadas).length).toBe(1);
       const cancelar = page.locator("#ux-ticket-cancelar");
       await expect(cancelar).toBeDisabled();
@@ -772,7 +772,7 @@ test.describe("ticket UX em React: casos do módulo antigo (1366 px)", () => {
     }
     const descricao = await registro.inputValue();
     await modal.getByRole("button", { name: "Revisar e finalizar" }).click();
-    const confirmacao = page.getByRole("dialog", { name: "Finalizar ticket no UX" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Finalizar ticket no UX" });
     await expect(confirmacao).toContainText("Série: LENTO");
     await expect(confirmacao).toContainText("Incidente: Transporte · Transferência Fisica de Equipamentos");
     await confirmacao.getByRole("button", { name: "Finalizar ticket" }).click();

@@ -159,7 +159,7 @@ const BOTAO_RESTAURAR = "Restaurar versões anteriores à atualização de 25/10
 
 async function restaurarPrimeiro(page) {
   await page.getByRole("button", { name: BOTAO_RESTAURAR }).click();
-  const confirmacao = page.getByRole("dialog", { name: "Restaurar inventários?" });
+  const confirmacao = page.getByRole("alertdialog", { name: "Restaurar inventários?" });
   await confirmacao.getByRole("button", { name: "Restaurar" }).click();
   await expect(confirmacao).toBeHidden();
 }
@@ -257,7 +257,7 @@ test.describe("Histórico de planilhas", () => {
     await abrirHistorico(page);
 
     await page.getByRole("button", { name: "Restaurar versões anteriores à atualização de 25/10/2026, 10:00:00" }).click();
-    const confirmacao = page.getByRole("dialog", { name: "Restaurar inventários?" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Restaurar inventários?" });
     await expect(confirmacao).toBeVisible();
     await expect(confirmacao).toContainText("Reverter a atualização registrada em 25/10/2026, 10:00:00?");
     await expect(confirmacao).toContainText("no endpoint: endpoint-anterior-g9.csv (10 registros)");
@@ -284,7 +284,7 @@ test.describe("Histórico de planilhas", () => {
 
     const botao = page.getByRole("button", { name: "Desfazer restauração de 25/10/2026, 08:00:00" });
     await botao.click();
-    const confirmacao = page.getByRole("dialog", { name: "Restaurar inventários?" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Restaurar inventários?" });
     await expect(confirmacao).toBeVisible();
     await confirmacao.getByRole("button", { name: "Cancelar" }).click();
     await expect(confirmacao).toBeHidden();

@@ -33,7 +33,7 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
   await modal.getByRole("button", { name: "Simular preenchimento" }).click();
   await expect(modal.getByRole("status")).toContainText("Nenhuma solicitação foi enviada");
   await modal.getByRole("button", { name: "Revisar e enviar" }).click();
-  const confirmacao = page.getByRole("dialog", { name: "Confirmar chamado no UX" });
+  const confirmacao = page.getByRole("alertdialog", { name: "Confirmar chamado no UX" });
   await expect(confirmacao).toContainText("O teclado do notebook não funciona.");
   expect(requests.filter(({ body }) => body.enviar === true)).toHaveLength(0);
   await confirmacao.getByRole("button", { name: "Enviar solicitação" }).click();

@@ -212,7 +212,7 @@ test("Configuração local: dados do cliente validam antes de enviar e Remover c
 
   const remover = page.locator("#cfg-local-chaves").getByRole("button", { name: "Remover chave do DeepSeek" });
   await remover.click();
-  const confirmacao = page.getByRole("dialog", { name: "Remover chave?" });
+  const confirmacao = page.getByRole("alertdialog", { name: "Remover chave?" });
   await expect(confirmacao).toBeVisible();
   await confirmacao.getByRole("button", { name: "Cancelar" }).click();
   await expect(confirmacao).toBeHidden();
