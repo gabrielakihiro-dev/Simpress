@@ -1,6 +1,6 @@
 # Fase B — leitura do SoftExpert (Sincronizar chamados Sebrae)
 
-Escopo: `scripts/sebrae_softexpert.py`, só leitura. A especificação geral está em `docs/operacao/sincronizar-chamados-sebrae.md`; a ligação com `rodar_rotina_sebrae` (triagem, decisão, Excel) é da Fase E.
+Escopo: `scripts/sebrae_softexpert.py`, só leitura. A especificação geral está em `docs/operacao/sincronizar-chamados-sebrae.md`; a ligação com `rodar_rotina_sebrae` é `scripts/sebrae_leitura.py` (o fluxo antigo com triagem, decisão e Excel foi removido em 26/11/2026).
 
 ## O que o módulo faz
 
@@ -11,18 +11,10 @@ Todas as funções recebem o `context`/`page` do Playwright já conectado ao Chr
 | `abrir_softexpert(context)` | Abre `https://sebraepr.softexpert.app/softexpert/workspace?page=taskCenter` em aba nova, espera o login (se faltar) e a lista carregar. Devolve a aba. |
 | `softexpert_logado(page)` / `tela_de_login(page)` | Sessão ativa = host do SoftExpert, sem campo de senha/URL de login e com a lista visível. |
 | `garantir_login(page)` | No primeiro acesso, usa `aguardar_login` da rotina e deixa o login manual. Após uma sessão já ativa expirar, pode clicar uma vez no botão `SSO` visível no domínio do SoftExpert; se não concluir, pede login manual. Não digita credenciais. |
-| `listar_chamados(page)` / `coletar_numeros(page)` | Percorre **toda** a lista (botão "Próxima" até desabilitar, ou rolagem até três voltas sem número novo) e devolve `ItemLista(numero, texto)` / só os números `UTIC-AAAA-N`, sem repetidos. Lista que não termina (`MAX_RODADAS_LISTA`) é falha, nunca resultado parcial. |
+| `listar_chamados(page)` | Percorre **toda** a lista (botão "Próxima" até desabilitar, ou rolagem até três voltas sem número novo) e devolve `ItemLista(numero, texto)` (só números `UTIC-AAAA-N`, sem repetidos). Lista que não termina (`MAX_RODADAS_LISTA`) é falha, nunca resultado parcial. |
 | `extrair_chamado(context, page, numero)` | Localiza o número na lista completa; se faltar, pesquisa pelo filtro "Pesquisar" da Central de Tarefas e aceita somente um cartão com o UTIC exato. Executar → Registro de Chamados, captura da janela PHP, confirmação "Sim", conferência de número e título, espera dos campos condicionais e releitura de campos vazios. Sempre consulta Atendimento - Chamados TI e lê o detalhe concluído. Devolve `ChamadoSoftExpert` com descrição, solicitante, "Habilitada em", título e detalhe. |
-| `extrair_chamados(context, page, numeros)` | Vários chamados, um por vez; `ChamadoNaoConfere` e `ChamadoNaoEncontrado` ficam no resultado (o chamador os registra como pendência com `erro.motivo`); `SessaoExpirada` espera novo login e refaz o chamado uma vez. Confere o cancelamento entre chamados. |
 
-Uso previsto pela Fase E:
-
-```python
-page = abrir_softexpert(context)
-numeros = coletar_numeros(page)
-t = triagem(numeros, numeros_do_dashboard(coluna_c))      # domains/sebrae_chamados.py
-lidos = extrair_chamados(context, page, list(t.a_extrair))  # dict numero -> ChamadoSoftExpert | SoftExpertErro
-```
+`coletar_numeros` e `extrair_chamados` foram removidos em 26/11/2026 (sem chamador); a leitura atual usa `listar_chamados` e `extrair_chamado` em `scripts/sebrae_leitura.py`.
 
 Erros (`SoftExpertErro` deriva de `RotinaErro` do runner, mesmo se o runner for o `__main__`): `SessaoExpirada` (`sessao_expirada`), `ChamadoNaoConfere` (`numero_nao_confere`, `titulo_nao_confere`), `ChamadoNaoEncontrado` (`nao_encontrado_na_lista`), `SoftExpertErro` (`formulario_indisponivel`, `confirmacao_inesperada`). Cada um traz `.motivo`. Nenhum deixa a janela PHP aberta; a captura de tela do erro vai para `data/logs/automacao_chrome` pelo `registrar_erro` existente.
 
@@ -71,7 +63,7 @@ Ainda é necessário validar com a rotina automatizada os seletores e a sequênc
 4. Conferir se campos condicionais mudam a descrição depois de alguma seleção (a rotina só relê, nunca altera campos) e se `RELEITURAS_CAMPOS`/`ESPERA_RELEITURA_MS` bastam.
 5. Conferir a contagem da lista com o total que a tela informar, se existir (candidato a verificação extra).
 
-A execução controlada real (todas as fases juntas) continua sendo a Fase E.
+A Fase E (execução controlada do fluxo antigo) foi removida em 26/11/2026.
 
 ## Testes
 

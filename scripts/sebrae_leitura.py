@@ -166,7 +166,7 @@ def executar(
             _registrar_busca(caminhos.historico, triagem, lidos, erros, log)
     log(f"Concluído: {len(lidos)} lido(s), {len(erros)} com erro.")
     print(
-        "\n[SUCESSO] Chamados novos lidos; abra a tela Automação para preencher e exportar."
+        "\n[SUCESSO] Chamados novos lidos; abra a tela Automação para preencher e atualizar o Dashboard."
         if not erros
         else f"\n[SUCESSO] {len(lidos)} chamado(s) lido(s); {len(erros)} não puderam ser lidos (veja o log).",
         flush=True,
