@@ -3185,6 +3185,58 @@ test("lápis com Salvar que falhou: a recarga acontece e o texto do lápis é pr
   assert.equal(novo.querySelector(".sebrae-descricao__editor").hidden, false, "o editor reabriu com o texto");
 });
 
+test("recarga devolve foco e cursor a qualquer campo das listas (lápis, campo manual) e reabre o antigo recolhido", async () => {
+  const { el, doc, feature } = await telaBlocoC(UM_FINALIZAVEL());
+  const criar = doc.createElement; // o DOM falso não tem seleção de texto
+  doc.createElement = tag => Object.assign(criar(tag), { setSelectionRange(inicio, fim) { this.selectionStart = inicio; this.selectionEnd = fim; } });
+  feature.mostrarChamadoSebrae("UTIC-2026-1200"); // aba Antigos, linha aberta
+  const antigo = el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo");
+  assert.equal(antigo.open, true);
+  const lapis = antigo.querySelector("button[data-sebrae-editar-descricao]");
+  lapis.dispatchEvent({ type: "click", currentTarget: lapis });
+  const entrada = antigo.querySelector("textarea[data-sebrae-descricao-editada]");
+  digitarCampo(entrada, "Descrição em edição.");
+  Object.assign(entrada, { selectionStart: 4, selectionEnd: 4 });
+  assert.ok(doc.activeElement === entrada);
+  await feature.carregarNovosSebrae();
+  const antigoNovo = el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo");
+  assert.ok(antigoNovo !== antigo);
+  assert.equal(antigoNovo.open, true, "o antigo recolhido pela recarga volta aberto");
+  const entradaNova = antigoNovo.querySelector("textarea[data-sebrae-descricao-editada]");
+  assert.ok(doc.activeElement === entradaNova, "o foco volta ao editor do lápis");
+  assert.deepEqual([entradaNova.selectionStart, entradaNova.selectionEnd], [4, 4]);
+  // campo manual do chamado novo
+  feature.mostrarChamadoSebrae("UTIC-2026-1500");
+  const campoB = cartaoDe(el, "UTIC-2026-1500").querySelector('[data-sebrae-campo="B"]');
+  campoB.focus();
+  await feature.carregarNovosSebrae();
+  const campoBNovo = cartaoDe(el, "UTIC-2026-1500").querySelector('[data-sebrae-campo="B"]');
+  assert.ok(campoBNovo !== campoB);
+  assert.ok(doc.activeElement === campoBNovo, "o foco volta ao campo manual B");
+});
+
+test("lápis aberto sem digitação volta aberto, sem aviso, e a reabertura não tira o foco de quem está fora das listas", async () => {
+  const { el, doc, feature, toasts } = await telaBlocoC(UM_FINALIZAVEL());
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  const lapis = cartao.querySelector("button[data-sebrae-editar-descricao]");
+  lapis.dispatchEvent({ type: "click", currentTarget: lapis });
+  assert.equal(cartao.querySelector(".sebrae-descricao__editor").hidden, false);
+  el["btn-sebrae-atualizar"].focus();
+  const antes = toasts.length;
+  await feature.carregarNovosSebrae();
+  const novo = cartaoDe(el, "UTIC-2026-1500");
+  assert.ok(novo !== cartao);
+  assert.equal(novo.querySelector(".sebrae-descricao__editor").hidden, false, "o editor do lápis volta aberto");
+  assert.equal(novo.querySelector("textarea[data-sebrae-descricao-editada]").value, "Travando.");
+  assert.equal(toasts.length, antes, "nada digitado: nenhum aviso");
+  assert.ok(doc.activeElement === el["btn-sebrae-atualizar"], "a reabertura do lápis não leva o foco");
+  // Cancelar fecha: a próxima recarga não reabre
+  const cancelar = novo.querySelector("button[data-sebrae-cancelar-descricao]");
+  cancelar.dispatchEvent({ type: "click", currentTarget: cancelar });
+  await feature.carregarNovosSebrae();
+  assert.equal(cartaoDe(el, "UTIC-2026-1500").querySelector(".sebrae-descricao__editor").hidden, true);
+});
+
 test("digitou com a consulta em voo: o texto vai ao servidor e volta no cartão novo", async () => {
   const { el, feature, estado } = await telaBlocoC(UM_FINALIZAVEL());
   const porta = portao();
