@@ -276,6 +276,8 @@ Importar um Dashboard novo (inclusive por `Baixar, importar e buscar`) tira a sa
 
 Única exceção à regra "o SoftExpert só é lido", autorizada pelo usuário em 30/10/2026: a automação pode **finalizar** um chamado, mas só quando o usuário o marcou `FINALIZADO` no site e pediu para finalizá-lo (um a um, nunca por iniciativa da automação). A função é `finalizar_chamado(page, numero, descricao, *, pdf=None, enviar_email=None, confirmar_final=True)` em `scripts/sebrae_softexpert.py`; a ligação com a rotina `fechar` e com o site vem em etapa separada.
 
+**Log e resultado sem dado pessoal (26/11/2026).** O log guarda só se o Solicitante é `API SEBRAE` e se o e-mail foi marcado, nunca o nome. Mensagem de falha com texto da página (valor lido, texto de confirmação) não o traz mais; erro do Playwright (mesmo embrulhado pela rotina) vira só o tipo e a chamada (`TimeoutError em Locator.click`), no `fechar` inclusive no envio ao SharePoint e nas novas tentativas. Vale para o log, para `sebrae_fechar_resultado.json` e para o GET `/api/sebrae/finalizar-softexpert`.
+
 Passos, nesta ordem (a interface real foi descrita pelo usuário em imagens; o botão `+` foi conferido no SoftExpert em 16/11/2026, sem enviar o anexo; o fluxo completo de upload e finalização segue validado só na bancada local):
 
 1. Abre a central de tarefas, acha o cartão cujo título começa com o número e clica no ícone **Executar** (o mesmo fluxo da leitura, inclusive a confirmação de associar a atividade).

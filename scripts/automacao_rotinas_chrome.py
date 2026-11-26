@@ -310,7 +310,7 @@ def etapa_resiliente(
         except EtapaInstavel as erro:
             if tentativa >= tentativas:
                 raise
-            log("Etapa", f"{descricao}: tentativa {tentativa}/{tentativas} instável ({erro}); refazendo.")
+            log("Etapa", f"{descricao}: tentativa {tentativa}/{tentativas} instável ({descrever_erro(erro, so_tipo=True)}); refazendo.")
             (recuperar or _recuperar_padrao)()
             verificar_cancelamento()
     raise AssertionError("inacessível: o loop sempre retorna ou relança")
@@ -818,13 +818,13 @@ def entrar_microsoft(
             # "Use another account", "Another account", "Acessar Outra Conta", "Outra Conta".
             outra = page.get_by_text(re.compile(r"(another|outra)\s+(account|conta)", re.IGNORECASE)).filter(visible=True)
             if conta.count() and not campo.count():
-                log(origem, f"Escolhendo a conta {email}...")
+                log(origem, "Escolhendo a conta configurada...")
                 conta.first.click()
                 escolheu = True
                 escolhas += 1
                 ultima_escolha = time.time()
             elif campo.count():
-                log(origem, f"Digitando o e-mail {email} e avançando (a senha fica com você)...")
+                log(origem, "Digitando o e-mail da conta configurada e avançando (a senha fica com você)...")
                 campo.first.fill(email)
                 avancar = page.locator("#idSIButton9, input[type='submit']").filter(visible=True)
                 if avancar.count():
@@ -3021,9 +3021,21 @@ def executar(rotina: str, sem_finalizar: bool = False, planilha_ux: Path | None 
                 browser.close()
 
 
-def descrever_erro(erro: Exception) -> str:
+def resumo_erro_de_terceiro(erro: BaseException) -> str:
+    """Tipo e, se houver, a chamada do Playwright (``Locator.click``); o resto da mensagem traz texto da página (LGPD)."""
+    chamada = re.match(r"\w+\.\w+(?=:)", (str(erro).strip().splitlines() or [""])[0])
+    return type(erro).__name__ + (f" em {chamada.group(0)}" if chamada else "")
+
+
+def descrever_erro(erro: Exception, *, so_tipo: bool = False) -> str:
+    """``so_tipo``: erro de terceiros (Playwright), mesmo embrulhado em ``RotinaErro``, vira só o resumo (LGPD)."""
     if isinstance(erro, RotinaErro):
+        causa = erro.__cause__
+        if so_tipo and causa is not None and not isinstance(causa, RotinaErro):
+            return resumo_erro_de_terceiro(causa)
         return str(erro)
+    if so_tipo:
+        return resumo_erro_de_terceiro(erro)
     # Erros do Playwright trazem o log de chamadas inteiro; a primeira linha basta no terminal.
     primeira = (str(erro).strip().splitlines() or [""])[0]
     return f"{type(erro).__name__}: {primeira}"
