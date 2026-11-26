@@ -406,6 +406,10 @@ test("o TSX desenha as quatro rotinas na ordem, com ícone, rótulo acessível, 
     "cockpit-automation-events", "automacao-andamento-conteudo", "btn-log-completo", "ck-dialogo-log-titulo", "automacao-log-arquivo", "automacao-log",
   ];
   for (const id of ids) assert.ok(componentes.includes(`id="${id}"`), `id ausente no TSX: ${id}`);
+  // 26/11/2026: o console recebe linha a cada 1,5 s e não é região viva; quem anuncia Livre/Em andamento é #automacao-estado.
+  assert.match(componentes, /<ol id="cockpit-automation-events"[^>]* aria-live="off"/);
+  assert.doesNotMatch(componentes.match(/<ol id="cockpit-automation-events"[^>]*>/)[0], /aria-relevant/);
+  assert.match(componentes, /<div id="automacao-estado" role="status" aria-live="polite" aria-atomic="true"/);
 });
 
 test("Automação mostra o histórico e o console sem painéis recolhíveis e sem sync antigo do Sebrae", () => {

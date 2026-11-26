@@ -289,6 +289,11 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator("#modal-confirmar-acao")).toBeVisible();
     await expect(page.locator("#titulo-confirmar-acao")).toHaveText("Inserir comando no PowerShell");
     await expect(page.locator("#mensagem-confirmar-acao")).toContainText("NÃO será executado");
+    // 26/11/2026: abre como alertdialog e o leitor de tela lê a mensagem junto com o título (o foco vai a Cancelar).
+    const dialogo = page.locator("#modal-confirmar-acao > .ck-dialogo");
+    await expect(dialogo).toHaveAttribute("role", "alertdialog");
+    await expect(dialogo).toHaveAttribute("aria-describedby", "mensagem-confirmar-acao");
+    await expect(page.getByRole("alertdialog", { name: "Inserir comando no PowerShell" })).toHaveAccessibleDescription(/NÃO será executado/);
     await cancelar(page);
     await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
     expect(chamadasDe(ambiente, "POST", "/api/endpoint/powershell")).toHaveLength(0);
