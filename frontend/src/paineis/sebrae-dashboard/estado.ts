@@ -2186,6 +2186,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       host.replaceChildren();
       return;
     }
+    const temCopia = Boolean(aviso.copia_local); // sem cópia local não há o que reenviar
     const botao = document.createElement("button");
     botao.type = "button";
     botao.className = "ck-btn ck-btn--secundario ck-btn--sm";
@@ -2203,7 +2204,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     });
     const acoes = document.createElement("div");
     acoes.className = "sebrae-sharepoint__acoes";
-    acoes.append(botao, descartar);
+    if (temCopia) acoes.append(botao);
+    acoes.append(descartar);
     const copiaCodigo = document.createElement("code");
     copiaCodigo.textContent = aviso.copia_local || "—";
     const copia = document.createElement("p");
@@ -2213,10 +2215,10 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     host.replaceChildren(
       dom.createTextElement("strong", "", "O Dashboard não foi substituído no SharePoint."),
       dom.createTextElement("p", "", `Motivo: ${aviso.motivo || "não informado"}.`),
-      copia,
-      dom.createTextElement("p", "", aviso.copia_sharepoint
-        ? "A cópia pendente também foi enviada à pasta DASHBOARD SEBRAE, com outro nome."
-        : "A cópia pendente não foi enviada ao SharePoint: ela está só neste computador."),
+      ...(temCopia ? [copia,
+        dom.createTextElement("p", "", aviso.copia_sharepoint
+          ? "A cópia pendente também foi enviada à pasta DASHBOARD SEBRAE, com outro nome."
+          : "A cópia pendente não foi enviada ao SharePoint: ela está só neste computador.")] : []),
       dom.createTextElement("p", "ck-campo__ajuda", "O que fazer:"),
       sugestoes, acoes,
     );
@@ -2314,9 +2316,11 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       const comecou = visto || dados.resultado?.iniciado_em !== anterior;
       if (!dados.em_andamento && !comecou && ++esperas < 4) continue; // a rotina ainda não começou a responder
       f.mensagemInicio = "";
+      const recarregadoAntes = f.recarregado;
       aplicarFechar(dados);
       if (!dados.em_andamento) {
         document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes")); // o sino mostra na hora a falha ao finalizar
+        if (Number(dados.conflitos) > 0 && f.recarregado === recarregadoAntes) carregarNovosSebrae(); // ex.: reenviar sem itens em resultados; moverFinalizados já recarrega nos outros casos
         return;
       }
     }
@@ -2865,6 +2869,15 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
   }
 
+  /** Entrega o estado da rotina enviar à Automação, que acompanha até o fim (e recarrega os conflitos) mesmo com a aba oculta. */
+  async function acompanharEnviarNaAutomacao() {
+    try {
+      const automacao = await app.apiFetch("/api/automacao/estado", { errorMessage: "Não foi possível consultar a automação." });
+      if (automacao?.estado === "em_andamento" && automacao.rotina === "enviar") { app.acompanharExecucaoAutomacao?.(automacao); return; }
+    } catch (_erro) { /* sem estado: a consulta comum abaixo cobre */ }
+    app.atualizarEstadoAutomacao?.();
+  }
+
   async function atualizarDashboardSebrae() {
     if (estado.rascunhoExterno) {
       app.showToast("O rascunho mudou em outra aba. Recarregue e confira os campos antes de atualizar o Dashboard.", "warning");
@@ -2963,7 +2976,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         avisoExcluidos || envio.tipo === "warning" ? "alerta" : "ok");
       definirEnvioDisponivel(true);
       app.showToast(envio.texto, envio.tipo);
-      if (dados.enviar?.iniciado) app.atualizarEstadoAutomacao?.(); // mostra a rotina enviar e habilita o Cancelar execução sem esperar a próxima consulta da Automação
+      if (dados.enviar?.iniciado) await acompanharEnviarNaAutomacao();
       tratarFechar(dados.fechar);
     } catch (falha) { const error = falha as ErroApi;
       definirStatusAtualizar(error.message, "erro");
