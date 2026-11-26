@@ -292,6 +292,27 @@
     </section>
   </div>
 
+  <div id="modal-saude-local" class="modal-overlay ck-veu hidden">
+    <section class="ckp-dialogo" aria-labelledby="titulo-saude-local" aria-describedby="descricao-saude-local">
+      <header class="ckp-cab">
+        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-activity"></use></svg></span>
+        <div class="ckp-cab__textos">
+          <span class="ckp-cab__kicker">Prontidão da base</span>
+          <h2 class="ckp-cab__titulo" id="titulo-saude-local" tabindex="-1">Saúde local</h2>
+          <p class="ckp-cab__sub" id="descricao-saude-local">Espaço usado, arquivos de estado e limpeza de temporários deste computador. Nada sai daqui sem você baixar.</p>
+        </div>
+        <div class="ckp-cab__acoes"><button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharSaudeLocal" aria-label="Fechar saúde local (Esc)"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      </header>
+
+      <div class="ckp-corpo" id="saude-local-corpo" data-react-painel="saude-local"></div>
+
+      <footer class="ckp-rodape">
+        <span class="ck-espaco"></span>
+        <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharSaudeLocal">Fechar</button>
+      </footer>
+    </section>
+  </div>
+
   <div id="modal-contato-origem" class="modal-overlay ck-veu hidden">
     <div class="local-setup-dialog ck-dialogo">
       <div class="local-setup-heading">

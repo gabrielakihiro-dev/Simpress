@@ -48,6 +48,7 @@ const FEATURE_ORDER = Object.freeze([
   "outlookEmail",
   "equipmentDossier",
   "configuracaoLocal",
+  "saudeLocal",
 ]);
 
 export function iniciar(app: Qualquer = globalThis): void {
