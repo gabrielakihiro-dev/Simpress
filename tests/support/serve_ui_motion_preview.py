@@ -435,6 +435,7 @@ def dashboard_payload():
         "base_desatualizada": BASE_FRESHNESS[base_freshness_state],
         "chamados_outro_tecnico": {"total": 0, "itens": []},
         "backups_regionais": backups_payload(),
+        "lembretes_agendados": LEMBRETES_AGENDADOS[lembretes_agendados_estado["modo"]],
         **PANEL_ALERTS[panel_alerts_state],
     }
 
@@ -847,6 +848,18 @@ def lembretes_reset(itens=0):
     return {"itens": itens}
 
 
+# Lembretes agendados (sino): so numeros, como o `lembretes_agendados` real. Padrao = zero, para nao mudar o badge dos outros e2e.
+# GET /__fixture_lembretes_agendados?estado=zero|atrasados|hoje|ambos|indisponivel escolhe o estado; /__fixture_lembretes volta ao padrao.
+LEMBRETES_AGENDADOS = {
+    "zero": {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": False},
+    "atrasados": {"total": 2, "atrasados": 2, "hoje": 0, "indisponivel": False},
+    "hoje": {"total": 1, "atrasados": 0, "hoje": 1, "indisponivel": False},
+    "ambos": {"total": 3, "atrasados": 2, "hoje": 1, "indisponivel": False},
+    "indisponivel": {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": True},
+}
+lembretes_agendados_estado = {"modo": "zero"}
+
+
 def lembretes_proxy(handler, method, raw_path, body=None):
     if LEMBRETES["client"] is None:
         lembretes_reset()
@@ -1125,7 +1138,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.send(cobertura_reset(params.get("cenario", ["base"])[0]))
         elif path == "/api/cobertura" or path.startswith("/api/cobertura/"):
             cobertura_proxy(self, "GET", self.path)
+        elif path == "/__fixture_lembretes_agendados":
+            modo = parse_qs(url.query).get("estado", ["zero"])[0]
+            lembretes_agendados_estado["modo"] = modo if modo in LEMBRETES_AGENDADOS else "zero"
+            self.send({"estado": lembretes_agendados_estado["modo"]})
         elif path == "/__fixture_lembretes":
+            lembretes_agendados_estado["modo"] = "zero"
             self.send(lembretes_reset(int(parse_qs(url.query).get("itens", ["0"])[0])))
         elif path == "/api/lembretes":
             lembretes_proxy(self, "GET", self.path)

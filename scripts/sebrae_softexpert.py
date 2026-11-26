@@ -1729,8 +1729,9 @@ def finalizar_chamado(
 
     Só deve ser chamada para chamado que o usuário marcou FINALIZADO no site e pediu para finalizar.
     ``page`` é a aba da central de tarefas. ``enviar_email=None`` decide pelo Solicitante (``API SEBRAE``
-    desmarca; sem Solicitante legível é falha). Com ``confirmar_final=False`` pára antes do Finalizar,
-    mas um PDF já foi enviado ao chamado. Entrada inválida levanta ``SoftExpertErro`` antes de qualquer
+    desmarca; sem Solicitante legível é falha). Com ``confirmar_final=False`` pára antes do Finalizar e
+    nada é gravado: o PDF só é validado localmente, não é enviado ao chamado (``anexo_pendente`` nos
+    detalhes; ele sobe só na finalização, logo antes do Finalizar). Entrada inválida levanta ``SoftExpertErro`` antes de qualquer
     navegação. Devolve ``{numero, status, detalhes}`` com ``status`` em ``ok``, ``pronto`` (sem
     Finalizar), ``nao_encontrado`` (fora da central de tarefas) ou ``erro``; ``SessaoExpirada`` sobe.
     """
@@ -1800,15 +1801,21 @@ def _finalizar(
         _log(f"{numero}: Solicitante {solicitante!r}; e-mail ao solicitante {'marcado' if enviar else 'desmarcado'}.")
         _ir_para_menu(formulario, NOME_ATENDIMENTO_TI, "Atendimento - Chamados TI")
         _preencher_atendimento(formulario, descricao, enviar)
-        if pdf is not None:
+        # O Enviar do anexo é escrita real: só sobe junto com o Finalizar. Na conferência o PDF fica só
+        # validado localmente (extensão, existe, não vazio, em finalizar_chamado) e nada é clicado no Anexo.
+        if pdf is not None and confirmar_final:
             _anexar_pdf(formulario, pdf, escritas)
             _ir_para_menu(formulario, NOME_ATENDIMENTO_TI, "Atendimento - Chamados TI")
         campos = _ler_atendimento(formulario, descricao, enviar)
         base = {"campos": campos, "solicitante": solicitante, "enviar_email": enviar, "pdf": pdf.name if pdf else None}
         if not confirmar_final:
             captura = _capturar(formulario, numero, "antes_de_finalizar")
-            _log(f"{numero}: tudo conferido; parando antes do Finalizar.")
-            return _resultado(numero, STATUS_PRONTO, finalizado=False, captura=captura, escritas=list(escritas), **base)
+            anexo = "; o PDF não foi enviado (só sobe na finalização)" if pdf is not None else ""
+            _log(f"{numero}: tudo conferido; parando antes do Finalizar{anexo}.")
+            return _resultado(
+                numero, STATUS_PRONTO, finalizado=False, captura=captura, escritas=list(escritas),
+                anexo_pendente=pdf is not None, **base,
+            )
         _clicar_finalizar(page, formulario, numero, escritas)
         janela_fechou = formulario is not page and formulario.is_closed()
         if _cartao_na_lista(page, numero):
