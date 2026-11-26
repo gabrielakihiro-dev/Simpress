@@ -824,7 +824,9 @@ class DashboardDownloadDaPastaTests(unittest.TestCase):
         page = MagicMock()
         with patch.object(automacao, "visivel", side_effect=[True, True, False, False, False]), patch.object(automacao, "log"):
             automacao._item_do_menu_da_linha(page, MagicMock(), automacao._MENU_BAIXAR)
-        page.get_by_role.return_value.filter.return_value.first.click.assert_called_once()  # o botão de limpar
+        page.locator.return_value.or_.return_value.filter.return_value.first.click.assert_called_once()  # o botão de limpar
+        # 26/11/2026: no DOM real o botão é role=menuitem; o seletor estável é o data-automationid
+        page.locator.assert_any_call('[data-automationid="clearSelectionCommand"]')
         self.assertIn(call("row", selected=True), page.get_by_role.call_args_list)
         self.assertIn(call("button", name=automacao._BOTAO_LIMPAR_SELECAO), page.get_by_role.call_args_list)
 
@@ -834,7 +836,7 @@ class DashboardDownloadDaPastaTests(unittest.TestCase):
         page = MagicMock()
         with patch.object(automacao, "visivel", side_effect=[False, True, True, False, False, False]), patch.object(automacao, "log"):
             automacao._item_do_menu_da_linha(page, MagicMock(), automacao._MENU_BAIXAR)
-        page.get_by_role.return_value.filter.return_value.first.click.assert_called_once()
+        page.locator.return_value.or_.return_value.filter.return_value.first.click.assert_called_once()
         page.keyboard.press.assert_not_called()
 
     def test_menu_of_the_row_stops_when_the_selection_does_not_clear(self):
