@@ -124,12 +124,13 @@ no("section", "notification-center-panel");
 no("p", "notification-center-summary");
 const tituloSino = no("h2", "notification-center-title");
 let resposta = {};
+let fetchAtual = async () => ({ ok: true, json: async () => resposta });
 panels.install({
   document: doc,
   MutationObserver: class { observe() {} },
   CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
   console: { warn() {} },
-  fetch: async () => ({ ok: true, json: async () => resposta }),
+  fetch: (...args) => fetchAtual(...args),
 });
 
 async function atualizar(corpo) {
@@ -262,4 +263,48 @@ test("painelCompartilhado: novo encadeia mesmo se o em voo já era novo", async 
   d3.resolve(3);
   assert.equal(await c, 3);
   await assentar();
+});
+
+// Integração do painel inteiro: evento -> refresh -> painelCompartilhado({ novo }) -> badge.
+async function comFetchManual(corpo) {
+  const pendentes = [];
+  const anterior = fetchAtual;
+  fetchAtual = () => { const d = adiada(); pendentes.push(d); return d.promessa; };
+  try { await corpo(pendentes); } finally { fetchAtual = anterior; await assentar(); }
+}
+const respostaDe = painel => ({ ok: true, json: async () => painel });
+
+test("evento com depoisDeMudanca busca de novo depois do GET em voo e o badge vem da 2ª resposta", async () => {
+  await atualizar({});
+  await comFetchManual(async pendentes => {
+    const p1 = ouvintes["simpress:atualizar-notificacoes"]();
+    await assentar();
+    assert.equal(pendentes.length, 1, "1º GET em voo");
+    const p2 = ouvintes["simpress:atualizar-notificacoes"](new CustomEvent("simpress:atualizar-notificacoes", { detail: { depoisDeMudanca: true } }));
+    await assentar();
+    assert.equal(pendentes.length, 1, "o pedido novo espera o 1º terminar");
+    pendentes[0].resolve(respostaDe({ lembretes_agendados: dados(0, 0) }));
+    await assentar();
+    assert.equal(pendentes.length, 2, "depois do 1º, busca de novo");
+    assert.equal(seloSino.textContent, "0", "resposta antiga descartada (serial)");
+    pendentes[1].resolve(respostaDe({ lembretes_agendados: { atrasados: 1, hoje: 0, total: 1, indisponivel: false } }));
+    await Promise.all([p1, p2]);
+    await assentar();
+    assert.equal(seloSino.textContent, "1", "badge conta o aviso da 2ª resposta");
+    assert.equal(seloSino.hidden, false);
+  });
+});
+
+test("dois eventos sem detail seguidos: um só GET (dedupe padrão preservado)", async () => {
+  await atualizar({});
+  await comFetchManual(async pendentes => {
+    const a = ouvintes["simpress:atualizar-notificacoes"]();
+    const b = ouvintes["simpress:atualizar-notificacoes"]();
+    await assentar();
+    assert.equal(pendentes.length, 1);
+    pendentes[0].resolve(respostaDe({ lembretes_agendados: dados(0, 0) }));
+    await Promise.all([a, b]);
+    await assentar();
+    assert.equal(pendentes.length, 1);
+  });
 });
