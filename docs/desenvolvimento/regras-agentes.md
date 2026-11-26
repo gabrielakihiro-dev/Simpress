@@ -84,30 +84,31 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 
 | Papel | Claude Code (agentes do projeto em `.claude/agents/`) | Codex | Antigravity |
 |---|---|---|---|
-| Análise: buscar e ler em volume | `batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` | Subagente `research` ou `batedor` (`Model: flash_lite`, sem write tools) |
-| Implementação decidida | `executor` (Sonnet 5.5) | GPT-6.1 Sol | Subagente `executor` (`Model: flash`) ou `self` |
-| Revisão independente | `revisor` (Opus 5.5) | GPT-6.1 Terra | Subagente `revisor` (`Model: pro`) |
-| Segunda opinião sobre texto ou plano | `segunda-opiniao` (Sonnet 5.5) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (`Model: flash` ou `pro`) |
-| Arquitetura ou estratégia cara de errar (raramente) | `arquiteto` (Fable 5.2) | GPT-6.1 Terra | Subagente `arquiteto` (`Model: pro`) |
+| Análise: buscar e ler em volume | `batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` | Subagente `batedor` (Hydrogen Low, plugin `simpress-maestro`) ou `research` |
+| Implementação decidida | `executor` (Sonnet 5.5) | GPT-6.1 Sol | Subagente `executor` (Hydrogen Medium/High, plugin `simpress-maestro`) ou `self` |
+| Revisão independente | `revisor` (Opus 5.5) | GPT-6.1 Terra | Subagente `revisor` (Neon High, plugin `simpress-maestro`) |
+| Segunda opinião sobre texto ou plano | `segunda-opiniao` (Sonnet 5.5) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (Hydrogen Medium, plugin `simpress-maestro`) |
+| Arquitetura ou estratégia cara de errar (raramente) | `arquiteto` (Fable 5.2) | GPT-6.1 Terra | Subagente `arquiteto` (Neon High → Carbon xHigh só se Neon não resolver) |
 
-- Agentes especializados (só Claude Code, pedidos do usuário, 24/11/2026; nenhum tem a ferramenta `Agent`, para não aninhar subagentes):
-  - `leitor-logs` (Haiku 5.5): resumir log ou saída longa de teste em erro exato e arquivo:linha.
-  - `documentador` (Haiku 5.5): alinhar os `.md` de aba e doc depois de uma mudança pronta; só edita `.md`.
-  - `conferente-glossario` (Haiku 5.5): conferir termos contra o `GLOSSARY.md`; só aponta.
-  - `testador` (Sonnet 5.5): escrever e rodar testes Python com TDD, um arquivo ou shard por vez.
-  - `testador-e2e` (Sonnet 5.5): specs Playwright em `tests/e2e/` pela fixture `ui-fixture`, um spec por vez.
-  - `depurador` (Sonnet 5.5): achar a causa raiz de bug ou teste que falha e corrigir só ela.
-  - `front-react` (Sonnet 5.5): telas e componentes da migração React/Vite em `frontend/src/`.
-  - `implementador` (Opus 5.5): código delicado (portal, SharePoint, OS, Endpoint) que o `executor` não deve fazer.
-  - `auditor-seguranca` (Opus 5.5): auditoria de segurança e LGPD só leitura, com severidade e arquivo:linha.
-  - `auditor-dependencias` (Haiku 5.5): `pip-audit` e `npm audit` só leitura, sem `--fix` nem instalar nada.
-  - `refatorador` (Sonnet 5.5): refatoração sem mudar comportamento, em passos pequenos com testes verdes antes e depois.
-  - `testador-acessibilidade` (Haiku 5.5): WCAG 2.2 AA na fixture `ui-fixture`; só aponta.
+- Agentes especializados (Claude Code em `.claude/agents/` e espelhados no Antigravity pelo plugin `.agents/plugins/simpress-maestro/agents/`; nenhum tem ferramenta de delegação, para não aninhar subagentes):
+  - `leitor-logs` (Haiku 5.5 / Hydrogen Low): resumir log ou saída longa de teste em erro exato e arquivo:linha.
+  - `documentador` (Haiku 5.5 / Hydrogen Medium): alinhar os `.md` de aba e doc depois de uma mudança pronta; só edita `.md`.
+  - `conferente-glossario` (Haiku 5.5 / Hydrogen Low): conferir termos contra o `GLOSSARY.md`; só aponta.
+  - `testador` (Sonnet 5.5 / Hydrogen Medium): escrever e rodar testes Python com TDD, um arquivo ou shard por vez.
+  - `testador-e2e` (Sonnet 5.5 / Hydrogen Medium): specs Playwright em `tests/e2e/` pela fixture `ui-fixture`, um spec por vez.
+  - `depurador` (Sonnet 5.5 / Hydrogen High): achar a causa raiz de bug ou teste que falha e corrigir só ela.
+  - `front-react` (Sonnet 5.5 / Hydrogen Medium): telas e componentes da migração React/Vite em `frontend/src/`.
+  - `implementador` (Opus 5.5 / Neon High): código delicado (portal, SharePoint, OS, Endpoint) que o `executor` não deve fazer.
+  - `auditor-seguranca` (Opus 5.5 / Neon High): auditoria de segurança e LGPD só leitura, com severidade e arquivo:linha.
+  - `auditor-dependencias` (Haiku 5.5 / Hydrogen Low): `pip-audit` e `npm audit` só leitura, sem `--fix` nem instalar nada.
+  - `refatorador` (Sonnet 5.5 / Hydrogen Medium): refatoração sem mudar comportamento, em passos pequenos com testes verdes antes e depois.
+  - `testador-acessibilidade` (Haiku 5.5 / Hydrogen Low): WCAG 2.2 AA na fixture `ui-fixture`; só aponta.
+  - No Antigravity (25/11/2026, plano AI Pro): o plugin de workspace `.agents/plugins/simpress-maestro/` entrega os 17 subagentes acima usando **exclusivamente** **Hydrogen**, **Neon** e **Carbon** (sem Flash nem 3.1 Pro): Hydrogen (Low) para leitura/auditorias baratas, Hydrogen (Medium/High) para execuções diretas (mesmo papel do Sonnet), Neon (High) para revisão, segurança e código crítico, e Carbon (High/xHigh) só quando o Neon não resolver. Traz `rules/AGENTS.md`, `hooks.json` (`SessionStart` para perguntar o par esforço/modelo via `ask_question`, revisar antes do PR e seguir o ciclo automático autorizado pelo usuário em 25/11/2026: abrir `#PR`, acompanhar a `#CI` da `#PR`, fazer `gh pr merge` após verde respeitando a ordem numérica e executar `git pull` na `main` após a CI da `main`; e `PreToolUse` para bloquear edição direta de dados operacionais). As skills em `.agents/skills/` acompanham `.claude/skills/`, e a skill `swarm-simpress` orquestra execuções paralelas via `/swarm` com modelos por faixa e `workspace: share` para autores.
   - Depois de criar ou alterar skill ou agente, rode `python scripts/conferir_ferramentas_ia.py` (sem `--instalado` confere só o repositório).
 
 - Os agentes do Claude Code são adaptados do [model-super-power](https://github.com/johnnyhelder/claude-model-super-power) (MIT), versionados em `.claude/agents/` sem instalar o plugin; numa máquina nova, o `git clone` já os traz e o `instalar_primeira_vez.bat` roda `scripts/conferir_ferramentas_ia.py --instalado`, que confere skills, agentes, plugins, MCP, hooks e instruções, e o próprio `.bat` (não o script) avisa se o plugin externo `model-super-power` estiver instalado (ele duplicaria os agentes com outros modelos). Em sessão de worktree, o app desktop lê `.claude/agents/` da pasta principal do repositório, não a do worktree: agente novo ou alterado só aparece depois do merge e do `git pull` na pasta principal (testado em 20/11/2026); a segunda opinião usa Sonnet 5.5 e o arquiteto, Fable 5.2 (escolha do usuário, 20/11/2026). Se um modelo não estiver no plano, troque o `model` do arquivo.
 - Delegação obrigatória (regra do usuário, 23/11/2026): o hook `UserPromptSubmit` de `.claude/settings.json` lembra, em todo prompt e qualquer assunto, que leitura vai ao `batedor`, execução e testes ao `executor`, revisão final ao `revisor` e decisão difícil ao `arquiteto` (ou ao especialista de `.claude/agents/` que casar com a tarefa, regra do usuário de 24/11/2026), antes de executar qualquer coisa; a sessão principal coordena. É lembrete no contexto, não bloqueio.
-- Plugins do Claude Code (pedido do usuário, 23/11/2026): o `instalar_primeira_vez.bat` instala, no escopo do usuário e só se faltarem, `ponytail` (marketplace `DietrichGebert/ponytail`), `context7` (`claude-plugins-official`) e `custo-modelos`, mod deste repositório em `.claude/plugins/custo-modelos/` (marketplace local `simpress`, copiado para `%USERPROFILE%\.claude\simpress-plugins`). O `custo-modelos` mostra abaixo da faixa do Ponytail o custo da sessão por modelo (Opus, Sonnet, Fable, Haiku), somando os subagentes; é estimativa pelos preços da API em `hooks/precos.ts` (atualize ao mudar preço). Plugins carregam só em sessão nova. Testes: `claude plugin test .claude/plugins/custo-modelos`.
+- Plugins do Claude Code (pedido do usuário, 23/11/2026): o `instalar_primeira_vez.bat` instala, no escopo do usuário e só se faltarem, `ponytail` (marketplace `DietrichGebert/ponytail`), `context7` (`claude-plugins-official`) e `custo-modelos`, mod deste repositório em `.claude/plugins/custo-modelos/` (marketplace local `simpress`, copiado para `%USERPROFILE%\.claude\simpress-plugins`). O `custo-modelos` mostra abaixo da faixa do Ponytail o custo da sessão por modelo (Opus, Sonnet, Fable, Haiku), somando os subagentes; é estimativa pelos preços da API em `hooks/precos.ts` (atualize ao mudar preço). Plugins carregam só em sessão nova. Testes: `claude plugin test .claude/plugins/custo-modelos`. Na nuvem: "Sessões na nuvem (claude.ai/code)", abaixo.
 - Nível de esforço (regra do usuário, 23/11/2026; substitui a de 20/11): em toda sessão nova do Claude Code nesta pasta, a primeira resposta classifica a dificuldade e pergunta o nível (Low, Medium, High, xHigh) com `AskUserQuestion`, o recomendado em primeiro marcado (Recommended). O hook `SessionStart` (matcher `startup|clear`) em `.claude/settings.json` injeta essa instrução; vem no clone e o `instalar_primeira_vez.bat` confere se ele está lá. Exceção: sessão aberta por outra sessão com brief (`start_session`) não pergunta, já nasce no nível passado e segue o brief. Limite: a sessão não consegue mudar o próprio esforço (`set_session_effort` recusa a própria sessão); se a escolha diferir do esforço atual, o agente pede ao usuário para trocar no seletor do app ou oferece abrir sessão nova nesse nível. Sessão nova aberta pelo agente (`start_session`) recebe `effort` pela dificuldade, mas só até o nível da sessão atual; para nível maior, inicia a sessão e chama `set_session_effort` com o id dela (o app pede aprovação do usuário, é esperado).
 - Sessão nova para execução (regra do usuário, 24/11/2026; substitui a de 20/11): depois do planejamento, a execução sempre vai para uma sessão nova (`start_session`) na pasta Simpress, com brief completo (plano, arquivos, critérios de pronto) e `effort` pela dificuldade, em vez de executar na mesma conversa.
 - Chat lotado com pendências (regra do usuário, 24/11/2026): se numa sessão (inclusive uma aberta pelo Claude) sobrar algo a alterar, como opcionais da revisão, ou algo a revisar, e o chat já estiver lotado ou gastando muitos tokens, abra uma sessão nova (`start_session`, `fresh`) com brief completo (pendências, branch e PR, estado atual) para fazer isso. Não peça `/clear` ao usuário nem use `hand_off_to_session`.
@@ -151,6 +152,25 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - O servidor só carrega em sessão nova do Claude Code (reiniciar a sessão depois de mudar `.mcp.json` ou `settings.json`).
 - Como usar: suba o `ui-fixture` e peça "use a skill playwright-teste" (fluxo em `.claude/skills/playwright-teste`).
 - LGPD: aponte só para a fixture em `127.0.0.1:8765`, nunca para o app real; os snapshots do navegador vão ao modelo e poderiam levar dado pessoal.
+
+## Sessões na nuvem (claude.ai/code)
+
+Pedido do usuário (25/11/2026): a nuvem tem os mesmos plugins e skills que o `instalar_primeira_vez.bat` instala no notebook.
+
+- O que vem do repositório sozinho: `.claude/skills/`, `.claude/agents/`, hooks e `advisorModel` de `.claude/settings.json`.
+- O que não vem: plugins. A nuvem ignora `extraKnownMarketplaces` do `settings.json` do projeto ("What carries over from your setup" em <https://code.claude.com/docs/en/cloud-environments.md>), por isso eles não estão declarados lá; no notebook isso ainda substituiria a entrada `simpress` do escopo do usuário (que aponta para `%USERPROFILE%\.claude\simpress-plugins`).
+- Como a nuvem recebe: ambiente de nuvem pessoal `simpress` (criado em 25/11/2026, ligado a este repositório), com script de setup que instala, no escopo do usuário do contêiner, `ponytail@ponytail`, `context7@claude-plugins-official`, `custo-modelos@simpress` (marketplace em `.claude/plugins/` da própria cópia do repositório), o `graphify` com a skill (`graphify install`) e o Playwright MCP para Linux. Rede: libera `mcp.context7.com` (o MCP do context7); em 26/11/2026 o `curl` a esse host respondia 200, mas o MCP do plugin falhava com `ERR_PROXY_TUNNEL` dentro do Claude Code (pendente; sem ele, o context7 não traz ferramentas). O script só vive no ambiente; para mudar, edite em Settings do ambiente ou peça ao agente (`update_environment`, que pede aprovação). Sessão na nuvem do Simpress deve escolher esse ambiente, não o `Default`.
+- Plano B para `ponytail` e `context7` (não testado): adicionar em <https://claude.ai/customize/plugins>, que, pela doc ("Cloud session" em <https://code.claude.com/docs/en/plugins/install.md>), sincroniza com as sessões na nuvem.
+- Playwright MCP: o `.mcp.json` usa `cmd /c npx ...` (só Windows) e falha na nuvem com `ENOENT: cmd`. O script de setup registra no contêiner um servidor `playwright` no escopo `local` (`claude mcp add --scope local`), com `npx` direto, `--executable-path /opt/pw-browsers/chromium` no lugar de `--browser chrome` e `--no-sandbox` (o contêiner roda como root, e o Chromium sem essa opção não abre; o navegador só acessa a fixture na 8765; testado em 26/11/2026, mas pendente no script do ambiente até o usuário acrescentar a opção em Settings); o escopo `local` ganha do `.mcp.json` e o Windows não muda. Os demais argumentos (`--allowed-origins` só na 8765, `--isolated`, `--headless`, `--output-dir`) e o `permissions.deny` continuam iguais; ao mudar o `.mcp.json`, mude também o script do ambiente.
+- graphify na nuvem: a skill e o CLI ficam instalados, mas `graphify-out/` é local e não vem no clone; sem ele, use busca (`Grep`), pule o `graphify update .` depois de mudar código e só rode `/graphify .` se valer o custo em tokens.
+- Equivalentes de ferramentas (app desktop → nuvem); os hooks de `.claude/settings.json` citam as do desktop, traduza por esta tabela:
+
+| Regra | App desktop | Nuvem |
+|---|---|---|
+| Abrir sessão nova com esforço | `start_session` + `set_session_effort` | `create_session` com `effort` (e `environment_id` do ambiente `simpress`) |
+| Acompanhar PR com Auto-fix | `ccd_pr` `set_monitor` (`auto_fix: true`) | `subscribe_pr_activity`; ele só entrega os eventos: ao chegar falha de CI ou revisão, o próprio agente corrige e faz push, sem mesclar |
+| Notas compartilhadas em `C:\Users\...` | pasta local do notebook | não existe; use o branch, o PR ou a mensagem entre sessões |
+| Playwright MCP | `.mcp.json` (`cmd /c`) | servidor `local` do script de setup |
 
 ## Tamanho das regras
 

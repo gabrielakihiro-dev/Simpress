@@ -434,6 +434,7 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     try {
       const form = new FormData();
       form.append("file", blob, filename);
+      form.append("confirmado", "true"); // só depois do diálogo acima
       const execucao = await apiFetch<ExecucaoUx>("/api/automacao/ux-apelidos", {
         method: "POST", body: form,
         errorMessage: "Não foi possível iniciar a atualização no UX Simpress.",

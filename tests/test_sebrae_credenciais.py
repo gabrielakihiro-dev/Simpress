@@ -4,11 +4,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from domains import sebrae_credenciais, sebrae_novos
 from domains.sebrae_chamados import ChamadoSoftExpert
 from tests import test_sebrae_fechar as fechar
 from tests import test_sebrae_leitura as leitura
+from tests.test_sebrae_dashboard_gravacao import montar
 from tests.test_sebrae_dashboard_router import RotasBase
 
 DESCRICAO = "Usuário criado\nSenha: Abc12345\nCPF 123.456.789-09"
@@ -62,6 +64,57 @@ class FinalizarApagaSenhaTest(fechar.FecharBase):
         self.descrever(fechar.B)
         self.rodar({fechar.B: fechar.ok()}, [fechar.B])
         self.assertEqual(sebrae_credenciais.numeros(self.dir), {fechar.C})
+
+    def test_finalizado_por_outro_tecnico_mantem_a_senha_guardada(self):
+        # decisão do usuário (25/11/2026): preserva o Desfazer finalização; a senha só sai na importação
+        sebrae_credenciais.guardar(self.dir, fechar.B, DESCRICAO)
+        self.descrever(fechar.B)
+        self.rodar({fechar.B: fechar.com_status("nao_encontrado")}, [fechar.B], manuais={fechar.B: "12/11/2026 09:30"})
+        self.assertEqual(self.por_numero()[fechar.B]["status"], "finalizado_outro_tecnico")
+        self.assertEqual(sebrae_credenciais.numeros(self.dir), {fechar.B})
+
+    def test_nao_encontrado_sem_encerramento_manual_mantem_a_senha(self):
+        sebrae_credenciais.guardar(self.dir, fechar.B, DESCRICAO)
+        self.descrever(fechar.B)
+        self.rodar({fechar.B: fechar.com_status("nao_encontrado")}, [fechar.B])
+        self.assertEqual(sebrae_credenciais.numeros(self.dir), {fechar.B})
+
+    def test_falha_ao_apagar_nao_muda_o_resultado_e_o_log_so_traz_o_tipo(self):
+        sebrae_credenciais.guardar(self.dir, fechar.B, DESCRICAO)
+        self.descrever(fechar.B)
+        with patch.object(sebrae_credenciais, "remover", side_effect=OSError("Abc12345")):
+            self.rodar({fechar.B: fechar.ok()}, [fechar.B])
+        self.assertEqual(self.por_numero()[fechar.B]["status"], fechar.fin.STATUS_OK)
+        self.assertTrue(any("senha guardada não apagada (OSError)" in texto for texto in self.rotinas.logs))
+        self.assertFalse(any("Abc12345" in texto for texto in self.rotinas.logs))
+
+
+class ImportacaoApagaSenhaTest(RotasBase):
+    NOVO = "UTIC-2026-1378"  # lido do SoftExpert, ainda fora da coluna C
+
+    def setUp(self):
+        super().setUp()
+        self.pasta = self.caminhos.existentes.parent
+        for numero in ("UTIC-2026-0001", "UTIC-2026-0002", self.NOVO):
+            sebrae_credenciais.guardar(self.pasta, numero, DESCRICAO)
+
+    def test_encerrado_na_importacao_apaga_e_aberto_ou_novo_mantem(self):
+        self.assertEqual(self.importar(montar()).status_code, 200)  # 0001 EM ABERTO, 0002 FINALIZADO
+        self.assertEqual(sebrae_credenciais.numeros(self.pasta), {"UTIC-2026-0001", self.NOVO})
+        self.assertEqual(self.importar(montar(status=("FINALIZADO", "FINALIZADO"))).status_code, 200)
+        self.assertEqual(sebrae_credenciais.numeros(self.pasta), {self.NOVO})
+
+    def test_chamado_que_some_da_coluna_c_apaga_a_senha(self):
+        self.importar(montar())
+        self.assertEqual(self.importar(montar(chamados=("UTIC-2026-0003",), status=("EM ABERTO",))).status_code, 200)
+        self.assertEqual(sebrae_credenciais.numeros(self.pasta), {self.NOVO})
+
+    def test_falha_ao_apagar_nao_bloqueia_a_importacao(self):
+        with patch.object(sebrae_credenciais, "remover", side_effect=OSError("Abc12345")), self.assertLogs(level="WARNING") as logs:
+            resposta = self.importar(montar())
+        self.assertEqual(resposta.status_code, 200)
+        self.assertTrue(any("OSError" in linha for linha in logs.output))
+        self.assertFalse(any("Abc12345" in linha for linha in logs.output))
 
 
 class RotaCredenciaisTest(RotasBase):
