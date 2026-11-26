@@ -6,14 +6,14 @@ Rotinas e automação do Chrome. Valem junto com o `AGENTS.md` da raiz; texto in
 
 - Toda rotina usa o Chrome CDP 9333 e a trava `data/state/automacao_chrome.lock`; nenhuma automação fecha abas anteriores nem o Chrome por ociosidade (`SIMPRESS_CHROME_OCIOSO_S`, desligado por padrão). Doc: `docs/operacao/automacao-chrome.md`.
 - Porta CDP 9333 sem autenticação: risco aceito (decisão do usuário, 25/11/2026); nunca use `--remote-allow-origins` (`tests/test_cdp_sem_remote_allow_origins.py`); reavalie se a máquina tiver outros usuários. Doc: `docs/operacao/automacao-chrome.md`, seção "Porta CDP 9333".
-- Login, senha e MFA são do usuário; a rotina espera o login. A rotina `login` nunca digita senha nem o código do autenticador (seção "Rotina `login`").
-- Clique acidental: se a página sair do lugar, volte ao mesmo link com `goto`, nunca `reload` no Oracle e no UX, e retome até 3 vezes (seção "Clique acidental").
+- Login, senha e MFA são do usuário; a rotina espera o login. A rotina `login` nunca digita senha nem o código do autenticador (doc acima, seção "Rotina `login`").
+- Clique acidental: se a página sair do lugar, volte ao mesmo link com `goto`, nunca `reload` no Oracle e no UX, e retome até 3 vezes (doc acima, seção "Clique acidental").
 - Cliques irreversíveis (`Salvar edições`, `Enviar` do chamado UX, `Finalizar` e `Enviar` do anexo, `Replace`, `Conectar`, `Duplicata`) nunca se repetem e só rodam depois de `aguardar_estabilidade_pre_clique`.
 - "pare" ou "cancelar" interrompe a rotina; presa 10 s depois do pedido, o vigia da trava encerra o driver do Playwright: todo `sync_playwright` sob a trava chama `registrar_driver`; depois de clique irreversível, só o cancelamento cooperativo. Download bloqueado não se contorna: só arquivo manual que o usuário identificar.
 
 ## Endpoint
 
-- PowerShell no Endpoint: invariante da raiz (NUNCA envia Enter, só `locator.fill()` em `#remotePowershellInputField`, retorno `enter_enviado: false`, recusas de comando vazio, com mais de 2000 caracteres ou com caractere de controle); o log guarda só tamanho e modo, nunca o texto. Doc: `docs/operacao/automacao-chrome.md`.
+- PowerShell no Endpoint insere o comando e NUNCA envia Enter (só `locator.fill()` em `#remotePowershellInputField`); comando vazio, com mais de 2000 caracteres ou com caractere de controle é rejeitado; o retorno traz `enter_enviado: false`; o log guarda só tamanho e modo, nunca o texto. Doc: `docs/operacao/automacao-chrome.md`.
 - Consulta ao vivo lê só `Usuário do último logon` do equipamento selecionado; sem escrita no Endpoint.
 - `staged_computers_endpoint.py` só lê, em aba própria, e o resultado vira só anotação da linha. Doc: `docs/operacao/alertas-os-divergencias.md`.
 

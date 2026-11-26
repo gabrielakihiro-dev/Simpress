@@ -1,6 +1,6 @@
 # Regras do projeto
 
-Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity); `CLAUDE.md`, `.claude/rules/` e `.cursor/rules/` só apontam para cá ou para docs. A raiz guarda só o que vale no projeto inteiro. Vocabulário: `GLOSSARY.md`.
+Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity); `CLAUDE.md`, `.claude/rules/` e `.cursor/rules/` só apontam para cá ou para docs. A raiz guarda só o que vale no projeto inteiro; o resto fica no `AGENTS.md` da pasta ou no doc do Índice. Vocabulário: `GLOSSARY.md`.
 
 **Antes de editar arquivo em `domains/`, `scripts/`, `routers/` ou `tests/`, leia o `AGENTS.md` da pasta; na interface (`frontend/` ou `static/`), leia `frontend/AGENTS.md`** (o Codex não os carrega sozinho).
 
@@ -54,7 +54,7 @@ Ao editar `AGENTS.md`, `CLAUDE.md` ou `.cursor/rules/`, siga "Tamanho das regras
 
 ## Explicações para leigo
 
-O usuário é leigo em back-end e front-end, mas conhece Git: ao explicar, analisar ou relatar mudança, siga "Explicações para leigo" em `docs/desenvolvimento/regras-agentes.md`.
+O usuário é leigo em back-end e front-end, mas conhece Git: ao explicar, analisar ou instruir, e antes e depois de mudar código, siga "Explicações para leigo" em `docs/desenvolvimento/regras-agentes.md`.
 
 ## Git
 
