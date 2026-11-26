@@ -1159,18 +1159,97 @@ test("sino: sem lembretes agendados ou com leitura indisponível o cartão fica 
   }
 });
 
-test("mutação com sucesso pede o painel de novo; falha não pede", async ({ page }) => {
-  await abrirLembretes(page);
-  const pedidosPainel = [];
-  page.on("request", requisicao => { if (new URL(requisicao.url()).pathname === "/api/painel") pedidosPainel.push(requisicao.url()); });
-  await adicionarPelaTela(page, "Lembrete sintético sino");
-  await expect.poll(() => pedidosPainel.length).toBeGreaterThan(0);
-  await page.waitForTimeout(300);
-  const aposSucesso = pedidosPainel.length;
-  await page.route("**/api/lembretes", rota => (rota.request().method() === "POST" ? rota.fulfill({ status: 503, json: { detail: "Aviso de teste: gravação indisponível.", codigo: "lembretes_gravacao" } }) : rota.fallback()));
-  await campoNovo(page).fill("Lembrete sintético falha");
-  await campoNovo(page).press("Enter");
-  await expect(page.getByText("Aviso de teste: gravação indisponível.")).toBeVisible();
-  await page.waitForTimeout(500);
-  expect(pedidosPainel.length).toBe(aposSucesso);
+// Conta só as RESPOSTAS de GET /api/painel. O contador é ligado antes de abrir a tela, a carga inicial é esperada até
+// o número parar de mudar (e a rede ficar ociosa) e só então zerado, logo antes de cada mutação.
+async function abrirContandoPainel(page, opcoes) {
+  const contador = { respostas: 0 };
+  page.on("response", resposta => {
+    if (resposta.request().method() === "GET" && new URL(resposta.url()).pathname === "/api/painel") contador.respostas += 1;
+  });
+  await abrirLembretes(page, opcoes);
+  let anterior = -1;
+  await expect.poll(async () => {
+    await page.waitForTimeout(400);
+    const estavel = contador.respostas === anterior;
+    anterior = contador.respostas;
+    return estavel;
+  }, { timeout: 15000 }).toBe(true);
+  await page.waitForLoadState("networkidle");
+  expect(contador.respostas).toBeGreaterThan(0); // a carga inicial pediu o painel; sem isso o teste não provaria nada
+  contador.zerar = () => { contador.respostas = 0; };
+  return contador;
+}
+
+const falharMetodo = (page, padrao, metodo, status, detail) => page.route(padrao, rota => (rota.request().method() === metodo
+  ? rota.fulfill({ status, json: { detail, codigo: "lembretes_gravacao" } })
+  : rota.fallback()));
+
+test("mutação com sucesso: criar lembrete pede o painel exatamente 1 vez", async ({ page }) => {
+  try {
+    const painel = await abrirContandoPainel(page);
+    painel.zerar();
+    await adicionarPelaTela(page, "Lembrete sintético sino");
+    await expect.poll(() => painel.respostas).toBe(1);
+    await page.waitForTimeout(700); // um segundo pedido, se existisse, chegaria aqui
+    await page.waitForLoadState("networkidle");
+    expect(painel.respostas).toBe(1);
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+test("mutação com falha: criar, concluir e excluir com 503/500 não pedem o painel", async ({ page }) => {
+  try {
+    const painel = await abrirContandoPainel(page, { itens: 1 });
+    const item = pendentes(page).filter({ hasText: "Lembrete sintético 1" });
+
+    // POST criar (503).
+    await falharMetodo(page, "**/api/lembretes", "POST", 503, "Aviso de teste: criar indisponível.");
+    painel.zerar();
+    await campoNovo(page).fill("Lembrete sintético falha");
+    await campoNovo(page).press("Enter");
+    await expect(page.getByText("Aviso de teste: criar indisponível.")).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(painel.respostas).toBe(0);
+    await expect(pendentes(page)).toHaveCount(1);
+
+    // PATCH concluir (500).
+    await falharMetodo(page, "**/api/lembretes/*", "PATCH", 500, "Aviso de teste: alternar falhou.");
+    painel.zerar();
+    await page.getByRole("button", { name: "Concluir: Lembrete sintético 1" }).click();
+    await expect(page.getByText("Aviso de teste: alternar falhou.")).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(painel.respostas).toBe(0);
+    await expect(item).toHaveCount(1);
+
+    // DELETE excluir (503), pelo diálogo de confirmação.
+    await falharMetodo(page, "**/api/lembretes/*", "DELETE", 503, "Aviso de teste: excluir indisponível.");
+    painel.zerar();
+    await item.getByRole("button", { name: "Excluir lembrete" }).click();
+    await page.getByRole("alertdialog", { name: "Excluir este lembrete?" }).getByRole("button", { name: "Excluir", exact: true }).click();
+    await expect(page.getByText("Aviso de teste: excluir indisponível.")).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(painel.respostas).toBe(0);
+    await expect(item).toHaveCount(1);
+    expect((await apiLembretes(page)).length).toBe(1);
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+test("excluir com 404 (o item já não existe) reconta o painel exatamente 1 vez", async ({ page }) => {
+  try {
+    const painel = await abrirContandoPainel(page, { itens: 1 });
+    await falharMetodo(page, "**/api/lembretes/*", "DELETE", 404, "Aviso de teste: lembrete não encontrado.");
+    painel.zerar();
+    await pendentes(page).first().getByRole("button", { name: "Excluir lembrete" }).click();
+    await page.getByRole("alertdialog", { name: "Excluir este lembrete?" }).getByRole("button", { name: "Excluir", exact: true }).click();
+    await expect(pendentes(page)).toHaveCount(0);
+    await expect.poll(() => painel.respostas).toBe(1);
+    await page.waitForTimeout(700);
+    await page.waitForLoadState("networkidle");
+    expect(painel.respostas).toBe(1);
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
 });
