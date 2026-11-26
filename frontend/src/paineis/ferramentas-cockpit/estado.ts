@@ -2347,10 +2347,11 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       row = findRow();
       if (row?.hidden) dataPanels()?.revelarLinhaOs?.(row);
     }
-    if (!row) return;
+    if (!row) return false;
     const toggle = [...host.querySelectorAll<ElementoCockpit>(".ck-os__andamento-btn")].find(button => button.dataset.serie === row.dataset.serial);
     if (toggle?.getAttribute("aria-expanded") !== "true") toggle?.click();
     destacarLinhaCockpit(row);
+    return true;
   }
 
   // Janela "Chamado × OS" (botão da OS no cartão do F5): chamado à esquerda, OS à direita, tudo só leitura.

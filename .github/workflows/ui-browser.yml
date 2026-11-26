@@ -93,7 +93,7 @@ jobs:
           - shard: 3
             specs: >-
               cockpit-layout.spec.cjs dossie-equipamento.spec.cjs info-tips-ferramentas.spec.cjs
-              react-g3.spec.cjs
+              react-g3.spec.cjs busca-unificada.spec.cjs
           - shard: 4
             specs: >-
               cockpit-tools.spec.cjs react-g4.spec.cjs outlook-email.spec.cjs configuracao-local.spec.cjs

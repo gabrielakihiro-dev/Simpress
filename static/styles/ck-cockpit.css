@@ -275,6 +275,13 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-ac__teclas { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 @media (max-width: 1199.98px) { .ck-ac { width: auto; right: 0; } }
 @media (max-width: 767.98px) { .ck-ac__teclas { display: none; } .ck-ac__lista { max-height: 60vh; } }
+.ck-ac__grupo-cab { display: flex; align-items: baseline; gap: 6px; padding: 8px 12px 4px; font-size: var(--fs-xs); font-weight: 600; color: var(--cor-texto-sutil); }
+@media (max-width: 767.98px) {
+  .ck-ac__grupo-cab { padding-inline: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .ck-ac__lista:not(.hidden), .ck-ac__grupo { display: flex; flex-direction: column; gap: 8px; }
+  .ck-ac__item { min-height: 44px; align-items: center; border: 1px solid var(--cor-borda); border-radius: 12px; }
+  .ck-ac__item[aria-selected="true"] { border-color: var(--cor-destaque); }
+}
 
 /* ---------- 2.9 Menu Ferramentas e sino (telas 6 e 7) ---------- */
 .ck-menu, .ck-sino { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; max-width: calc(100vw - 24px); background: var(--cor-superficie-elevada); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); animation: ck-surgir var(--duracao) var(--curva); }

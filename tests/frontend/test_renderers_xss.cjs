@@ -196,6 +196,26 @@ test("equipment search rows escape every field, with and without highlighting", 
   }
 });
 
+test("chamado and OS autocomplete rows escape every field and keep the option id", () => {
+  const renderers = createEquipmentSearchRenderers({ dom, loggedUserMarkers });
+  const chamado = { numero: carga("numero"), aba: carga("aba") };
+  const os = { fonte: "oracle", os: carga("os"), serie: carga("serie"), status: carga("status"), utic: carga("utic") };
+  for (const query of ["", "img", "#numero", '">']) {
+    const linhaChamado = renderers.criarLinhaChamado(chamado, 3, query, {});
+    const linhaOs = renderers.criarLinhaOs(os, 4, query, {});
+    assert.equal(linhaChamado.id, "autocomplete-option-3");
+    assert.equal(linhaOs.id, "autocomplete-option-4");
+    afirmarSemHtmlVivo(linhaChamado.innerHTML, `chamado (consulta ${JSON.stringify(query)})`);
+    afirmarSemHtmlVivo(linhaOs.innerHTML, `OS (consulta ${JSON.stringify(query)})`);
+    if (!query) {
+      afirmarCamposEscapados(linhaChamado.innerHTML, ["numero", "aba"], "chamado");
+      afirmarCamposEscapados(linhaOs.innerHTML, ["os", "serie", "status", "utic"], "OS");
+    }
+  }
+  assert.match(renderers.criarLinhaChamado({ numero: "UTIC-1", aba: "finalizados" }, 0, "", {}).innerHTML, />Finalizados</);
+  assert.match(renderers.criarLinhaOs({ ...os, fonte: "simpress", os: "7285", serie: "S", status: "x", utic: null }, 0, "", {}).innerHTML, />Simpress</);
+});
+
 test("ticket rules escape the stage labels, dates and lists they render", () => {
   const regras = criarRegrasChamados(dom);
   const simpress = {

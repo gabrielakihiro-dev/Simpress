@@ -96,7 +96,7 @@ export function createEquipmentSearchRenderers(context: Qualquer) {
       `;
   }
 
-  function criarLinhaAutocomplete(item: Qualquer, index: number, currentQuery: Qualquer, { onSelect, onHighlight }: { onSelect: Qualquer; onHighlight: Qualquer }): HTMLElement {
+  function montarLinhaAutocomplete(index: number, html: string, { onSelect, onHighlight }: { onSelect: Qualquer; onHighlight: Qualquer }): HTMLElement {
     const row = document.createElement("div");
     row.id = `autocomplete-option-${index}`;
     row.setAttribute("role", "option");
@@ -104,8 +104,33 @@ export function createEquipmentSearchRenderers(context: Qualquer) {
     row.className = "ck-ac__item autocomplete-row";
     row.onclick = onSelect;
     row.onmouseenter = onHighlight;
-    row.innerHTML = conteudoLinhaAutocomplete(item, currentQuery);
+    row.innerHTML = html;
     return row;
+  }
+
+  function criarLinhaAutocomplete(item: Qualquer, index: number, currentQuery: Qualquer, callbacks: { onSelect: Qualquer; onHighlight: Qualquer }): HTMLElement {
+    return montarLinhaAutocomplete(index, conteudoLinhaAutocomplete(item, currentQuery), callbacks);
+  }
+
+  const ROTULO_ABA: Record<string, string> = { novos: "Novos", antigos: "Antigos", finalizados: "Finalizados" };
+
+  // Mesmas classes da linha de equipamento: número, local (aba ou fonte) e detalhe.
+  function criarLinhaChamado(item: Qualquer, index: number, currentQuery: Qualquer, callbacks: { onSelect: Qualquer; onHighlight: Qualquer }): HTMLElement {
+    const aba = ROTULO_ABA[item.aba] || String(item.aba || "");
+    return montarLinhaAutocomplete(index, `
+        <span class="ck-ac__serie">${highlightMatch(String(item.numero || ""), currentQuery).replaceAll('class="serial-match"', 'class="ck-ac__prefixo"')}</span>
+        <span class="ck-ac__local">${escapeHtml(aba)}</span>
+        <span class="ck-ac__modelo">Chamado Sebrae</span>
+      `, callbacks);
+  }
+
+  function criarLinhaOs(item: Qualquer, index: number, currentQuery: Qualquer, callbacks: { onSelect: Qualquer; onHighlight: Qualquer }): HTMLElement {
+    const detalhe = [item.serie, item.status, item.utic].filter(Boolean).join(" · ");
+    return montarLinhaAutocomplete(index, `
+        <span class="ck-ac__serie">${highlightMatch(String(item.os || ""), currentQuery).replaceAll('class="serial-match"', 'class="ck-ac__prefixo"')}</span>
+        <span class="ck-ac__local">${item.fonte === "oracle" ? "Oracle" : "Simpress"}</span>
+        <span class="ck-ac__modelo" title="${escapeHtml(detalhe)}">${escapeHtml(detalhe)}</span>
+      `, callbacks);
   }
 
   function criarLinhaPesquisaCompleta(item: Qualquer, index: number, currentQuery: Qualquer, onSelect: Qualquer): HTMLElement {
@@ -129,7 +154,7 @@ export function createEquipmentSearchRenderers(context: Qualquer) {
     return row;
   }
 
-  return { criarLinhaAutocomplete, criarLinhaPesquisaCompleta };
+  return { criarLinhaAutocomplete, criarLinhaChamado, criarLinhaOs, criarLinhaPesquisaCompleta };
 }
 
 // Publicação em window, lida por frontend/src/aplicacao/app.ts e por paineis/pesquisa-equipamento/montar.tsx.

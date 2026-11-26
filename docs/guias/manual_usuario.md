@@ -76,6 +76,8 @@ Menu lateral:
 
 Para pesquisar: na **Home**, digite série, apelido/hostname, modelo, cidade ou nome do usuário e pressione `Enter` (ou clique em **Buscar Equipamento**). De qualquer aba (F2–F4) ou painel (F5–F9), a pesquisa leva direto à **Home (F1)**. A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, com filtros de categoria (**Notebooks**, **MacBooks**, **Monitores**, **Fones**) e cidade.
 
+O mesmo campo acha **chamados** e **OS**: digite o número do chamado (por exemplo `UTIC-2026-15`) ou o número da OS (4 dígitos ou mais). A lista ganha os grupos **Chamados** e **OS** abaixo dos equipamentos. Escolher um chamado abre a aba de chamados (F5) no cartão dele; escolher uma OS abre a aba de OS (F6) na sub-aba certa (Abertas ou Finalizadas), com o número da OS na busca e a linha destacada (se a OS não aparecer ali, um aviso curto explica).
+
 **Controle remoto:** na Home, com um equipamento selecionado, clique em **Controle remoto** (ao lado de *Consultar no Endpoint*). O Simpress abre o controle remoto no Endpoint com o motivo `acesso` e deixa a conexão aberta para você continuar. Se o computador estiver offline, aparece uma caixa de mensagem avisando. Você também pode pedir ao Assistente ("abra o controle remoto da série X"); ele mostra um cartão e só conecta depois que você confirmar. Exige o Chrome de automação aberto (porta 9333) com o login do Endpoint feito.
 
 **Histórico de apelidos (F7):** mostra tudo o que mudou nos equipamentos (apelido, usuário logado, endereço de instalação e avisos do Endpoint), do mais novo para o mais antigo. Atualizado em 11/11/2026.
