@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from domains import equipment_edit, equipment_export, inventory_state
 from domains.alias_changes import validate_equipment_serial
@@ -42,6 +42,28 @@ class EquipamentoUpdatePayload(BaseModel):
         return validate_equipment_serial(value)
 
 
+# Formato das respostas (response_model_exclude_unset): a linha vem da planilha, então tudo é Any e campo
+# desconhecido passa como está (extra="allow"); campo ausente continua ausente, nunca vira null.
+class _Saida(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class EquipamentoPublico(_Saida):
+    serial: Any = None
+    modelo: Any = None
+    tipo: Any = None
+    apelido: Any = None
+    idCliente: Any = None
+    revisao: Any = None
+
+
+class EquipamentoSalvo(_Saida):
+    sucesso: bool
+    mensagem: str
+    equipamento: EquipamentoPublico
+    total_modificados: int
+
+
 @dataclass(frozen=True)
 class EquipmentRouteServices:
     edit: equipment_edit.EquipmentEditServices
@@ -62,7 +84,7 @@ class EquipmentRouteExports:
 def create_equipment_router(services: EquipmentRouteServices) -> Tuple[APIRouter, EquipmentRouteExports]:
     router = APIRouter()
 
-    @router.get("/api/equipamento/{serial}")
+    @router.get("/api/equipamento/{serial}", response_model=EquipamentoPublico, response_model_exclude_unset=True)
     def get_equipamento(serial: str):
         """Busca um equipamento pelo número de série (sem distinção de maiúsculas/minúsculas)."""
         clean_serial = serial.strip().upper()
@@ -73,7 +95,7 @@ def create_equipment_router(services: EquipmentRouteServices) -> Tuple[APIRouter
 
         raise HTTPException(status_code=404, detail=f"Equipamento com serial '{serial}' não encontrado na base de dados.")
 
-    @router.post("/api/equipamento/salvar")
+    @router.post("/api/equipamento/salvar", response_model=EquipamentoSalvo, response_model_exclude_unset=True)
     def salvar_equipamento(payload: EquipamentoUpdatePayload):
         """Atualiza ou cadastra um equipamento tanto na memória do site quanto diretamente na planilha Excel."""
         if not payload.serial or not payload.serial.strip():
