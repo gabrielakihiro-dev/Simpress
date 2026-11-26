@@ -125,15 +125,83 @@ class ImportacaoApagaSenhaTest(RotasBase):
         self.assertEqual(resposta.status_code, 200)  # a importação segue
         self.assertEqual(len(sebrae_credenciais.numeros(self.pasta)), 9)  # nenhuma apagada
         aviso = resposta.json()["aviso"]
-        self.assertIn("encerraria 8 senhas", aviso)
-        self.assertIn("(de 9)", aviso)
+        self.assertIn("apagaria 8 senhas", aviso)
+        self.assertIn("sumiram da coluna C (de 9 guardadas)", aviso)
         self.assertNotIn("UTIC-2026", aviso)
         self.assertNotIn("Abc12345", resposta.text)
 
-    def test_sem_aviso_quando_a_limpeza_esta_no_limite(self):
+    def test_sem_aviso_quando_sai_uma_unica_senha(self):
         self.importar(montar())
         resposta = self.importar(montar(chamados=("UTIC-2026-0003",), status=("EM ABERTO",)))  # 1 apagada (0001)
         self.assertNotIn("aviso", resposta.json())
+        self.assertNotIn("UTIC-2026-0001", sebrae_credenciais.numeros(self.pasta))
+
+
+class LimiteNaImportacaoTest(RotasBase):
+    """Limites exatos pelo router: só os que SAEM da coluna C contam; cada caso guarda ``total`` senhas e tira ``saem`` da planilha."""
+
+    def cenario(self, total, saem):
+        pasta = self.caminhos.existentes.parent
+        nums = tuple(f"UTIC-2026-{n:04d}" for n in range(1, total + 1))
+        for numero in nums:
+            sebrae_credenciais.guardar(pasta, numero, DESCRICAO)
+        self.assertEqual(self.importar(montar(chamados=nums, status=("EM ABERTO",) * total, ultima=total + 6)).status_code, 200)
+        resto = nums[saem:] + ("UTIC-2026-9999",)  # os `saem` primeiros somem da coluna C; 9999 não tem senha
+        resposta = self.importar(montar(chamados=resto, status=("EM ABERTO",) * len(resto), ultima=len(resto) + 6))
+        self.assertEqual(resposta.status_code, 200)
+        return resposta.json(), len(sebrae_credenciais.numeros(pasta))
+
+    def test_5_que_sairam_apagam(self):
+        corpo, restantes = self.cenario(20, 5)
+        self.assertEqual((restantes, "aviso" in corpo), (15, False))
+
+    def test_6_que_sairam_pulam(self):
+        corpo, restantes = self.cenario(20, 6)
+        self.assertEqual(restantes, 20)
+        self.assertIn("apagaria 6 senhas", corpo["aviso"])
+
+    def test_2_de_4_apagam(self):
+        corpo, restantes = self.cenario(4, 2)
+        self.assertEqual((restantes, "aviso" in corpo), (2, False))
+
+    def test_3_de_4_pulam(self):
+        corpo, restantes = self.cenario(4, 3)
+        self.assertEqual(restantes, 4)
+        self.assertIn("(de 4 guardadas)", corpo["aviso"])
+
+    def test_1_de_1_apaga(self):
+        corpo, restantes = self.cenario(1, 1)
+        self.assertEqual((restantes, "aviso" in corpo), (0, False))
+
+    def test_finalizados_em_massa_apagam_sem_aviso(self):
+        pasta = self.caminhos.existentes.parent
+        nums = tuple(f"UTIC-2026-{n:04d}" for n in range(1, 11))
+        for numero in nums:
+            sebrae_credenciais.guardar(pasta, numero, DESCRICAO)
+        status = ("FINALIZADO",) * 6 + ("EM ABERTO",) * 4
+        resposta = self.importar(montar(chamados=nums, status=status, ultima=16))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotIn("aviso", resposta.json())
+        self.assertEqual(sebrae_credenciais.numeros(pasta), frozenset(nums[6:]))
+
+    def test_saidas_em_massa_pulam_so_elas_e_a_importacao_repetida_nao_prende(self):
+        pasta = self.caminhos.existentes.parent
+        nums = tuple(f"UTIC-2026-{n:04d}" for n in range(1, 13))  # 12 senhas
+        for numero in nums:
+            sebrae_credenciais.guardar(pasta, numero, DESCRICAO)
+        self.importar(montar(chamados=nums, status=("EM ABERTO",) * 12, ultima=18))
+        # 6 somem da coluna C (0001..0006), 2 vêm FINALIZADO (0007, 0008), 4 seguem abertos (0009..0012)
+        folha = nums[6:] + ("UTIC-2026-9999",)
+        status = ("FINALIZADO", "FINALIZADO") + ("EM ABERTO",) * 5
+        primeira = self.importar(montar(chamados=folha, status=status, ultima=13))
+        self.assertEqual(primeira.status_code, 200)
+        self.assertIn("apagaria 6 senhas", primeira.json()["aviso"])
+        self.assertEqual(sebrae_credenciais.numeros(pasta), frozenset(nums[:6] + nums[8:]))  # só os FINALIZADO foram
+        # 2ª importação igual: FINALIZADO já apagados e saídas já fora de abertos; nada a pular nem a avisar
+        segunda = self.importar(montar(chamados=folha, status=status, ultima=13))
+        self.assertEqual(segunda.status_code, 200)
+        self.assertNotIn("aviso", segunda.json())
+        self.assertEqual(sebrae_credenciais.numeros(pasta), frozenset(nums[:6] + nums[8:]))
 
 
 class LimiteRemoverEncerradosTest(unittest.TestCase):
@@ -153,7 +221,7 @@ class LimiteRemoverEncerradosTest(unittest.TestCase):
     def test_mais_de_5_pula(self):
         nums = self.guardar(100)
         r = self.sair(nums[:6])
-        self.assertEqual((r.pulado, r.apagadas, r.previstas, r.guardadas), (True, 0, 6, 100))
+        self.assertEqual((r.pulado, r.apagadas, r.previstas_saida, r.guardadas), (True, 0, 6, 100))
         self.assertEqual(len(sebrae_credenciais.numeros(self.dir)), 100)
 
     def test_mais_de_50_por_cento_pula(self):
@@ -183,13 +251,28 @@ class LimiteRemoverEncerradosTest(unittest.TestCase):
         nums = self.guardar(6)
         saindo = nums[:3] + [f"UTIC-2026-9{n:03d}" for n in range(20)]  # 20 abertos sem senha saem junto: nao contam
         r = self.sair(saindo)
-        self.assertEqual((r.pulado, r.previstas), (False, 3))
+        self.assertEqual((r.pulado, r.previstas_saida), (False, 3))
 
-    def test_planilha_sem_coluna_c_nao_apaga_nada(self):
+    def test_planilha_cortada_nao_apaga_nada(self):
         nums = self.guardar(3)
-        r = self.sair(nums)  # mapa vazio: todo aberto "saiu"
+        r = self.sair(nums)  # planilha truncada: todo aberto "saiu"
         self.assertTrue(r.pulado)
         self.assertEqual(len(sebrae_credenciais.numeros(self.dir)), 3)
+
+    def test_finalizado_apaga_sempre_mesmo_em_massa(self):
+        nums = self.guardar(10)
+        mapa = {n: {"status": "FINALIZADO"} for n in nums[:6]}
+        mapa.update({n: {"status": "EM ABERTO"} for n in nums[6:]})
+        r = sebrae_credenciais.remover_encerrados(self.dir, mapa, [])
+        self.assertEqual((r.pulado, r.apagadas, r.previstas_saida), (False, 6, 0))
+        self.assertEqual(sebrae_credenciais.numeros(self.dir), frozenset(nums[6:]))
+
+    def test_trava_pula_so_os_que_sairam_e_apaga_os_finalizados(self):
+        nums = self.guardar(20)
+        mapa = {nums[0]: {"status": "FINALIZADO"}, nums[1]: {"status": "FINALIZADO"}}
+        r = sebrae_credenciais.remover_encerrados(self.dir, mapa, [{"numero": n} for n in nums[2:9]])  # 7 saem
+        self.assertEqual((r.pulado, r.apagadas, r.previstas_saida, r.guardadas), (True, 2, 7, 20))
+        self.assertEqual(sebrae_credenciais.numeros(self.dir), frozenset(nums[2:]))
 
     def test_arquivo_ausente_nao_pula(self):
         r = self.sair(["UTIC-2026-0001"])

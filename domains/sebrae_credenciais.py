@@ -5,7 +5,7 @@ Só os valores que ``omitir_credenciais`` esconde são guardados, por chamado, e
 do Dashboard, histórico, logs e Assistente. A tela só recebe o valor quando o usuário clica em "Mostrar senha"
 (``GET /api/sebrae/chamados/{numero}/credenciais``). A entrada é apagada quando a rotina ``fechar`` finaliza o chamado
 no SoftExpert (``ok``) e, na importação do Dashboard, quando o chamado vem com D ``FINALIZADO`` ou sai da coluna C depois
-de estar aberto (``remover_encerrados``, com trava de quantidade). Finalizado por outro técnico não apaga (preserva o Desfazer finalização;
+de estar aberto (``remover_encerrados``; FINALIZADO apaga sempre, a trava de quantidade vale só para os que saíram da coluna C). Finalizado por outro técnico não apaga (preserva o Desfazer finalização;
 decisão do usuário 25/11/2026). Chamado novo, ainda fora da coluna C, e chamado aberto mantêm a senha.
 """
 
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 ARQUIVO = "sebrae_credenciais.json"
 MAX_VALORES = 10
 MAX_VALOR = 200
-LIMITE_SENHAS_APAGADAS = 5  # a importação nunca apaga mais que isso de uma vez (decisão do usuário, 26/11/2026)
+LIMITE_SENHAS_APAGADAS = 5  # a importação nunca apaga mais que isso de uma vez de chamados que saíram da coluna C (decisão do usuário, 26/11/2026)
 LIMITE_FRACAO_APAGADAS = 0.5  # nem mais que esta fração das guardadas (só vale com 2 ou mais a apagar)
 
 
@@ -123,11 +123,14 @@ def remover(state_dir: Path, *numeros: str) -> None:
 
 @dataclass(frozen=True)
 class ResultadoLimpeza:
-    """O que ``remover_encerrados`` fez: só contagens, nunca números de chamado nem valores."""
+    """O que ``remover_encerrados`` fez: só contagens, nunca números de chamado nem valores.
+
+    ``apagadas``: senhas de fato apagadas (FINALIZADO, mais as que saíram da coluna C quando a trava não pulou).
+    ``previstas_saida``: senhas de chamados que saíram da coluna C (o que a trava mede). ``pulado``: essas não foram apagadas."""
 
     apagadas: int
     pulado: bool
-    previstas: int
+    previstas_saida: int
     guardadas: int
 
 
@@ -138,17 +141,17 @@ def remover_encerrados(
     Dashboard) ou estava em ``abertos_antes`` e sumiu da coluna C (mesma regra de ``sebrae_arquivo.registrar_saidas``).
     Chamado ausente do ``mapa`` que não estava aberto antes é novo e mantém a senha.
 
-    Trava (26/11/2026): planilha errada (ex.: sem a coluna C) faria todo chamado aberto "sair". Se as senhas a apagar
-    (``alvo``, só as que existem no arquivo) passam de ``LIMITE_SENHAS_APAGADAS`` ou de ``LIMITE_FRACAO_APAGADAS`` das
-    guardadas, nenhuma é apagada (``pulado``). A fração só vale com 2 ou mais a apagar: apagar a única senha guardada
-    (1 de 1) é normal."""
+    FINALIZADO é sinal explícito: a senha sai sempre, sem trava (decisão do usuário, 26/11/2026). A trava vale só para
+    os que saíram da coluna C (``saiu_alvo``, só as que existem no arquivo), sintoma de planilha errada ou cortada: se passam
+    de ``LIMITE_SENHAS_APAGADAS`` ou de ``LIMITE_FRACAO_APAGADAS`` das guardadas, nenhuma delas é apagada (``pulado``;
+    os FINALIZADO da mesma importação são apagados). A fração só vale com 2 ou mais: apagar a única senha guardada
+    (1 de 1) é normal. Efeito aceito: com a trava pulada e a planilha certa, essas senhas ficam guardadas."""
     guardadas = numeros(state_dir)
-    saiu = {str(a.get("numero") or "") for a in abertos_antes} - set(mapa)
-    encerrados = saiu | {numero for numero, atual in mapa.items() if atual.get("status") == STATUS_FINALIZADO}
-    alvo = sorted(encerrados & guardadas)
-    previstas, total = len(alvo), len(guardadas)
-    if previstas > LIMITE_SENHAS_APAGADAS or (previstas >= 2 and previstas > total * LIMITE_FRACAO_APAGADAS):
-        return ResultadoLimpeza(apagadas=0, pulado=True, previstas=previstas, guardadas=total)
+    finalizados_alvo = {numero for numero, atual in mapa.items() if atual.get("status") == STATUS_FINALIZADO} & guardadas
+    saiu_alvo = ({str(a.get("numero") or "") for a in abertos_antes} - set(mapa)) & guardadas
+    previstas, total = len(saiu_alvo), len(guardadas)
+    pulado = previstas > LIMITE_SENHAS_APAGADAS or (previstas >= 2 and previstas > total * LIMITE_FRACAO_APAGADAS)
+    alvo = sorted(finalizados_alvo if pulado else finalizados_alvo | saiu_alvo)
     if alvo:
         remover(state_dir, *alvo)
-    return ResultadoLimpeza(apagadas=previstas, pulado=False, previstas=previstas, guardadas=total)
+    return ResultadoLimpeza(apagadas=len(alvo), pulado=pulado, previstas_saida=previstas, guardadas=total)

@@ -2902,7 +2902,7 @@ async function importarComResposta(resposta) {
 }
 
 test("importar o Dashboard com `aviso` na resposta mostra o texto no status e no toast (warning), junto da confirmação", async () => {
-  const aviso = "A importação encerraria 6 senhas guardadas de uma vez (de 10); nenhuma foi apagada. Confira se a planilha está completa.";
+  const aviso = "A importação apagaria 6 senhas guardadas de chamados que sumiram da coluna C (de 10 guardadas); essas não foram apagadas. Confira se a planilha está completa.";
   const { toasts, status } = await importarComResposta({ aviso });
   assert.equal(status, `Dashboard importado: Dashboard.xlsx (3 chamados já lançados). ${aviso}`);
   assert.deepEqual(toasts, [[`Dashboard importado. ${aviso}`, "warning"]]);

@@ -653,8 +653,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return mapa
 
     def _apagar_senhas_encerradas(mapa: Mapping[str, Mapping[str, str]], anteriores: Optional[Mapping[str, Any]]) -> str:
-        """Stored F5 password of a ticket closed (D FINALIZADO) or gone from column C in this import; never blocks the import.
-        Returns a warning (counts only, no ticket numbers) when the cleanup was skipped for deleting too many at once, else ''."""
+        """Stored F5 password of a ticket closed (D FINALIZADO) or gone from column C in this import (FINALIZADO always; the gone-from-C ones obey the count limit); never blocks the import.
+        Returns a warning (counts only, no ticket numbers) when the gone-from-C cleanup was skipped for deleting too many at once, else ''."""
         try:
             resultado = sebrae_credenciais.remover_encerrados(_pasta_estado(), mapa, anteriores["abertos"] if anteriores else [])
         except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
@@ -663,8 +663,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         if not resultado.pulado:
             return ""
         return (
-            f"A importação encerraria {resultado.previstas} senhas guardadas de uma vez (de {resultado.guardadas}); "
-            "nenhuma foi apagada. Confira se a planilha está completa."
+            f"A importação apagaria {resultado.previstas_saida} senhas guardadas de chamados que sumiram da coluna C "
+            f"(de {resultado.guardadas} guardadas); essas não foram apagadas. Confira se a planilha está completa."
         )
 
     def _resolvedor_os(abertos: Sequence[Mapping[str, Any]]) -> marcas.Resolvedor:
