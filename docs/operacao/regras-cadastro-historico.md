@@ -33,6 +33,7 @@ Texto integral das seções que ficavam no `AGENTS.md` da raiz até 10/11/2026. 
 
 - Precedência do apelido: manual > hostname único do Endpoint > apelido da Simpress, exceto o hostname `PRNOTEBK` ou `PRNOTEBKP` + sigla de cidade de `SERIE_LOCAL_MAP` (inclui `CWB` = Curitiba) + número opcional (hífen e espaço ignorados; ex. `PRNOTEBKPCWB01`), que vence o manual na tela e na exportação (`hostname_backup_com_cidade` em `domains/regras_negocio.py`; `domains/effective_alias.py`).
 - Na importação das planilhas (manual ou pela pasta `entrada_automatica`), quando esse hostname é aplicado (Endpoint legível, série única nas duas fontes), o apelido manual sai de `apelidos_modificados.json` e vai ao histórico de alterações (`acao: "hostname_backup"`, sem desfazer); não gera pendência Manter/Excluir e as antigas da série viram `substituida` (`domains/inventory_update.py`).
+- O evento `hostname_backup` não pode ser desfeito nem excluído do histórico (409); nele `apelido_novo` é o hostname de backup e o apelido manual apagado fica em `apelido_anterior`. Restaurar planilhas antigas não traz o manual de volta: redigite o valor guardado em `apelido_anterior`.
 
 ### Rótulos do Histórico de Planilhas
 

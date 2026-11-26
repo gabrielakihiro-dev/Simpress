@@ -96,6 +96,9 @@ class IdentificarMarcaTests(unittest.TestCase):
     def test_hostname_bkp_com_sigla_pg_e_nao_ppg(self):
         self.assertEqual(identificar_marca("PRNOTEBKPPG01", "Ponta Grossa"), ("Ponta Grossa", None))
 
+    def test_hostname_bkp_cwb_le_curitiba(self):
+        self.assertEqual(identificar_marca("PRNOTEBKPCWB01", "Curitiba"), ("Curitiba", None))
+
     def test_hostname_bkp_pab_le_pato_branco(self):
         # BKP+AB01 não é token; BK+PAB01 é: só a segunda leitura vale.
         self.assertEqual(identificar_marca("PRNOTEBKPAB01", "Pato Branco"), ("Pato Branco", None))
