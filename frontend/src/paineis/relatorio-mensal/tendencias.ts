@@ -24,7 +24,8 @@ function svg(tag: string, atributos: Record<string, string | number> = {}, texto
 
 // 12.35 -> "12,4"; vírgula decimal pt-BR, uma casa.
 export const formatarDias = (valor: number) => (Math.round(valor * 10) / 10).toFixed(1).replace(".", ",");
-export const unidadeDias = (valor: number) => (Math.abs(Math.round(valor * 10) / 10) < 2 ? "dia" : "dias");
+// Singular só para 0 < |x| < 2; zero é plural ("0,0 dias").
+export const unidadeDias = (valor: number) => { const a = Math.abs(Math.round(valor * 10) / 10); return a > 0 && a < 2 ? "dia" : "dias"; };
 // Sinal sempre (queda com "−", alta com "+", zero sem sinal).
 function comSinal(texto: string, valor: number) {
   return valor < 0 ? `${MENOS}${texto}` : valor > 0 ? `+${texto}` : texto;
@@ -78,18 +79,20 @@ function cartaoTempo(dados: Registro, cartao: Cartao) {
 
 // Linha simples: pontos igualmente espaçados (uma marca por atualização), 3 linhas de grade (máximo, meio, mínimo).
 function graficoAcesso(pontos: Registro[], rotulo: string) {
-  const largura = 500, esq = 34, dir = 490, topo = 20, base = 100;
+  const largura = 500, esq = 44, dir = 490, topo = 20, base = 100;
   const valores = pontos.map(p => Number(p.total));
   let max = Math.max(...valores), min = Math.min(...valores);
   if (max === min) { max += 1; min -= 1; }
   const y = (v: number) => Math.round((base - ((v - min) / (max - min)) * (base - topo)) * 10) / 10;
   const x = (i: number) => Math.round((esq + 6 + (i * (dir - esq - 12)) / (pontos.length - 1)) * 10) / 10;
   const raiz = svg("svg", { viewBox: `0 0 ${largura} 128`, width: "100%", role: "img", "aria-label": rotulo, class: "nf8-tend__svg" });
+  // Com pouca amplitude o meio arredonda igual a uma ponta: só rótulos distintos (a linha de grade fica).
   const marcas = [max, (max + min) / 2, min];
+  const rotulos = marcas.filter((v, i) => marcas.findIndex(o => Math.round(o) === Math.round(v)) === i);
   const grade = svg("g", { class: "nf8-tend__reticula" });
   marcas.forEach(v => grade.append(svg("line", { x1: esq, x2: dir, y1: y(v), y2: y(v) })));
   raiz.append(grade);
-  marcas.forEach(v => raiz.append(svg("text", { x: 0, y: y(v) + 4 }, String(Math.round(v)))));
+  rotulos.forEach(v => raiz.append(svg("text", { x: 0, y: y(v) + 4 }, String(Math.round(v)))));
   raiz.append(svg("polyline", { class: "nf8-tend__linha", points: pontos.map((_, i) => `${x(i)},${y(valores[i])}`).join(" ") }));
   valores.forEach((v, i) => raiz.append(svg("circle", { class: "nf8-tend__ponto", cx: x(i), cy: y(v), r: 3.5 })));
   raiz.append(svg("text", { x: esq, y: 124 }, dataCurta(pontos[0].data)), svg("text", { x: dir, y: 124, "text-anchor": "end" }, dataCurta(pontos[pontos.length - 1].data)));
@@ -134,8 +137,8 @@ export function avisoTendencias(texto: string, papel: "status" | "alert") {
   return no;
 }
 
-/** Cabeçalho: título, selo e segmentado "Período" (30 | 90 dias). `aoMudar` recebe o número de dias. */
-export function montarCabecalhoTendencias(periodoInicial: number, aoMudar: (dias: number) => void) {
+/** Cabeçalho: título, selo e segmentado "Período" (30 | 90 dias). `aoMudar` recebe o número de dias; `aoRepetir`, o clique no período já ativo. */
+export function montarCabecalhoTendencias(periodoInicial: number, aoMudar: (dias: number) => void, aoRepetir?: (dias: number) => void) {
   let atual = PERIODOS.includes(periodoInicial) ? periodoInicial : PERIODOS[0];
   const cab = criar("div", "nf8-tend__cab");
   const titulo = criar("div", "nf8-tend__titulo");
@@ -150,7 +153,7 @@ export function montarCabecalhoTendencias(periodoInicial: number, aoMudar: (dias
     botao.dataset.relPeriodo = String(dias);
     botao.setAttribute("aria-pressed", String(dias === atual));
     botao.addEventListener("click", () => {
-      if (dias === atual) return;
+      if (dias === atual) { aoRepetir?.(dias); return; }
       atual = dias;
       botoes.forEach(outro => outro.setAttribute("aria-pressed", String(outro.dataset.relPeriodo === String(atual))));
       aoMudar(dias);

@@ -1945,21 +1945,25 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   }
 
   // Tendências (30/90 dias até hoje) não dependem do mês: carregam na primeira abertura da aba e ao trocar o período; ficam em memória.
-  const tendView: Registro = { periodo: 30, dados: null, corpo: null, pedido: 0 };
+  const tendView: Registro = { periodo: 30, dados: null, corpo: null, pedido: 0, carregando: false, velha: false };
 
   async function carregarTendencias() {
     const atual = ++tendView.pedido;
     const periodo = tendView.periodo;
     tendView.dados = null;
+    tendView.velha = false;
+    tendView.carregando = true;
     tendView.corpo.replaceChildren(avisoTendencias("Carregando tendências…", "status"));
     try {
       const dados = await apiFetch(`/api/relatorio-mensal/tendencias?dias=${periodo}`, { errorMessage: "Falha ao carregar as tendências." });
       if (atual !== tendView.pedido) return;
       tendView.dados = dados;
+      tendView.carregando = false;
       tendView.corpo.replaceChildren(montarCorpoTendencias(dados, monthlyCartao));
       globalThis.SimpressBento?.animarDentro?.(tendView.corpo);
     } catch (error: Qualquer) {
       if (atual !== tendView.pedido) return;
+      tendView.carregando = false;
       tendView.corpo.replaceChildren(avisoTendencias(error?.message || "Falha ao carregar as tendências.", "alert"));
     }
   }
@@ -1969,13 +1973,20 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     if (!painel) return;
     if (!tendView.corpo) {
       tendView.corpo = element("div", "nf8-tend__corpo");
-      painel.append(montarCabecalhoTendencias(tendView.periodo, dias => { tendView.periodo = dias; void carregarTendencias(); }), tendView.corpo);
-      void carregarTendencias();
+      painel.append(montarCabecalhoTendencias(
+        tendView.periodo,
+        dias => { tendView.periodo = dias; void carregarTendencias(); },
+        () => { if (!tendView.dados && !tendView.carregando) void carregarTendencias(); }, // nova tentativa depois de erro
+      ), tendView.corpo);
     }
+    // Abrir a aba busca enquanto não houver dado bom (primeira vez, erro) ou se o dado ficou velho.
+    if (!tendView.carregando && (!tendView.dados || tendView.velha)) void carregarTendencias();
   }
 
   // Importar OS (F6) ou nova comparação com o F8 aberto: recarrega o mês exibido sem perder filtros.
   function refreshMonthlyAfterChange() {
+    tendView.velha = true; // OS/inventário mudaram: as tendências recarregam na próxima abertura da aba (já, se ela está à vista)
+    if (activeTool === "relatorio" && monthlyView.aba === "tendencias" && tendView.corpo) abrirTendencias();
     if (activeTool !== "relatorio") { relatorioDesatualizado = true; return; }
     const month = byId("cockpit-monthly-month")?.value;
     if (month) void loadMonthlyReport(month, { quiet: true });
@@ -2341,6 +2352,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
         renderMonthlyPeriods(input.value);
         await loadMonthlyReport(input.value);
       } else if (relatorioDesatualizado) await loadMonthlyReport(input.value, { quiet: true });
+      if (monthlyView.aba === "tendencias" && tendView.corpo) abrirTendencias(); // reabrir o F8 já na aba
     }
     if (tool === "planilhas") await loadSheets();
     if (tool === "cobertura") await app.carregarCobertura?.();

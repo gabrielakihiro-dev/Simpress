@@ -31,6 +31,9 @@ test("formatação: vírgula decimal, unidade dia/dias e datas", () => {
   assert.equal(t.formatarDias(2), "2,0");
   assert.equal(t.unidadeDias(1.7), "dia");
   assert.equal(t.unidadeDias(2), "dias");
+  assert.equal(t.unidadeDias(0), "dias", "zero é plural");
+  assert.equal(t.unidadeDias(-0.04), "dias", "arredonda para 0,0 antes de escolher");
+  assert.equal(t.unidadeDias(-1), "dia");
   assert.equal(t.unidadeDias(12.4), "dias");
   assert.equal(t.dataCurta("2026-11-25"), "25/11");
   assert.equal(t.dataLonga("2026-11-25"), "25/11/2026");
@@ -75,6 +78,18 @@ test("alta de tempo médio leva + sem cor de sucesso; sem média anterior mostra
   } finally { limpar(); }
 });
 
+test("variação zero sai no plural; eixo Y não repete rótulo quando a amplitude é pequena", () => {
+  try {
+    const zero = achar(render(base({ tempo_medio_os: { media_dias: 14.1, encerradas: 5, encerradas_sem_data: 0, media_dias_anterior: 14.1, encerradas_anterior: 4 } })), "rel-tend-tempo");
+    assert.match(texto(zero), /0,0 diasVariação/);
+    const eixo = totais => achar(render(base({ sem_acesso_7_dias: { pontos: totais.map((total, i) => ({ data: `2026-11-${23 + i}`, total })), historico_desde: "2026-10-20" } })), "rel-tend-acesso")
+      .querySelectorAll("svg")[0].querySelectorAll("text").map(n => n.textContent).slice(0, -2);
+    assert.deepEqual(eixo([47, 44, 41]), ["47", "44", "41"]);
+    assert.deepEqual(eixo([5, 6]), ["6", "5"], "meio 5,5 arredonda igual a uma ponta");
+    assert.deepEqual(eixo([5, 5, 5]), ["6", "5", "4"], "série constante abre folga de 1 para cada lado");
+  } finally { limpar(); }
+});
+
 test("sem dados por cartão, com motivo e role=status; selo Histórico desde quando começa depois do início", () => {
   try {
     const vazio = render(base({
@@ -91,11 +106,12 @@ test("sem dados por cartão, com motivo e role=status; selo Histórico desde qua
   } finally { limpar(); }
 });
 
-test("cabeçalho: segmentado Período com aria-pressed, aviso de carregando/erro e nada de série ou hostname", () => {
+test("cabeçalho: segmentado Período com aria-pressed, aviso de carregando/erro e render que ignora campos fora do contrato (série, hostname)", () => {
   try {
     global.document = createFakeDocument();
     const dias = [];
-    const cab = t.montarCabecalhoTendencias(30, d => dias.push(d));
+    const repetidos = [];
+    const cab = t.montarCabecalhoTendencias(30, d => dias.push(d), d => repetidos.push(d));
     assert.match(texto(cab), /^TendênciasAté hoje · não muda com o mêsPeríodo30 dias90 dias$/);
     const grupo = cab.querySelectorAll('[role="group"]')[0];
     assert.equal(grupo.getAttribute("aria-label"), "Período");
@@ -104,10 +120,16 @@ test("cabeçalho: segmentado Período com aria-pressed, aviso de carregando/erro
     botoes[1].click();
     botoes[1].click();
     assert.deepEqual(dias, [90]);
+    assert.deepEqual(repetidos, [90], "clique no período ativo avisa aoRepetir, sem aoMudar");
     assert.deepEqual(botoes.map(b => b.getAttribute("aria-pressed")), ["false", "true"]);
     assert.equal(t.avisoTendencias("Carregando tendências…", "status").getAttribute("role"), "status");
     assert.equal(t.avisoTendencias("Falha ao carregar as tendências.", "alert").getAttribute("role"), "alert");
-    const tudo = texto(cab) + texto(t.montarCorpoTendencias(base(), cartao));
+    // Campos fora do contrato (que o back-end não manda) não podem aparecer: o render só lê os campos do contrato.
+    const extra = base();
+    extra.tempo_medio_os.serie = "SERIEXYZ"; extra.tempo_medio_os.hostname = "PRNOTEXYZ";
+    extra.sem_acesso_7_dias.pontos.forEach(p => { p.serie = "SERIEXYZ"; p.hostname = "PRNOTEXYZ"; });
+    const tudo = texto(cab) + texto(t.montarCorpoTendencias(extra, cartao));
+    assert.doesNotMatch(tudo, /XYZ/);
     assert.doesNotMatch(tudo, /serie|série|hostname|PRNOTE/i);
   } finally { limpar(); }
 });

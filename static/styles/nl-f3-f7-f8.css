@@ -250,7 +250,7 @@ section.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
   & .nf8-tend__selo { display: inline-flex; align-items: center; width: fit-content; padding: 3px 10px; border: 1px solid var(--nl-bd); border-radius: 999px; color: var(--nl-mut); font: 400 12px/1.4 var(--fonte-corpo); }
   & .nf8-tend__corpo { min-width: 0; }
   & .nf8-tend__grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-  & .nf8-tend__cartao { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  & .nf8-tend__cartao { container-type: inline-size; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
   & .nf8-tend__sub, & .nf8-tend__nota { margin: 0; color: var(--nl-mut); font: 400 12px/1.4 var(--fonte-corpo); }
   & .nf8-tend__num { color: var(--nl-tx); font: 700 32px/1.1 var(--fonte-corpo); letter-spacing: -.02em; }
   & .nf8-tend__num small { color: var(--nl-mut); font: 500 14px/1.3 var(--fonte-corpo); letter-spacing: 0; }
@@ -261,6 +261,8 @@ section.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
   & .nf8-tend__caixa b.nf8-tend__bom { color: var(--nl-etx); }
   & .nf8-tend__svg { display: block; width: 100%; height: auto; max-height: 160px; overflow: visible; }
   & .nf8-tend__svg text { fill: var(--nl-mut); font: 400 11px/1 var(--fonte-mono); }
+  /* Cartão estreito: o desenho (viewBox 500) encolhe junto; texto maior em unidades do viewBox mantém ~10px ou mais renderizados. */
+  @container (max-width: 420px) { .nf8-tend__svg text { font-size: 20px; } }
   & .nf8-tend__reticula line { stroke: var(--nl-bd); }
   & .nf8-tend__linha { fill: none; stroke: var(--tom); stroke-width: 2.5; stroke-linejoin: round; }
   & .nf8-tend__ponto { fill: var(--tom); }
