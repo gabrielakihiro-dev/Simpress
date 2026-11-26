@@ -38,6 +38,7 @@ test('F7 mantém o download e envia o mesmo Blob e nome depois da confirmação;
   assert.deepEqual(downloads, ['nome-gerado.xlsx']);
   assert.deepEqual(confirmacoes, [CONFIRMACAO_UX]);
   assert.equal(chamadas[1][0], '/api/automacao/ux-apelidos');
+  assert.equal(chamadas[1][1].body.get("confirmado"), "true");
   const arquivo = chamadas[1][1].body.get('file');
   assert.equal(arquivo.name, 'nome-gerado.xlsx');
   assert.equal(await arquivo.text(), await blob.text());

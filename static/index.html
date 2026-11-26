@@ -218,6 +218,12 @@
             <ul id="alerta-backups-regionais-lista" class="ck-aviso__lista" aria-label="Regionais com backup pendente" hidden></ul>
             <button type="button" id="btn-alerta-backups-regionais" data-on-click="abrirPainelCockpit" data-args='["comparacao","backups"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver backups no Resumo</button>
           </section>
+          <section id="alerta-lembretes-agendados" class="ck-aviso" data-gravidade="urgente" role="status" aria-labelledby="alerta-lembretes-agendados-titulo" data-state="loading" hidden>
+            <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg></span>
+            <div class="ck-aviso__topo"><span id="alerta-lembretes-agendados-selo" class="ck-badge" data-status="erro">Urgente</span><h3 id="alerta-lembretes-agendados-titulo" class="ck-aviso__titulo">Lembretes agendados</h3></div>
+            <p id="alerta-lembretes-agendados-texto" class="ck-aviso__texto"></p>
+            <button type="button" id="btn-alerta-lembretes-agendados" data-on-click="abrirPainelCockpit" data-args='["lembretes"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver Lembretes</button>
+          </section>
         </div>
       </section>
     </div>

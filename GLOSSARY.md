@@ -157,6 +157,15 @@ _Regra_: [docs/operacao/automacao-chrome.md, "Consulta ao vivo do Endpoint na Ho
 Bloqueio que impede duas rotinas de usar o Chrome de automação ao mesmo tempo.
 _Regra_: [docs/operacao/automacao-chrome.md, "Consulta ao vivo do Endpoint na Home (03/11/2026)"](./docs/operacao/automacao-chrome.md)
 
+**Central de Notificações (sino)**:
+Painel aberto pelo sino do cabeçalho, com os avisos ativos (OS paradas, divergências, lembretes agendados e outros); o número no sino conta avisos, não itens.
+_Regra_: [docs/operacao/alertas-os-divergencias.md, "Interface"](./docs/operacao/alertas-os-divergencias.md)
+
+**Lembretes agendados**:
+Contagem de lembretes pendentes atrasados e de hoje, mostrada no sino; só números, sem texto dos lembretes.
+_Evitar_: `alarme` ou `aviso nativo` (o sino não dispara alarme)
+_Regra_: [docs/operacao/alertas-os-divergencias.md, "7. Lembretes agendados"](./docs/operacao/alertas-os-divergencias.md)
+
 ## Relações
 
 - EquipamentosDetalhes define quais equipamentos existem; InvAll e Endpoint só auxiliam hostname e comparação.
