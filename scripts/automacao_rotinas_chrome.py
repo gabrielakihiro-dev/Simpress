@@ -2200,8 +2200,14 @@ def limpar_selecao(page: "Page") -> None:
 
     25/11/2026: a cópia recém-criada pela Duplicata ficou selecionada ("1 selected") e o "Download" encontrado era o dessa barra.
     """
-    botao = page.get_by_role("button", name=_BOTAO_LIMPAR_SELECAO).filter(visible=True)
-    # O botão "X 1 selected" também conta: a linha pode não expor aria-selected (DOM real não conferido).
+    # 26/11/2026, DOM real: o "X 1 selected" é <button role="menuitem" data-automationid="clearSelectionCommand"> e o nome
+    # acessível começa com o glifo do ícone; só por role=button e pelo regex nunca era achado (caía no Escape, que não desmarca).
+    botao = (
+        page.locator('[data-automationid="clearSelectionCommand"]')
+        .or_(page.get_by_role("button", name=_BOTAO_LIMPAR_SELECAO))
+        .filter(visible=True)
+    )
+    # O botão "X 1 selected" também conta: a linha pode não expor aria-selected.
     if not visivel(_linhas_selecionadas(page)) and not visivel(botao):
         return
     log("Dashboard", "Há linha selecionada na pasta; limpando a seleção antes de continuar.")
@@ -2220,7 +2226,7 @@ def _item_do_menu_da_linha(page: "Page", linha, nome: "re.Pattern[str]"):
     """Seleção limpa > "Mais ações" da linha do Dashboard principal > item ``nome`` do menu de contexto aberto.
 
     shortcut: o escopo é ``role=menu`` (o menu de contexto), que exclui a barra de comandos (``menubar``, cujos botões também são
-    ``menuitem``); o DOM real não foi conferido em ensaio supervisionado. A guarda abaixo garante que nenhuma outra linha está selecionada.
+    ``menuitem``, conferido no DOM real em 26/11/2026); o menu de contexto em si não foi conferido em ensaio supervisionado. A guarda abaixo garante que nenhuma outra linha está selecionada.
     """
     limpar_selecao(page)
     _abrir_mais_acoes(linha)
