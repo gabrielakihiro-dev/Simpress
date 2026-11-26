@@ -878,25 +878,56 @@ def _xf_a_esquerda(xf: str) -> str:
     return abertura + corpo
 
 
+def _a_esquerda(xf: str) -> bool:
+    alinhamento = re.search(r"<alignment\b[^>]*?/?>", xf)
+    return alinhamento is not None and _atributos(alinhamento.group(0)).get("horizontal") == "left"
+
+
+def _chave_xf(xf: str) -> str:
+    """The xf without the order of its attributes (the clone is compared with the styles that are already left-aligned)."""
+    return re.sub(r"<(xf|alignment|protection)\b([^>]*?)(/?)>", lambda m: f"<{m.group(1)} {sorted(_ATRIBUTO.findall(m.group(2)))}{m.group(3)}>", xf)
+
+
+def _cellxfs(estilos: str) -> Optional[Tuple["re.Match[str]", List[str]]]:
+    """``<cellXfs>`` and its entries; ``None`` when it is missing or its ``count`` does not match the entries (then nothing is touched)."""
+    bloco = re.search(r"<cellXfs\b[^>]*>(.*?)</cellXfs>", estilos, re.DOTALL)
+    if bloco is None:
+        return None
+    xfs = _XF.findall(bloco.group(1))
+    contagem = _atributos(re.match(r"<cellXfs\b[^>]*>", bloco.group(0)).group(0)).get("count")  # type: ignore[union-attr]
+    return (bloco, xfs) if contagem is None or contagem == str(len(xfs)) else None
+
+
 def _alinhar_a_esquerda(pacote: _Pacote, folha: str) -> Tuple[str, Optional[bytes]]:
     """F, G and H of the data rows of ``Tabela3`` (2 .. last; never the header) get a left-aligned style: gives the sheet and the new ``styles.xml``.
 
-    Only the ``s=`` of cells that already exist changes (no ``<c>`` is created) and only ``cellXfs`` grows, once per distinct source style."""
+    Only the ``s=`` of cells that already exist changes (no ``<c>`` is created) and only ``cellXfs`` grows, once per distinct source style
+    (a style that is already left-aligned, with ``applyAlignment="1"``, or has a left-aligned twin, is reused)."""
     if "xl/styles.xml" not in pacote.partes:
         return folha, None
-    estilos = pacote.texto("xl/styles.xml")
-    bloco = re.search(r"<cellXfs\b[^>]*>(.*?)</cellXfs>", estilos, re.DOTALL)
-    if bloco is None:
+    try:
+        estilos = pacote.texto("xl/styles.xml")
+    except UnicodeDecodeError as erro:
+        raise GravacaoInvalida("A estrutura do Dashboard guardado não é a esperada.") from erro
+    lido = _cellxfs(estilos)
+    if lido is None:
         return folha, None
-    xfs = _XF.findall(bloco.group(1))
+    bloco, xfs = lido
+    originais = len(xfs)
     mapa: Dict[int, int] = {}
 
     def novo_estilo(antigo: int) -> int:
         if antigo not in mapa:
-            novo = _xf_a_esquerda(xfs[antigo])
-            if novo not in xfs:
-                xfs.append(novo)
-            mapa[antigo] = xfs.index(novo)
+            origem = xfs[antigo]
+            if _a_esquerda(origem) and _atributos(re.match(r"<xf\b[^>]*?(?=/?>)", origem).group(0)).get("applyAlignment") == "1":  # type: ignore[union-attr]
+                mapa[antigo] = antigo
+            else:
+                novo = _xf_a_esquerda(origem)
+                chave = _chave_xf(novo)
+                gemeos = [i for i, x in enumerate(xfs) if _a_esquerda(x) and _chave_xf(_xf_a_esquerda(x)) == chave]
+                if not gemeos:
+                    xfs.append(novo)
+                mapa[antigo] = gemeos[0] if gemeos else len(xfs) - 1
         return mapa[antigo]
 
     def trocar(achado: "re.Match[str]") -> str:
@@ -905,7 +936,7 @@ def _alinhar_a_esquerda(pacote: _Pacote, folha: str) -> Tuple[str, Optional[byte
         atributos = achado.group(3)
         antigo = re.search(r'\bs="(\d+)"', atributos)
         indice = int(antigo.group(1)) if antigo else 0
-        if indice >= len(xfs):
+        if indice >= originais:
             return achado.group(0)
         novo = novo_estilo(indice)
         atributos = re.sub(r'\bs="\d+"', f's="{novo}"', atributos) if antigo else atributos + f' s="{novo}"'
@@ -913,7 +944,7 @@ def _alinhar_a_esquerda(pacote: _Pacote, folha: str) -> Tuple[str, Optional[byte
 
     inicio, fim = folha.find("<sheetData>"), folha.find("</sheetData>")
     folha = folha[:inicio] + _CELULA_FGH.sub(trocar, folha[inicio:fim]) + folha[fim:]
-    if len(xfs) == len(_XF.findall(bloco.group(1))):
+    if len(xfs) == originais:
         return folha, None
     abertura = re.sub(r'\bcount="\d+"', f'count="{len(xfs)}"', re.match(r"<cellXfs\b[^>]*>", bloco.group(0)).group(0))  # type: ignore[union-attr]
     return folha, (estilos[:bloco.start()] + abertura + "".join(xfs) + "</cellXfs>" + estilos[bloco.end():]).encode("utf-8")
@@ -1037,11 +1068,23 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
             folha = arquivo.read(pacote.aba).decode("utf-8")
             ElementTree.fromstring(folha)
             ElementTree.fromstring(arquivo.read("xl/workbook.xml"))
+            if "xl/styles.xml" in arquivo.namelist():
+                estilos = arquivo.read("xl/styles.xml").decode("utf-8")
+                ElementTree.fromstring(estilos)
+                lido = _cellxfs(estilos)
+                if lido is not None and any(
+                    int(m.group(2)) >= 2 and int(m.group(2)) <= pacote.tabela_ultima_linha and not (
+                        int((re.search(r'\bs="(\d+)"', m.group(3)) or [0, 0])[1]) < len(lido[1])
+                        and _a_esquerda(lido[1][int((re.search(r'\bs="(\d+)"', m.group(3)) or [0, 0])[1])])
+                    )
+                    for m in _CELULA_FGH.finditer(folha)
+                ):
+                    raise GravacaoInvalida("F, G e H da cópia não ficaram alinhadas à esquerda; nada foi entregue.")
             if categorias and not _categorias_conferem(arquivo, pacote):
                 raise GravacaoInvalida("A lista de categorias da cópia não confere com a original; nada foi entregue.")
         if ler_coluna_c(conteudo) != anteriores | frozenset(novos):
             raise GravacaoInvalida("A coluna C da cópia não confere com o esperado; nada foi entregue.")
-    except (zipfile.BadZipFile, ElementTree.ParseError) as erro:
+    except (zipfile.BadZipFile, ElementTree.ParseError, UnicodeDecodeError) as erro:
         raise GravacaoInvalida("A cópia gerada não passou na conferência; nada foi entregue.") from erro
     if not ordem.ultimo:
         return
