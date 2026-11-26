@@ -50,6 +50,23 @@ class EffectiveAliasPrecedenceTests(unittest.TestCase):
         self.assertEqual(item["invall_alias_status"], "aplicado")
         self.assertEqual(item["invall_alias_detail"], "Série associada ao Endpoint; o apelido manual prevalece.")
 
+    def test_backup_hostname_with_known_city_wins_over_manual_override(self):
+        for hostname in ("PRNOTEBKPCWB01", "PRNOTEBKCWB02", "PRNOTEBKPAB01", "PRNOTEBKP-CWB-01"):
+            with self.subTest(hostname=hostname):
+                index = endpoint_index([{"SERIAL": "S1", "NOMEDOCOMPUTADOR": hostname}])
+                item = self.apply(equipment("S1", manual_alias="MANUAL (M)"), index)
+                self.assertEqual(item["apelido"], hostname)
+                self.assertEqual(item["invall_alias_status"], "aplicado")
+                self.assertEqual(
+                    item["invall_alias_detail"], "Hostname de backup do Endpoint; prevalece sobre o apelido manual.",
+                )
+
+    def test_backup_hostname_with_unknown_sigla_keeps_manual_override(self):
+        index = endpoint_index([{"SERIAL": "S1", "NOMEDOCOMPUTADOR": "PRNOTEBKPXYZ01"}])
+        item = self.apply(equipment("S1", manual_alias="MANUAL"), index)
+        self.assertEqual(item["apelido"], "MANUAL")
+        self.assertEqual(item["invall_alias_detail"], "Série associada ao Endpoint; o apelido manual prevalece.")
+
     def test_unique_endpoint_hostname_wins_over_simpress_alias(self):
         index = endpoint_index([{"SERIAL": " s1 ", "NOMEDOCOMPUTADOR": "PRNOTE-ENDPOINT", "USUARIOSLOGADOS": "ana"}])
         item = self.apply(equipment("S1"), index)
@@ -133,6 +150,13 @@ class EffectiveAliasPrecedenceTests(unittest.TestCase):
             {"s1": "MANUAL-1", "S-3": "MANUAL-A", "s3": "MANUAL-B"},
         )
         self.assertEqual(aliases, {"S1": "MANUAL-1", "S2": "HOST-2", "S3": "HOST-3"})
+
+    def test_export_aliases_keep_backup_hostname_over_manual_override(self):
+        aliases = effective_alias.merge_export_aliases(
+            {"S1": "PRNOTEBKPCWB01", "S2": "PRNOTEBKPXYZ01", "S3": "HOST-3"},
+            {"s1": "MANUAL-1", "S2": "MANUAL-2", "S3": "MANUAL-3", "S4": "MANUAL-4"},
+        )
+        self.assertEqual(aliases, {"S1": "PRNOTEBKPCWB01", "S2": "MANUAL-2", "S3": "MANUAL-3", "S4": "MANUAL-4"})
 
     def test_manual_alias_for_serial_requires_a_single_normalized_match(self):
         overrides = {"s-1": "ONE", "S2": "A", "s2": "B"}

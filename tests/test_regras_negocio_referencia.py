@@ -15,6 +15,7 @@ from domains.inventory_comparison import (
 from domains.regras_negocio import (
     cadastro_e_macbook,
     e_serie_sebrae,
+    hostname_backup_com_cidade,
     hostname_de_curitiba,
     hostname_e_macbook,
 )
@@ -86,6 +87,16 @@ class RegrasNegocioTests(unittest.TestCase):
         for hostname in ("PRNOTECWB01", "PRMACSJP01", "PRNOTE", "", None):
             with self.subTest(hostname=hostname):
                 self.assertFalse(hostname_de_curitiba(hostname))
+
+    def test_hostname_backup_com_cidade(self):
+        siglas = ("CWB", "PAB", "AB-X")
+        for nome in ("PRNOTEBKPCWB01", "PRNOTEBKPCWB02", "PRNOTEBKCWB02", "prnotebkp-cwb-01", "PRNOTEBKP CWB",
+                     "PRNOTEBKPAB01", "PRNOTEBKABX"):
+            self.assertTrue(hostname_backup_com_cidade(nome, siglas), nome)
+        for nome in ("PRNOTEBKPXYZ01", "PRNOTEBKP01", "PRNOTEBK", "PRNOTECWB01", "PRNOTEBKPCWBX01", "", None):
+            self.assertFalse(hostname_backup_com_cidade(nome, siglas), nome)
+        # CWB entrou em SERIE_LOCAL_MAP: o backup de Curitiba deixa de ser série sem mapeamento.
+        self.assertEqual(location_for_computer_name("PRNOTEBKPCWB01"), "Curitiba")
 
     def test_hostname_e_macbook_olha_o_hostname_do_endpoint(self):
         for hostname in ("PRMACEND01", "PRMAC-END01", "prmac end01"):

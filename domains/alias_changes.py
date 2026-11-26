@@ -21,7 +21,7 @@ from typing import Any, Callable, ContextManager, Dict, List, Optional, Tuple, T
 from core.errors import DomainConflictError, DomainError
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, WorkbookSafetyError
 from domains import inventory_state
-from domains.effective_alias import with_details_serials, with_manual_alias_marker
+from domains.effective_alias import BACKUP_HOSTNAME_ALIAS_ACTION, with_details_serials, with_manual_alias_marker
 from domains.inventory_comparison import normalize_reference_value
 from domains.inventory_state import STATE_LOCK
 
@@ -340,6 +340,12 @@ def _with_person_names(services: AliasChangeServices, events: List[Dict[str, Any
     return result
 
 
+def _refuse_backup_hostname_event(evento: Dict[str, Any]) -> None:
+    """The manual alias deleted by a backup hostname would lose to that hostname again."""
+    if evento.get("acao") == BACKUP_HOSTNAME_ALIAS_ACTION:
+        raise DomainConflictError("O hostname de backup do Endpoint prevalece sobre o apelido manual; este registro não pode ser desfeito.")
+
+
 def restore_alias_history_event(services: AliasChangeServices, evento_id: str) -> Dict[str, Any]:
     historico = services.load_alias_history()
     evento = next((item for item in historico if item.get("id") == evento_id), None)
@@ -364,6 +370,7 @@ def restore_alias_history_event(services: AliasChangeServices, evento_id: str) -
     )
     if not evento_mais_recente or evento_mais_recente.get("id") != evento_id:
         raise DomainConflictError("Só é possível excluir e restaurar o registro mais recente daquele campo.")
+    _refuse_backup_hostname_event(evento)
 
     apelido_atual = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
     apelido_novo = str(evento.get("apelido_novo") or "").strip()
@@ -413,6 +420,7 @@ def undo_alias_change(services: AliasChangeServices, evento_id: str) -> Dict[str
     )
     if not evento_mais_recente or evento_mais_recente.get("id") != evento.get("id"):
         raise DomainConflictError("Só é possível desfazer a alteração mais recente deste equipamento.")
+    _refuse_backup_hostname_event(evento)
 
     apelido_atual = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
     apelido_evento = str(evento.get("apelido_novo") or "").strip()

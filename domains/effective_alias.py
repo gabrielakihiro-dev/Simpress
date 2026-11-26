@@ -1,8 +1,9 @@
 """Endpoint hostname index and effective alias precedence.
 
 The effective alias of an equipment follows a fixed precedence:
-manual override > unique Endpoint hostname > Simpress alias. Hostnames are
-applied only when the serial appears exactly once in both sources.
+manual override > unique Endpoint hostname > Simpress alias, except that a backup
+hostname with a known city sigla (``PRNOTEBK[P]<sigla>[nº]``) beats the manual
+override. Hostnames are applied only when the serial appears exactly once in both sources.
 """
 
 import logging
@@ -17,6 +18,7 @@ from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Mapping, Opti
 from core.errors import DomainError
 
 from domains.inventory_comparison import (
+    SERIE_LOCAL_MAP,
     _parse_verification_datetime,
     _record_value,
     _upload_verification_value,
@@ -24,13 +26,22 @@ from domains.inventory_comparison import (
     normalize_reference_value,
 )
 from domains.readiness import file_signature
-from domains.regras_negocio import cadastro_e_macbook, hostname_e_macbook
+from domains.regras_negocio import cadastro_e_macbook, hostname_backup_com_cidade, hostname_e_macbook
 
 logger = logging.getLogger(__name__)
 _last_alias_conflicts = 0
 
 MANUAL_ALIAS_MARKER = "(M)"
 _MANUAL_ALIAS_MARKER_PATTERN = re.compile(r"\s*\(M\)\s*$", re.IGNORECASE)
+
+
+# `acao` do histórico de apelidos quando a importação apaga um manual vencido pelo hostname de backup.
+BACKUP_HOSTNAME_ALIAS_ACTION = "hostname_backup"
+
+
+def hostname_backup_vence_manual(hostname: Any) -> bool:
+    """Hostname de backup do Endpoint com sigla de cidade conhecida: prevalece sobre o apelido manual."""
+    return hostname_backup_com_cidade(hostname, SERIE_LOCAL_MAP)
 
 
 def strip_manual_alias_marker(alias: Any) -> str:
@@ -479,11 +490,15 @@ def apply_effective_alias(
         equipment["invall_alias_status"] = "serie_invall_duplicada"
         equipment["invall_alias_detail"] = "A série aparece mais de uma vez no endpoint; o apelido atual foi mantido."
     elif serial_key in endpoint_index.get("unique", {}):
-        if not manual_override:
-            equipment["apelido"] = endpoint_index["unique"][serial_key]
+        hostname = endpoint_index["unique"][serial_key]
+        backup_wins = manual_override and hostname_backup_vence_manual(hostname)
+        if not manual_override or backup_wins:
+            equipment["apelido"] = hostname
         equipment["invall_alias_status"] = "aplicado"
         equipment["invall_alias_detail"] = (
-            "Série associada ao Endpoint; o apelido manual prevalece."
+            "Hostname de backup do Endpoint; prevalece sobre o apelido manual."
+            if backup_wins
+            else "Série associada ao Endpoint; o apelido manual prevalece."
             if manual_override
             else "Hostname do Endpoint associado pela série normalizada."
         )
@@ -496,8 +511,12 @@ def apply_effective_alias(
 
 
 def merge_export_aliases(endpoint_aliases: Dict[str, str], overrides: Dict[str, str]) -> Dict[str, str]:
-    """Combine unique Endpoint hostnames with manual overrides, which win."""
+    """Combine unique Endpoint hostnames with manual overrides, which win except over a backup hostname."""
     aliases = dict(endpoint_aliases)
-    aliases.update(manual_aliases_by_serial(overrides))
+    aliases.update({
+        serial_key: alias
+        for serial_key, alias in manual_aliases_by_serial(overrides).items()
+        if not hostname_backup_vence_manual(endpoint_aliases.get(serial_key))
+    })
     return aliases
 

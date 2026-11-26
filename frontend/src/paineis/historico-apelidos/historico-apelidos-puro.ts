@@ -3,6 +3,7 @@ export interface EventoHistorico {
   id: string;
   serial?: string;
   tipo?: string;
+  acao?: string;
 }
 
 export type CategoriaEvento = "apelido" | "endereco" | "usuario" | "aviso_endpoint";
@@ -41,7 +42,9 @@ export function acoesEventoHistorico(
   const ehAviso = categoria === "aviso_endpoint";
   const ehEndereco = categoria === "endereco";
   const chaveCampo = `${serial}:${ehAviso ? `aviso:${evento.id}` : categoria}`;
-  const ehUltimoCampo = Boolean(serial) && ultimaPorCampo.get(chaveCampo) === evento.id;
+  // Evento automático da importação: o back-end recusa desfazer e restaurar (409).
+  const automatico = evento.acao === "hostname_backup";
+  const ehUltimoCampo = !automatico && Boolean(serial) && ultimaPorCampo.get(chaveCampo) === evento.id;
   return {
     desfazer: ehUltimoCampo && !ehEndereco && !ehAviso,
     excluir: ehUltimoCampo && !ehEndereco,

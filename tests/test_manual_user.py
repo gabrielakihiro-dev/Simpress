@@ -13,7 +13,7 @@ import openpyxl
 
 import main
 from core.errors import DomainBusyError, DomainError
-from domains import inventory_state
+from domains import effective_alias, inventory_state
 from domains.effective_alias import (
     apply_effective_alias,
     build_endpoint_alias_index,
@@ -570,6 +570,87 @@ class ManualUserWorkflowTests(unittest.TestCase):
         # Desfazer o arquivamento no histórico de alterações devolve o manual.
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=archived["id"]))
         self.assertEqual((undone["equipamento"]["usuarios_logados"], undone["equipamento"]["usuarios_logados_origem"]), ("joao", "manual"))
+
+    def _alias_events(self):
+        return [e for e in json.loads(self.history.read_text(encoding="utf-8")) if e["tipo"] == "apelido"]
+
+    def test_backup_hostname_deletes_the_manual_alias_on_import(self):
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="MANUAL"))
+        old_pending = {"serie": "SN-1", "apelido_manual": "MANUAL (M)", "resolucao": "pendente"}
+        self.comparison_history.write_text(json.dumps([
+            {"id": "antigo", "horario": "2026-01-01T00:00:00", "comparacao": {"divergencias_apelidos_manuais": [old_pending]}},
+        ]), encoding="utf-8")
+        # SN-2 perde o usuário do Endpoint na mesma importação: o aviso e o registro do backup entram juntos no histórico.
+        result = self._submit([("SN-1", "PRNOTEBKP-CWB-01", ""), ("SN-2", "HOST-2", "")])
+
+        self.assertEqual(json.loads(self.overrides.read_text(encoding="utf-8")), {})
+        cached = inventory_state.equipamentos_cache["SN-1"]
+        self.assertEqual((cached["apelido"], cached["_apelido_manual_override"], cached["_apelido_local"]),
+                         ("PRNOTEBKP-CWB-01", False, "ALIAS-1"))
+        event = self._alias_events()[-1]
+        self.assertEqual(
+            (event["acao"], event["serial"], event["apelido_anterior"], event["apelido_novo"], event["tinha_override"]),
+            ("hostname_backup", "SN-1", "MANUAL (M)", "PRNOTEBKP-CWB-01", True),
+        )
+        self.assertTrue(any(e["tipo"] == "aviso_endpoint" for e in json.loads(self.history.read_text(encoding="utf-8"))))
+        # Sem pendência Manter/Excluir de um manual que não existe mais, nem no evento novo nem no antigo.
+        self.assertEqual(result["divergencias_apelidos_manuais"], [])
+        saved = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        self.assertEqual(saved[0]["comparacao"]["divergencias_apelidos_manuais"][0]["resolucao"], "substituida")
+        self.assertEqual(saved[-1]["resumo"]["divergencias_apelidos_manuais"], 0)
+        # Desfazer devolveria um manual que o hostname de backup venceria de novo.
+        with self.assertRaises(DomainError) as undo:
+            main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=event["id"]))
+        with self.assertRaises(DomainError) as restore:
+            main.excluir_evento_historico_apelido(event["id"])
+        self.assertEqual((undo.exception.status_code, restore.exception.status_code), (409, 409))
+        # Uma nova carga da base mantém o hostname, agora sem apelido manual.
+        self.assertTrue(main.load_database())
+        self.assertFalse(inventory_state.equipamentos_cache["SN-1"]["_apelido_manual_override"])
+
+    def test_backup_hostname_keeps_the_manual_alias_when_it_is_not_applied(self):
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="MANUAL"))
+        saved_overrides = self.overrides.read_text(encoding="utf-8")
+        unavailable = patch.object(
+            main, "read_endpoint_alias_index", side_effect=lambda: effective_alias.unavailable_endpoint_alias_index(),
+        )
+        duplicated_details = [
+            ("SN-1", "ALIAS-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SN-1", "ALIAS-1B", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SN-2", "ALIAS-2", "Modelo B", "Maringá", "Notebook", "87000000"),
+        ]
+        for case, endpoint_rows, context, details_rows in (
+            ("serie_duplicada_no_endpoint", [("SN-1", "PRNOTEBKPCWB01", ""), ("SN-1", "PRNOTEBKPCWB02", ""), ("SN-2", "HOST-2", "ana")], None, None),
+            ("endpoint_indisponivel", [("SN-1", "PRNOTEBKPCWB01", ""), ("SN-2", "HOST-2", "ana")], unavailable, None),
+            ("sigla_desconhecida", [("SN-1", "PRNOTEBKPXYZ01", ""), ("SN-2", "HOST-2", "ana")], None, None),
+            ("hostname_vazio_no_endpoint", [("SN-1", "", ""), ("SN-2", "HOST-2", "ana")], None, None),
+            ("serie_duplicada_na_simpress", [("SN-1", "PRNOTEBKPCWB01", ""), ("SN-2", "HOST-2", "ana")], None, duplicated_details),
+        ):
+            with self.subTest(case=case), (context or ExitStack()):
+                self._submit(endpoint_rows, details_rows)
+                self.assertEqual(self.overrides.read_text(encoding="utf-8"), saved_overrides)
+                self.assertNotIn("hostname_backup", [e.get("acao") for e in self._alias_events()])
+                cached = inventory_state.equipamentos_cache["SN-1"]
+                self.assertEqual((cached["apelido"], cached["_apelido_manual_override"]), ("MANUAL (M)", True))
+
+    def test_backup_hostname_rolls_back_the_manual_alias_when_the_comparison_history_fails(self):
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="MANUAL"))
+        before = {path: path.read_bytes() for path in (self.overrides, self.history)}
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
+        original_update = main.AtomicFileTransaction.update_json
+
+        def fail_comparison_history(transaction, path, updater, default):
+            if Path(path) == self.comparison_history:
+                raise OSError("falha fictícia no histórico")
+            return original_update(transaction, path, updater, default)
+
+        with patch.object(main.AtomicFileTransaction, "update_json", fail_comparison_history):
+            with self.assertRaises(DomainError) as raised:
+                self._submit([("SN-1", "PRNOTEBKPCWB01", ""), ("SN-2", "HOST-2", "ana")])
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
+        self.assertTrue(inventory_state.equipamentos_cache["SN-1"]["_apelido_manual_override"])
 
     def test_refusing_the_replacement_keeps_the_manual_user_and_remembers_the_endpoint_user(self):
         self._save("SN-1", "joao")

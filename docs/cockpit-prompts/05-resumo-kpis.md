@@ -122,6 +122,7 @@ Sexta aba do Resumo (`#resumo-aba-backups`). Responde: cada regional prioritári
   - confirmação manual válida (`origem: "confirmacao"`).
 - Fica fora da contagem (`excluidos`): série com usuário vigente (usuário manual, retenção ativa ou usuário do Endpoint com verificação recente) ou bloqueada pela Cobertura ou pela manutenção (`bloqueio:<motivo>`; reuso descrito em `docs/cockpit-prompts/16-cobertura.md`).
 - Vai para conferência: série duplicada, leitura ambígua do apelido, cidade do apelido diferente da do cadastro, cadastro sem cidade.
+- Curitiba (`CWB` = Curitiba em `SERIE_LOCAL_MAP`, 26/11/2026): `PRNOTEBKPCWB01` é lido como backup de Curitiba; Curitiba não é regional prioritária, então o notebook entra nas sobras (regionais fora das prioritárias).
 - Candidatos (sem usuário e sem bloqueio, mas ainda sem prova): `fonte_endpoint_indisponivel`, `ausente_no_endpoint`, `sem_verificacao_7_dias`, `encontrado_sem_usuario`.
 - Sobras: o que passa do mínimo nas prioritárias e todo backup das regionais fora das prioritárias. Cada sobra traz `series` e `itens` (`serie`, `origem`, `confirmado_ate`).
 

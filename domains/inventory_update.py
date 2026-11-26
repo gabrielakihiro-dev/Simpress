@@ -10,7 +10,7 @@ import time
 import uuid
 from copy import deepcopy
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type
@@ -32,10 +32,12 @@ from domains.history_annotations import (
     load_effective_history_annotations, same_annotation_revision,
 )
 from domains.effective_alias import (
+    BACKUP_HOSTNAME_ALIAS_ACTION,
     apply_effective_alias,
     build_endpoint_alias_index,
     endpoint_loss_warnings,
     endpoint_user_for_serial,
+    hostname_backup_vence_manual,
     with_details_serials,
 )
 from domains.local_setup import unpack_simpress_zip
@@ -114,6 +116,8 @@ class InventoryUpdateServices:
         Callable[[List[Dict[str, Any]], Dict[str, Any]], Optional[bytes]]
     ] = None
     validate_export_model_sync: Optional[Callable[[bytes], Any]] = None
+    # Manual aliases file; with alias_history_file, a manual alias beaten by a backup hostname is deleted.
+    modified_aliases_file: Optional[Callable[[], Path]] = None
 
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
@@ -667,8 +671,8 @@ def _inventory_transaction_targets(
     plan: _InventoryCommitPlan,
     services: InventoryUpdateServices,
     idempotency_key: Optional[str],
-) -> Tuple[List[Path], Optional[Path], Optional[Path]]:
-    """List every file the transaction locks, plus the optional user-history files."""
+) -> Tuple[List[Path], Optional[Path], Optional[Path], Optional[Path]]:
+    """List every file the transaction locks, plus the optional user-history and manual alias files."""
     transaction_targets = [
         *plan.target_files.values(),
         *(path for path in plan.backup_sources.values() if path is not None),
@@ -689,7 +693,15 @@ def _inventory_transaction_targets(
     if manual_users_file is not None:
         transaction_targets.append(manual_users_file)
         transaction_targets.append(holds_file(manual_users_file))
-    return transaction_targets, alias_history_file, manual_users_file
+    # Locked up front (stable lock order); only written when a backup hostname beats a manual alias.
+    modified_aliases_file = (
+        services.modified_aliases_file()
+        if services.modified_aliases_file is not None and alias_history_file is not None
+        else None
+    )
+    if modified_aliases_file is not None:
+        transaction_targets.append(modified_aliases_file)
+    return transaction_targets, alias_history_file, manual_users_file, modified_aliases_file
 
 
 def _replay_confirmed_inventory_update(
@@ -986,8 +998,9 @@ def _journal_endpoint_warnings(
     alias_history_file: Path,
     loss_warnings: List[Dict[str, str]],
     overridden: Dict[str, Dict[str, str]],
+    extra_entries: List[Dict[str, Any]],
 ) -> None:
-    """Append vanished Endpoint users/hostnames and archived manual users to the alias history."""
+    """Append vanished Endpoint users/hostnames, archived manual users and extra events to the alias history."""
     equipment_by_key = {
         services.normalize_reference_value(item.get("serial")): item
         for item in prepared_state["equipamentos_cache"].values()
@@ -1001,6 +1014,7 @@ def _journal_endpoint_warnings(
             *history,
             *build_endpoint_warning_entries(loss_warnings, equipment_by_key, history, source_label),
             *build_archived_manual_user_entries(overridden),
+            *extra_entries,
         ]
 
     transaction.update_json(alias_history_file, append_endpoint_warnings, [])
@@ -1015,8 +1029,9 @@ def _reconcile_endpoint_users(
     endpoint_index: Dict[str, Any],
     alias_history_file: Path,
     manual_users_file: Optional[Path],
+    extra_history_entries: List[Dict[str, Any]],
 ) -> List[Dict[str, str]]:
-    """Journal user holds and Endpoint warnings; return the logged-user changes of this update."""
+    """Journal user holds, Endpoint warnings and extra alias events; return the logged-user changes."""
     user_changes: List[Dict[str, str]] = []
     loss_warnings = endpoint_loss_warnings(previous.endpoint_index, endpoint_index)
     # A manual user hidden by an Endpoint user leaves the manual file and is kept in the
@@ -1041,11 +1056,72 @@ def _reconcile_endpoint_users(
             overridden,
             archived_manual_users(earlier_history if isinstance(earlier_history, list) else []),
         )
-    if loss_warnings or overridden:
+    # The alias history can be staged only once per transaction, so every event goes in this call.
+    if loss_warnings or overridden or extra_history_entries:
         _journal_endpoint_warnings(
             transaction, services, staged, prepared_state, alias_history_file, loss_warnings, overridden,
+            extra_history_entries,
         )
     return user_changes
+
+
+def _drop_manual_aliases_beaten_by_backup_hostname(
+    transaction: Any,
+    services: InventoryUpdateServices,
+    prepared_state: Dict[str, Any],
+    endpoint_index: Dict[str, Any],
+    modified_aliases_file: Optional[Path],
+) -> Tuple[set, List[Dict[str, Any]]]:
+    """Delete the manual aliases a backup hostname now beats; return their serials and history events.
+
+    Only the "aplicado" branch counts (Endpoint readable, serial unique on both sides): the
+    load already ran ``apply_effective_alias`` with the manual file, so the cache tells it.
+    """
+    if modified_aliases_file is None:
+        return set(), []
+    unique = endpoint_index.get("unique", {})
+    beaten: Dict[str, Dict[str, Any]] = {}
+    for item in prepared_state["equipamentos_cache"].values():
+        key = services.normalize_reference_value(item.get("serial"))
+        if (
+            item.get("_apelido_manual_override")
+            and item.get("invall_alias_status") == "aplicado"
+            and hostname_backup_vence_manual(unique.get(key))
+        ):
+            beaten[key] = item
+    if not beaten:
+        return set(), []
+
+    def without_beaten(data: Any) -> Dict[str, Any]:
+        if not isinstance(data, dict):
+            raise RuntimeError("O arquivo de apelidos manuais não contém um objeto válido.")
+        return {
+            serial: alias for serial, alias in data.items()
+            if services.normalize_reference_value(serial) not in beaten
+        }
+
+    transaction.update_json(modified_aliases_file, without_beaten, {})
+    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    entries = []
+    refreshed_index = with_details_serials(endpoint_index, prepared_state["equipamentos_cache"])
+    for key in sorted(beaten):
+        item = beaten[key]
+        entries.append({
+            "id": uuid.uuid4().hex,
+            "tipo": "apelido",
+            "serial": str(item.get("serial") or key).strip().upper(),
+            "equipamento": item.get("modelo") or item.get("tipo") or "Equipamento",
+            "apelido_anterior": str(item.get("_apelido_local") or "").strip(),
+            "apelido_novo": str(unique[key]),
+            "horario": now,
+            "acao": BACKUP_HOSTNAME_ALIAS_ACTION,
+            "referencia_id": None,
+            "tinha_override": True,
+        })
+        item["_apelido_manual_override"] = False
+        item["_apelido_local"] = str(item.get("_apelido_base", "") or "").strip()
+        apply_effective_alias(item, refreshed_index, details_duplicate=bool(item.get("serie_detalhes_duplicada")))
+    return set(beaten), entries
 
 
 def _detail_serial_index(
@@ -1308,7 +1384,7 @@ def _commit_inventory_files(
     """Validate, compare, replace, reload, and journal inventories in a worker thread."""
     plan = _plan_inventory_commit(staged, services, idempotency_key)
     comparison, comparison_time = _compare_staged_inventories(staged, services, plan.uploaded_names)
-    transaction_targets, alias_history_file, manual_users_file = _inventory_transaction_targets(
+    transaction_targets, alias_history_file, manual_users_file, modified_aliases_file = _inventory_transaction_targets(
         plan, services, idempotency_key,
     )
     with _transaction_with_backup_cleanup(
@@ -1335,17 +1411,34 @@ def _commit_inventory_files(
 
         endpoint_index = services.read_endpoint_alias_index()
         user_changes: List[Dict[str, str]] = []
+        shown = previous
         if alias_history_file is not None:
+            beaten_serials, backup_alias_entries = _drop_manual_aliases_beaten_by_backup_hostname(
+                transaction, services, prepared_state, endpoint_index, modified_aliases_file,
+            )
+            # A deleted manual alias leaves no Manter/Excluir decision in this event; older pending
+            # ones are still superseded below, since the full source list goes to the history journal.
+            shown = replace(
+                previous,
+                manual_alias_sources=[
+                    item for item in previous.manual_alias_sources
+                    if services.normalize_reference_value(item.get("serie")) not in beaten_serials
+                ],
+                manual_divergences=[
+                    item for item in previous.manual_divergences
+                    if services.normalize_reference_value(item.get("serie")) not in beaten_serials
+                ],
+            )
             user_changes = _reconcile_endpoint_users(
                 transaction, services, staged, prepared_state, previous,
-                endpoint_index, alias_history_file, manual_users_file,
+                endpoint_index, alias_history_file, manual_users_file, backup_alias_entries,
             )
         _attach_alias_review(
             comparison, comparison_time, services, staged, plan.uploaded_names,
             previous.aliases, prepared_state, endpoint_index,
         )
         _attach_commit_metadata(
-            comparison, plan, previous, user_changes,
+            comparison, plan, shown, user_changes,
             missing_backup_files, invalid_backup_files, prepared_state,
         )
         event_id = uuid.uuid4().hex
@@ -1354,7 +1447,7 @@ def _commit_inventory_files(
             comparison,
             event_id,
             plan.uploaded_names,
-            _comparison_summary(comparison, previous.manual_divergences, user_changes),
+            _comparison_summary(comparison, shown.manual_divergences, user_changes),
             automatic_import_id,
         )
         copied_annotations = _journal_comparison_history(
