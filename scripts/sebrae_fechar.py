@@ -3,8 +3,10 @@
 Única escrita no SoftExpert fora a confirmação de associar o chamado (``sebrae_softexpert.finalizar_chamado``).
 Entrada: o arquivo de pedido ``data/state/sebrae_fechar_job.json`` (números UTIC; o texto e o PDF de cada chamado
 são lidos do estado no momento da execução). Saída: ``data/state/sebrae_fechar_resultado.json`` com um resultado por
-chamado (``ok``, ``nao_encontrado``, ``finalizado_outro_tecnico``, ``erro``, ``sem_descricao``, ``sem_encerramento`` e ``pronto`` no modo
-``--sem-finalizar``).
+chamado (``ok``, ``nao_encontrado``, ``finalizado_outro_tecnico``, ``erro``, ``incerto``, ``sem_descricao``, ``sem_encerramento`` e
+``pronto`` no modo ``--sem-finalizar``).
+``incerto`` (26/11/2026): Finalizar foi clicado e o resultado não foi confirmado. Fica no estado do chamado; o próximo pedido nunca
+clica de novo: só confere se o cartão saiu da central de tarefas (fora = ``ok`` com o R do usuário; dentro = continua ``incerto``).
 Regra do usuário (24/11/2026, substitui a escolha de 31/10/2026 de usar o horário do SoftExpert): todo chamado do pedido precisa da DT
 ENCERRAMENTO (R) digitada pelo usuário (campo ``encerramentos``); sem ela vira ``sem_encerramento`` e nada é aberto no SoftExpert.
 Regra do usuário (12/11/2026): chamado fora da central que o usuário já marcou com D=FINALIZADO e R (campo ``encerramentos_manuais``
@@ -348,7 +350,7 @@ def executar(
                 salvar()
                 resultado["sharepoint"] = _enviar_ao_sharepoint(context, rotinas, state_dir, saida, list(encerramentos), log, agora)
         aviso = resultado["sharepoint"] or {}
-        falhas = any(r["status"] == fin.STATUS_ERRO for r in resultado["resultados"]) or bool(aviso.get("falhou") or aviso.get("incerto"))
+        falhas = any(r["status"] in (fin.STATUS_ERRO, fin.STATUS_INCERTO) for r in resultado["resultados"]) or bool(aviso.get("falhou") or aviso.get("incerto"))
         return 1 if falhas else 0
     except BaseException:
         propagando = True
@@ -387,6 +389,45 @@ def _processar(
         salvar()
         return item
 
+    def registrar(item: Dict[str, Any], status: str, quando: str = "") -> None:
+        """Estado do chamado depois de anotado o resultado: a falha local vira aviso no item, nunca derruba o lote nem perde o R."""
+        try:
+            fin.registrar_finalizacao(state_dir, item["numero"], status, quando)
+        except Exception as erro:  # noqa: BLE001 - DomainBusyError, FileBusyError, OSError: só o tipo vai ao log
+            log(f"{item['numero']}: o registro local da finalização falhou ({type(erro).__name__}).")
+            item["mensagem"] = " ".join(filter(None, [
+                item.get("mensagem"), "O registro local falhou; não peça de novo antes de conferir no SoftExpert."]))
+            salvar()
+
+    def finalizado(numero: str, quando: str, **extras: Any) -> None:
+        """``ok``: R do usuário (regra de 24/11/2026, nunca a hora atual), anotado ANTES do registro local, e senha apagada."""
+        encerramentos[numero] = quando
+        registrar(anotar(numero, fin.STATUS_OK, encerrado_em=quando, **extras), fin.STATUS_OK, quando)
+        log(f"{numero}: finalizado no SoftExpert.")
+        try:  # senha guardada para o F5 sai junto com o chamado (regra do usuário, 19/11/2026)
+            sebrae_credenciais.remover(state_dir, numero)
+        except Exception as erro:  # noqa: BLE001 - never blocks the result; log only the type
+            log(f"{numero}: senha guardada não apagada ({type(erro).__name__}).")
+
+    def incerto(numero: str, mensagem: str = fin.MENSAGEM_INCERTO, **extras: Any) -> None:
+        log(f"{numero}: Finalizar clicado sem confirmação (incerto); o site não clica de novo.")
+        registrar(anotar(numero, fin.STATUS_INCERTO, mensagem=mensagem, **extras), fin.STATUS_INCERTO)
+
+    def anexo_enviado(numero: str, pdf: Optional[Path], escritas: List[str]) -> str:
+        """``anexo`` sem ``finalizar``: o PDF não sobe de novo no próximo pedido. Devolve o aviso para a mensagem."""
+        if pdf is None or "anexo" not in escritas or "finalizar" in escritas:
+            return ""
+        try:
+            fin.registrar_anexo_enviado(state_dir, numero, pdf)
+        except Exception as erro:  # noqa: BLE001
+            log(f"{numero}: não consegui registrar o PDF já enviado ({type(erro).__name__}).")
+            return "O PDF pode já estar no chamado e o registro local falhou: confira o anexo no SoftExpert antes de pedir de novo."
+        return "O PDF pode já estar no chamado: confira o anexo no SoftExpert; o próximo pedido finaliza sem enviá-lo de novo."
+
+    def escritas_de(erro: BaseException) -> List[str]:
+        """O que ``finalizar_chamado`` já gravou no SoftExpert antes da exceção (atributo ``escritas``)."""
+        return [str(e) for e in getattr(erro, "escritas", None) or []]
+
     vistos: set[str] = set()
     for bruto in numeros:
         rotinas.verificar_cancelamento("Cancelado antes de finalizar o próximo chamado.")
@@ -399,6 +440,8 @@ def _processar(
             continue
         vistos.add(numero)
         descricao, pdf = fin.dados_para_finalizar(state_dir, numero)
+        if pdf is None and fin.pdf_ja_enviado(state_dir, numero):
+            log(f"{numero}: o PDF já foi enviado ao chamado num pedido anterior; não é enviado de novo.")
         if not descricao:
             log(f"{numero}: sem descrição para finalizar; pulado.")
             anotar(numero, fin.STATUS_SEM_DESCRICAO, mensagem="Preencha a descrição para finalizar o chamado.")
@@ -408,19 +451,52 @@ def _processar(
             log(f"{numero}: sem DT ENCERRAMENTO (coluna R) informada; pulado.")
             anotar(numero, fin.STATUS_SEM_ENCERRAMENTO, mensagem="Informe a DT ENCERRAMENTO (coluna R) para finalizar o chamado.")
             continue
+        ja_incerto = fin.finalizacao_incerta(state_dir, numero)
         if parada:
-            anotar(numero, fin.STATUS_ERRO, mensagem=parada, motivo="softexpert_indisponivel")
+            if ja_incerto:  # Finalizar já clicado antes: nunca "finalize outra vez"
+                anotar(numero, fin.STATUS_INCERTO, mensagem=fin.MENSAGEM_INCERTO, motivo="softexpert_indisponivel")
+            else:
+                anotar(numero, fin.STATUS_ERRO, mensagem=parada, motivo="softexpert_indisponivel")
+            continue
+        if ja_incerto:
+            # Finalizar já foi clicado num pedido anterior: só confere a central, sem abrir o formulário nem clicar.
+            if not confirmar:
+                anotar(numero, fin.STATUS_INCERTO, mensagem=fin.MENSAGEM_INCERTO)
+                continue
+            try:
+                if pagina is None:
+                    pagina = modulo.abrir_softexpert(context)
+                    abas.append(pagina)
+                na_central = modulo.cartao_na_central(pagina, numero)
+            except Exception as erro:  # noqa: BLE001 - inclui SessaoExpirada: o chamado continua incerto, nada foi clicado
+                if isinstance(erro, modulo.SessaoExpirada):
+                    parada = MOTIVO_SESSAO
+                elif pagina is None:
+                    parada = rotinas.descrever_erro(erro, so_tipo=True)
+                rotinas.registrar_erro(pagina, ORIGEM)
+                incerto(numero, mensagem=f"{fin.MENSAGEM_INCERTO} Não consegui conferir a central de tarefas agora; peça de novo.")
+                continue
+            if na_central:
+                incerto(numero, mensagem=fin.MENSAGEM_INCERTO_NA_CENTRAL)
+            else:
+                finalizado(numero, data_usuario, mensagem="Fora da central de tarefas: o Finalizar clicado antes foi registrado.")
             continue
         try:
             if pagina is None:
                 pagina = modulo.abrir_softexpert(context)
                 abas.append(pagina)
             detalhes = modulo.finalizar_chamado(pagina, numero, descricao, pdf=pdf, confirmar_final=confirmar)
-        except modulo.SessaoExpirada:
+        except modulo.SessaoExpirada as erro:
             parada = MOTIVO_SESSAO
             log(f"{numero}: {parada}")
             rotinas.registrar_erro(pagina, ORIGEM)
-            anotar(numero, fin.STATUS_ERRO, mensagem=parada, motivo="sessao_expirada")
+            escritas = escritas_de(erro)
+            if "finalizar" in escritas:
+                incerto(numero, escritas=escritas, motivo="sessao_expirada")
+            else:
+                aviso = anexo_enviado(numero, pdf, escritas)
+                anotar(numero, fin.STATUS_ERRO, mensagem=" ".join(filter(None, [parada, aviso])), motivo="sessao_expirada",
+                       escritas=escritas)
             continue
         except Exception as erro:  # noqa: BLE001 - validação antes de navegar, login que não concluiu, aba que caiu
             mensagem = rotinas.descrever_erro(erro, so_tipo=True)
@@ -430,6 +506,16 @@ def _processar(
             if pagina is None:
                 parada = mensagem  # nem a central de tarefas abriu: tentar o próximo chamado repetiria o mesmo erro
             continue
+        except BaseException as erro:  # RotinaCancelada: anota o que já foi clicado antes de parar
+            try:
+                escritas = escritas_de(erro)
+                if "finalizar" in escritas:
+                    incerto(numero, escritas=escritas)
+                else:
+                    anexo_enviado(numero, pdf, escritas)
+            except Exception as falha:  # noqa: BLE001 - o cancelamento continua subindo
+                log(f"{numero}: não consegui anotar o resultado antes de parar ({type(falha).__name__}).")
+            raise
         status = str(detalhes.get("status") or fin.STATUS_ERRO)
         info = detalhes.get("detalhes") if isinstance(detalhes.get("detalhes"), dict) else {}
         extras = {
@@ -438,15 +524,9 @@ def _processar(
         }
         manual = (manuais or {}).get(numero, "") if confirmar else ""
         if status == fin.STATUS_OK:
-            quando = data_usuario  # regra de 24/11/2026: o R do usuário, nunca a hora atual
-            fin.registrar_finalizacao(state_dir, numero, fin.STATUS_OK, quando)
-            encerramentos[numero] = quando
-            anotar(numero, status, encerrado_em=quando, **extras)
-            log(f"{numero}: finalizado no SoftExpert.")
-            try:  # senha guardada para o F5 sai junto com o chamado (regra do usuário, 19/11/2026)
-                sebrae_credenciais.remover(state_dir, numero)
-            except Exception as erro:  # noqa: BLE001 - never blocks the result; log only the type
-                log(f"{numero}: senha guardada não apagada ({type(erro).__name__}).")
+            finalizado(numero, data_usuario, **extras)
+        elif status == fin.STATUS_INCERTO or "finalizar" in extras["escritas"]:
+            incerto(numero, **{**extras, "mensagem": fin.MENSAGEM_INCERTO})
         elif status == fin.STATUS_NAO_ENCONTRADO and manual:
             # Fora da central, com D=FINALIZADO e R do usuário: finalizado por outro técnico (regra do usuário, 12/11/2026).
             quando = manual
@@ -463,5 +543,6 @@ def _processar(
             log(f"{numero}: formulário pronto; Finalizar não foi clicado.")
         else:
             rotinas.registrar_erro(pagina, ORIGEM)
-            anotar(numero, fin.STATUS_ERRO, **extras)
+            aviso = anexo_enviado(numero, pdf, extras["escritas"])
+            anotar(numero, fin.STATUS_ERRO, **{**extras, "mensagem": " ".join(filter(None, [extras["mensagem"], aviso]))})
             log(f"{numero}: erro ao finalizar ({extras['mensagem']}).")

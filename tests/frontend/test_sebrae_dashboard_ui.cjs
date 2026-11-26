@@ -276,6 +276,12 @@ test("resumos do início e do fim da finalização em massa contam cada resultad
   assert.equal(resumoResultado(resultado), "Finalização no SoftExpert terminada: 2 finalizado(s), 1 já finalizado(s), 1 com erro, 1 não encontrado(s), 1 sem descrição.");
   assert.equal(resumoResultado({ resultados: [], cancelado: true }), "Finalização cancelada.");
   assert.match(resumoResultado({ resultados: [{ status: "ok" }, { status: "finalizado_outro_tecnico" }, { status: "finalizado_outro_tecnico" }] }), /2 finalizado\(s\) por outro técnico/);
+  // incerto (Finalizar clicado sem confirmação) e sem_encerramento entram no resumo; antes viravam "terminada: ."
+  assert.equal(resumoResultado({ resultados: [{ status: "incerto" }, { status: "sem_encerramento" }] }),
+    "Finalização no SoftExpert terminada: 1 incerto(s): confira no SoftExpert, 1 sem DT ENCERRAMENTO (R).");
+  assert.equal(textoResultado({ status: "incerto", mensagem: "Confira no SoftExpert; o site não clica de novo." }),
+    "Finalizar clicado, resultado não confirmado: Confira no SoftExpert; o site não clica de novo.");
+  assert.ok(podeFinalizar("feito", { status: "incerto" }, false)); // pedir de novo só confere a central
 });
 
 test("tamanho do PDF aparece em B, KB ou MB", () => {

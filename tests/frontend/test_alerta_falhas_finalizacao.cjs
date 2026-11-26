@@ -48,6 +48,15 @@ test("rotina interrompida e um só chamado com sessão expirada", () => {
   } finally { cena.restaurar(); }
 });
 
+test("incerto: Finalizar clicado sem confirmação nunca vira \"não foi finalizado\"", () => {
+  const cena = montar();
+  try {
+    cena.dashboard.renderizarAlertaFalhasFinalizacao({ total: 2, itens: [{ numero: "UTIC-2026-7", motivo: "incerto" }, { numero: "UTIC-2026-8", motivo: "erro" }] });
+    assert.equal(cena.texto.textContent,
+      `1 chamado não foi finalizado no SoftExpert: UTIC-2026-8. UTIC-2026-7: o Finalizar foi clicado, mas o resultado não foi confirmado. ${DICA}`);
+  } finally { cena.restaurar(); }
+});
+
 test("R não gravado no Dashboard: finalizado, sem contar como falha de finalização", () => {
   const cena = montar();
   try {

@@ -98,21 +98,36 @@ class Rotinas:
         self.copias.append(Path(arquivo))
 
 
-def modulo(respostas, aba):
-    """``respostas``: ``{numero: dict | Exception}`` returned/raised by ``finalizar_chamado``."""
+def modulo(respostas, aba, central=None):
+    """``respostas``: ``{numero: dict | BaseException}`` returned/raised by ``finalizar_chamado``.
+
+    ``central``: ``{numero: bool | Exception}`` answered by ``cartao_na_central`` (só leitura; registra em ``conferidos``)."""
     chamadas = []
+    conferidos = []
 
     def finalizar_chamado(pagina, numero, descricao, *, pdf=None, enviar_email=None, confirmar_final=True):
         chamadas.append({"numero": numero, "descricao": descricao, "pdf": pdf, "confirmar_final": confirmar_final})
         resposta = respostas[numero]
-        if isinstance(resposta, Exception):
+        if isinstance(resposta, BaseException):
+            raise resposta
+        return resposta
+
+    def cartao_na_central(pagina, numero):
+        conferidos.append(numero)
+        resposta = (central or {})[numero]
+        if isinstance(resposta, BaseException):
             raise resposta
         return resposta
 
     return types.SimpleNamespace(
-        SoftExpertErro=SoftExpertErro, SessaoExpirada=SessaoExpirada, chamadas=chamadas, aberturas=[],
-        abrir_softexpert=lambda contexto: aba, finalizar_chamado=finalizar_chamado,
+        SoftExpertErro=SoftExpertErro, SessaoExpirada=SessaoExpirada, chamadas=chamadas, aberturas=[], conferidos=conferidos,
+        abrir_softexpert=lambda contexto: aba, finalizar_chamado=finalizar_chamado, cartao_na_central=cartao_na_central,
     )
+
+
+def com_escritas(erro, *escritas):
+    erro.escritas = list(escritas)
+    return erro
 
 
 def ok():
@@ -139,11 +154,11 @@ class FecharBase(unittest.TestCase):
         for numero in numeros:
             fin.definir_descricao(self.dir, numero, f"feito {numero}")
 
-    def rodar(self, respostas, numeros, *, sem_finalizar=False, confirmar_final=True, manuais=None, encerramentos=None):
+    def rodar(self, respostas, numeros, *, sem_finalizar=False, confirmar_final=True, manuais=None, encerramentos=None, central=None):
         # Regra de 24/11/2026: sem R digitado o chamado nem é aberto; por padrão todos levam o mesmo R (= AGORA em Brasília).
         datas = {n: R_USUARIO for n in numeros} if encerramentos is None else encerramentos
         fin.gravar_job(self.dir, numeros, confirmar_final=confirmar_final, encerramentos_manuais=manuais or {}, encerramentos=datas)
-        mod = modulo(respostas, self.aba)
+        mod = modulo(respostas, self.aba, central)
         codigo = sebrae_fechar.executar(
             None, self.rotinas, state_dir=self.dir, modulo=mod, sem_finalizar=sem_finalizar, agora=lambda: AGORA,
         )
@@ -399,6 +414,127 @@ class FinalizarTest(FecharBase):
         self.assertEqual(self.rotinas.enviadas, [])
         self.assertIn("Não há Dashboard importado", self.resultado()["planilha"])
         self.assertEqual(self.por_numero()[A]["status"], "ok")
+        self.assertEqual(codigo, 0)
+
+
+class IncertoTest(FecharBase):
+    """Depois do clique em Finalizar, o resultado nunca vira erro repetível nem leva a um segundo clique (26/11/2026)."""
+
+    def estado(self, numero):
+        return (fin.ler_estado(self.dir).get(numero, {}).get("finalizacao") or {}).get("status")
+
+    def test_sessao_expirada_depois_do_finalizar_vira_incerto_e_os_restantes_param(self):
+        self.descrever(A, B)
+        codigo, mod = self.rodar({A: com_escritas(SessaoExpirada("login"), "finalizar"), B: ok()}, [A, B])
+        self.assertEqual(codigo, 1)
+        self.assertEqual([c["numero"] for c in mod.chamadas], [A])
+        achados = self.por_numero()
+        self.assertEqual(achados[A]["status"], fin.STATUS_INCERTO)
+        self.assertNotIn("finalize outra vez", achados[A]["mensagem"])
+        self.assertEqual(achados[B]["motivo"], "softexpert_indisponivel")
+        self.assertEqual(self.estado(A), fin.STATUS_INCERTO)
+        self.assertFalse(fin.ja_finalizado(self.dir, A))
+
+    def test_cancelamento_depois_do_finalizar_anota_incerto_antes_de_parar(self):
+        self.descrever(A)
+        with self.assertRaises(RotinaCancelada):
+            self.rodar({A: com_escritas(RotinaCancelada(), "finalizar")}, [A])
+        resultado = self.resultado()
+        self.assertTrue(resultado["cancelado"])
+        self.assertEqual([(r["numero"], r["status"]) for r in resultado["resultados"]], [(A, fin.STATUS_INCERTO)])
+        self.assertEqual(self.estado(A), fin.STATUS_INCERTO)
+
+    def test_cartao_na_central_depois_do_finalizar_vira_incerto(self):
+        self.descrever(A)
+        erro = com_status("erro", mensagem="continua na central", motivo="formulario_indisponivel", escritas=["finalizar"])
+        codigo, _ = self.rodar({A: erro}, [A])
+        self.assertEqual(codigo, 1)
+        self.assertEqual(self.por_numero()[A]["status"], fin.STATUS_INCERTO)
+        self.assertEqual(self.por_numero()[A]["mensagem"], fin.MENSAGEM_INCERTO)
+        self.assertEqual(self.estado(A), fin.STATUS_INCERTO)
+        self.assertEqual(self.rotinas.enviadas, [])
+
+    def test_novo_pedido_de_incerto_fora_da_central_vira_ok_sem_clique(self):
+        self.descrever(A)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_INCERTO)
+        with patch.object(sebrae_fechar.sebrae_credenciais, "remover") as remover:
+            codigo, mod = self.rodar({}, [A], central={A: False}, encerramentos={A: "05/11/2026 09:30"})
+        self.assertEqual(codigo, 0)
+        self.assertEqual(mod.chamadas, [])  # finalizar_chamado nunca foi chamado: nenhum formulário, nenhum clique
+        self.assertEqual(mod.conferidos, [A])
+        self.assertEqual(self.por_numero()[A]["status"], "ok")
+        self.assertEqual(fin.encerramentos_registrados(self.dir), {A: "05/11/2026 09:30"})
+        self.assertEqual(self.por_numero()[A]["planilha"], "gravado")
+        self.assertEqual(self.rotinas.enviadas, [None])
+        remover.assert_called_once_with(self.dir, A)
+
+    def test_novo_pedido_de_incerto_ainda_na_central_continua_incerto_sem_clique(self):
+        self.descrever(A)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_INCERTO)
+        codigo, mod = self.rodar({}, [A], central={A: True})
+        self.assertEqual(codigo, 1)
+        self.assertEqual(mod.chamadas, [])
+        self.assertEqual(self.por_numero()[A]["status"], fin.STATUS_INCERTO)
+        self.assertEqual(self.por_numero()[A]["mensagem"], fin.MENSAGEM_INCERTO_NA_CENTRAL)
+        self.assertEqual(self.estado(A), fin.STATUS_INCERTO)
+        self.assertEqual(self.rotinas.enviadas, [])
+
+    def test_novo_pedido_de_incerto_com_sessao_expirada_na_conferencia_continua_incerto(self):
+        self.descrever(A, B)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_INCERTO)
+        _, mod = self.rodar({B: ok()}, [A, B], central={A: SessaoExpirada("login")})
+        self.assertEqual(mod.chamadas, [])
+        self.assertEqual(self.por_numero()[A]["status"], fin.STATUS_INCERTO)
+        self.assertEqual(self.por_numero()[B]["motivo"], "softexpert_indisponivel")
+        self.assertEqual(self.estado(A), fin.STATUS_INCERTO)
+
+    def test_incerto_depois_da_sessao_cair_continua_incerto_sem_finalize_outra_vez(self):
+        self.descrever(A, B)
+        fin.registrar_finalizacao(self.dir, B, fin.STATUS_INCERTO)
+        _, mod = self.rodar({A: SessaoExpirada("login")}, [A, B], central={})
+        self.assertEqual(mod.conferidos, [])
+        self.assertEqual(self.por_numero()[B]["status"], fin.STATUS_INCERTO)
+        self.assertNotIn("finalize outra vez", self.por_numero()[B]["mensagem"])
+
+    def test_incerto_no_modo_sem_finalizar_nao_abre_nada(self):
+        self.descrever(A)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_INCERTO)
+        _, mod = self.rodar({}, [A], sem_finalizar=True, central={})
+        self.assertEqual((mod.chamadas, mod.conferidos), ([], []))
+        self.assertEqual(self.por_numero()[A]["status"], fin.STATUS_INCERTO)
+
+    def test_anexo_enviado_sem_finalizar_nao_e_reenviado_no_proximo_pedido(self):
+        self.descrever(A)
+        fin.anexar_pdf(self.dir, A, "laudo.pdf", PDF)
+        erro = com_status("erro", mensagem="Anexo: o envio de laudo.pdf não terminou em 120 s; nada foi finalizado.", escritas=["anexo"])
+        self.rodar({A: erro}, [A])
+        self.assertEqual(self.por_numero()[A]["status"], "erro")
+        self.assertIn("sem enviá-lo de novo", self.por_numero()[A]["mensagem"])
+        self.assertTrue(fin.pdf_ja_enviado(self.dir, A))
+        _, mod = self.rodar({A: ok()}, [A])
+        self.assertIsNone(mod.chamadas[0]["pdf"])  # finaliza sem anexar o mesmo PDF de novo
+        self.assertEqual(self.por_numero()[A]["status"], "ok")
+        fin.anexar_pdf(self.dir, A, "laudo.pdf", PDF)  # o usuário trocou o PDF: a versão nova sobe
+        self.assertIsNotNone(fin.dados_para_finalizar(self.dir, A)[1])
+
+    def test_anexo_enviado_e_sessao_expirada_registra_o_pdf_e_avisa(self):
+        self.descrever(A)
+        fin.anexar_pdf(self.dir, A, "laudo.pdf", PDF)
+        self.rodar({A: com_escritas(SessaoExpirada("login"), "anexo")}, [A])
+        self.assertEqual(self.por_numero()[A]["status"], "erro")
+        self.assertIn("PDF", self.por_numero()[A]["mensagem"])
+        self.assertTrue(fin.pdf_ja_enviado(self.dir, A))
+
+    def test_falha_em_registrar_finalizacao_nao_perde_o_ok_nem_o_r(self):
+        self.descrever(A, B)
+        with patch.object(sebrae_fechar.fin, "registrar_finalizacao", side_effect=FileBusyError("ocupado")):
+            codigo, _ = self.rodar({A: ok(), B: ok()}, [A, B])
+        achados = self.por_numero()
+        self.assertEqual((achados[A]["status"], achados[B]["status"]), ("ok", "ok"))
+        self.assertIn("registro local falhou", achados[A]["mensagem"])
+        self.assertEqual(achados[A]["planilha"], "gravado")  # o R do usuário foi à coluna R mesmo assim
+        self.assertRegex(linha_xml(self.saida.read_bytes(), 2), R_1405)
+        self.assertEqual(len(self.rotinas.enviadas), 1)
         self.assertEqual(codigo, 0)
 
 

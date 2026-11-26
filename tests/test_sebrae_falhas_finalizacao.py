@@ -57,6 +57,12 @@ class FalhasDaFinalizacaoTest(unittest.TestCase):
         for proibido in ("mensagem", "IGNORE", "joana", "123.456.789-09", "Timeout"):
             self.assertNotIn(proibido, texto)
 
+    def test_incerto_tem_codigo_proprio_e_sai_quando_o_chamado_vira_ok(self):
+        self.gravar([item("UTIC-2026-0007", fin.STATUS_INCERTO, mensagem=SUJO, motivo="sessao_expirada")])
+        self.assertEqual(fin.falhas_da_finalizacao(self.pasta, PARADA)["itens"], [{"numero": "UTIC-2026-0007", "motivo": "incerto"}])
+        fin.registrar_finalizacao(self.pasta, "UTIC-2026-0007", fin.STATUS_OK, "24/11/2026 10:00")
+        self.assertEqual(fin.falhas_da_finalizacao(self.pasta, PARADA)["itens"], [])
+
     def test_chamado_finalizado_depois_sai_do_aviso(self):
         self.gravar([item("UTIC-2026-0001"), item("UTIC-2026-0002")])
         fin.registrar_finalizacao(self.pasta, "UTIC-2026-0001", fin.STATUS_OK, "24/11/2026 10:00")

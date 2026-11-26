@@ -648,8 +648,9 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
   const MOTIVOS_FALHA_FINALIZACAO: Record<string, string> = { tempo_esgotado: "tempo esgotado", sessao_expirada: "sessão expirada" };
 
   function textoFalhasFinalizacao(itens: FalhaFinalizacao[]): string {
-    const erros = itens.filter(item => !["interrompida", "sharepoint", "planilha"].includes(String(item.motivo)));
+    const erros = itens.filter(item => !["interrompida", "sharepoint", "planilha", "incerto"].includes(String(item.motivo)));
     const semR = itens.filter(item => item.motivo === "planilha");
+    const incertos = itens.filter(item => item.motivo === "incerto");
     const partes: string[] = [];
     if (erros.length) {
       const numeros = erros.filter(item => item.numero).map(item => {
@@ -658,6 +659,11 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
       });
       const sujeito = erros.length === 1 ? "1 chamado não foi finalizado" : `${erros.length} chamados não foram finalizados`;
       partes.push(`${sujeito} no SoftExpert${numeros.length ? `: ${numeros.join(", ")}` : ""}.`);
+    }
+    if (incertos.length) {
+      // Finalizar foi clicado e não se sabe se terminou: nunca "não foi finalizado"
+      const numeros = incertos.filter(item => item.numero).map(item => String(item.numero));
+      partes.push(`${numeros.length ? `${numeros.join(", ")}: o` : "O"} Finalizar foi clicado, mas o resultado não foi confirmado.`);
     }
     if (semR.length) {
       // o chamado foi finalizado, mas a coluna R não: só o número UTIC, nunca a mensagem da rotina
