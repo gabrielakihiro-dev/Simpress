@@ -2917,3 +2917,245 @@ test("Atualizar Dashboard em lote: blocos só dos não encontrados e confirmar_o
     assert.deepEqual(posts[0].confirmar_outro_tecnico, esperado);
   }
 });
+
+// ---- Bloco C (26/11/2026): estado da aba Chamados ----
+
+const digitarCampo = (campo, valor) => { campo.value = valor; campo.dispatchEvent({ type: "input", currentTarget: campo }); };
+const portao = () => { let abrir; const espera = new Promise(resolver => { abrir = resolver; }); return { espera, abrir }; };
+
+/** Servidor falso: guarda descrição e observação nos itens da carga, para a recarga devolvê-las como o servidor faria. */
+function servidorBlocoC(carga, { falharDescricao = false, portaoPost = null } = {}) {
+  const estado = { falharDescricao, puts: [], posts: [], gets: 0 };
+  const apiFetch = async (url, opcoes = {}) => {
+    const corpo = opcoes.body ? JSON.parse(opcoes.body) : null;
+    if (opcoes.method === "PUT" && url.endsWith("/finalizacao")) {
+      estado.puts.push(corpo.descricao_finalizacao);
+      if (estado.falharDescricao) throw Object.assign(new Error("indisponível"), { status: 503 });
+      const numero = decodeURIComponent(url.split("/")[4]);
+      const item = carga.novos.formulario.find(n => n.numero === numero);
+      if (item) item.softexpert = { ...item.softexpert, descricao_finalizacao: corpo.descricao_finalizacao, descricao_definida: true };
+      return { descricao_finalizacao: corpo.descricao_finalizacao };
+    }
+    if (opcoes.method === "PUT" && url.endsWith("/observacao")) {
+      estado.puts.push(`obs:${corpo.observacao}`);
+      carga.importado.abertos[0].observacao = corpo.observacao;
+      return { observacao: corpo.observacao };
+    }
+    if (opcoes.method === "PUT" && url.endsWith("/descricao")) return { descricao: corpo.descricao || "Travando.", descricao_editada: corpo.descricao };
+    if (opcoes.method === "POST" && (url === POST_ATUALIZAR || url === POST_FINALIZAR)) {
+      estado.posts.push({ url, corpo });
+      if (portaoPost) await portaoPost.espera;
+      return url === POST_ATUALIZAR ? { arquivo: "Dashboard.xlsx", conteudo_base64: "AA==", linhas: [], base: {}, ...ENVIO_INICIADO } : { iniciado: true };
+    }
+    if (!opcoes.method) estado.gets += 1;
+    return structuredClone(carga);
+  };
+  return { estado, apiFetch };
+}
+
+async function telaBlocoC(carga, opcoes) {
+  const servidor = servidorBlocoC(carga, opcoes);
+  const tela = await renderizarCartoes(carga, null, servidor.apiFetch);
+  await esvaziarFila();
+  global.window.URL = { createObjectURL: () => "blob:teste", revokeObjectURL() {} };
+  const toasts = [];
+  tela.app.showToast = (texto, tipo) => toasts.push([texto, tipo]);
+  tela.app.atualizarEstadoAutomacao = () => {};
+  return { ...tela, ...servidor, toasts };
+}
+
+const marcarFinalizado = (cartao) => {
+  digitarCampo(cartao.querySelector('[data-sebrae-campo="D"]'), "FINALIZADO");
+  digitarCampo(cartao.querySelector('[data-sebrae-campo="R"]'), "2026-10-30T14:05");
+};
+
+test("Atualizar e finalizar para quando o salvamento da descrição falha: sem diálogo, sem envio e com aviso", async () => {
+  const { el, feature, app, estado, toasts } = await telaBlocoC(UM_FINALIZAVEL());
+  const dialogos = [];
+  app.confirmarAcao = async opcoes => { dialogos.push(opcoes); return true; };
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  marcarFinalizado(cartao);
+  estado.falharDescricao = true;
+  digitarCampo(cartao.querySelector("textarea[data-sebrae-descricao]"), "Teclado trocado.");
+  await feature.atualizarDashboardSebrae();
+  assert.equal(dialogos.length, 0);
+  assert.equal(estado.posts.length, 0);
+  assert.deepEqual(toasts.at(-1), ["Salve a descrição antes de finalizar.", "error"]);
+  assert.equal(el["btn-sebrae-atualizar"].getAttribute("aria-busy"), null);
+});
+
+test("recarga com o diálogo aberto: o POST de Atualizar e o de Finalizar levam a versão da hora do payload", async () => {
+  const carga = UM_FINALIZAVEL();
+  carga.importado.versao = "v1";
+  const { el, feature, app, estado } = await telaBlocoC(carga);
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  marcarFinalizado(cartao);
+  digitarCampo(cartao.querySelector("textarea[data-sebrae-descricao]"), "Teclado trocado.");
+  await esvaziarFila();
+  app.confirmarAcao = async () => {
+    carga.importado.versao = "v2"; // outra importação chega enquanto o diálogo está aberto
+    await feature.carregarNovosSebrae();
+    return true;
+  };
+  await feature.atualizarDashboardSebrae();
+  assert.equal(estado.posts.at(-1).url, POST_ATUALIZAR);
+  assert.equal(estado.posts.at(-1).corpo.versao_importacao, "v1");
+  carga.importado.versao = "v1";
+  await feature.carregarNovosSebrae();
+  const novo = cartaoDe(el, "UTIC-2026-1500");
+  const botao = novo.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  for (let i = 0; i < 25; i++) await esvaziarFila();
+  assert.equal(estado.posts.at(-1).url, POST_FINALIZAR);
+  assert.equal(estado.posts.at(-1).corpo.versao_importacao, "v1");
+});
+
+test("Finalizar: recarga durante o diálogo não troca a versão enviada", async () => {
+  const carga = UM_FINALIZAVEL();
+  carga.importado.versao = "v1";
+  const { el, feature, app, estado } = await telaBlocoC(carga);
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  marcarFinalizado(cartao);
+  digitarCampo(cartao.querySelector("textarea[data-sebrae-descricao]"), "Teclado trocado.");
+  await esvaziarFila();
+  app.confirmarAcao = async () => { carga.importado.versao = "v2"; await feature.carregarNovosSebrae(); return true; };
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  for (let i = 0; i < 25; i++) await esvaziarFila();
+  assert.equal(estado.posts.at(-1).corpo.versao_importacao, "v1");
+});
+
+test("recarga com texto não salvo: descrição e observação são salvas antes e voltam no cartão novo, com o foco", async () => {
+  const { el, feature, estado, doc } = await telaBlocoC(UM_FINALIZAVEL());
+  const antigo = cartaoDe(el, "UTIC-2026-1500");
+  const texto = antigo.querySelector("textarea[data-sebrae-descricao]");
+  digitarCampo(texto, "Teclado trocado.");
+  const observacao = el["sebrae-antigos-lista"].querySelector('textarea[data-sebrae-observacao="UTIC-2026-1200"]');
+  digitarCampo(observacao, "Liguei para o usuário.");
+  texto.focus();
+  await feature.carregarNovosSebrae();
+  assert.ok(estado.puts.includes("Teclado trocado."));
+  assert.ok(estado.puts.includes("obs:Liguei para o usuário."));
+  const novo = cartaoDe(el, "UTIC-2026-1500");
+  assert.notEqual(novo, antigo, "o cartão foi refeito");
+  assert.equal(novo.querySelector("textarea[data-sebrae-descricao]").value, "Teclado trocado.");
+  assert.equal(el["sebrae-antigos-lista"].querySelector('textarea[data-sebrae-observacao="UTIC-2026-1200"]').value, "Liguei para o usuário.");
+  assert.equal(doc.activeElement, novo.querySelector("textarea[data-sebrae-descricao]"));
+});
+
+test("recarga com salvamento que falha mantém a tela e o texto digitado", async () => {
+  const { el, feature, estado } = await telaBlocoC(UM_FINALIZAVEL());
+  const antigo = cartaoDe(el, "UTIC-2026-1500");
+  estado.falharDescricao = true;
+  digitarCampo(antigo.querySelector("textarea[data-sebrae-descricao]"), "Texto que não salvou.");
+  await feature.carregarNovosSebrae();
+  assert.equal(cartaoDe(el, "UTIC-2026-1500"), antigo);
+  assert.equal(antigo.querySelector("textarea[data-sebrae-descricao]").value, "Texto que não salvou.");
+});
+
+test("recarga espera o editor do lápis com texto não salvo e segue quando ele fecha", async () => {
+  global.window = global.window || {};
+  const { el, feature } = await telaBlocoC(UM_FINALIZAVEL());
+  global.window.setTimeout = funcao => { setImmediate(funcao); return 0; };
+  const antigo = el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo");
+  const lapis = antigo.querySelector("button[data-sebrae-editar-descricao]");
+  lapis.dispatchEvent({ type: "click", currentTarget: lapis });
+  digitarCampo(antigo.querySelector("textarea[data-sebrae-descricao-editada]"), "Descrição em edição.");
+  let terminou = false;
+  const recarga = feature.carregarNovosSebrae().then(() => { terminou = true; });
+  for (let i = 0; i < 10; i++) await esvaziarFila();
+  assert.equal(terminou, false, "a recarga espera");
+  assert.equal(el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo"), antigo, "o editor segue no mesmo cartão");
+  const cancelar = antigo.querySelector("button[data-sebrae-cancelar-descricao]");
+  cancelar.dispatchEvent({ type: "click", currentTarget: cancelar });
+  await recarga;
+  assert.notEqual(el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo"), antigo);
+});
+
+test("Atualizar Dashboard fica desabilitado durante o POST, mesmo quando um recálculo de botão acontece", async () => {
+  const carga = UM_FINALIZAVEL();
+  const porta = portao();
+  const { el, feature, app, estado } = await telaBlocoC(carga, { portaoPost: porta });
+  app.confirmarAcao = async () => false;
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  digitarCampo(cartao.querySelector('[data-sebrae-campo="B"]'), "REDE");
+  assert.equal(el["btn-sebrae-atualizar"].disabled, false);
+  const envio = feature.atualizarDashboardSebrae();
+  for (let i = 0; i < 5; i++) await esvaziarFila();
+  assert.equal(estado.posts.length, 1);
+  digitarCampo(cartao.querySelector('[data-sebrae-campo="B"]'), "OUTRO"); // recalcula o botão
+  assert.equal(el["btn-sebrae-atualizar"].disabled, true);
+  porta.abrir();
+  await envio;
+  assert.equal(el["btn-sebrae-atualizar"].disabled, false);
+});
+
+test("Finalizar fica desabilitado durante guardar a ficha e o POST, mesmo quando a descrição é salva de novo", async () => {
+  const porta = portao();
+  const { el, app, estado } = await telaBlocoC(UM_FINALIZAVEL(), { portaoPost: porta });
+  app.confirmarAcao = async () => true;
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  marcarFinalizado(cartao);
+  const texto = cartao.querySelector("textarea[data-sebrae-descricao]");
+  digitarCampo(texto, "Teclado trocado.");
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  for (let i = 0; i < 25; i++) await esvaziarFila();
+  assert.equal(estado.posts.length, 1);
+  digitarCampo(texto, "Teclado trocado!"); // recalcula o botão (atualizarFinalizar)
+  assert.equal(botao.disabled, true);
+  porta.abrir();
+  for (let i = 0; i < 25; i++) await esvaziarFila();
+});
+
+test("Copiar senha: aviso de erro quando o navegador nega e aria-label numerado só com várias senhas", async () => {
+  const carga = structuredClone(CARGA_CARTOES);
+  carga.novos.formulario = [];
+  carga.importado.abertos[0].tem_credencial = true;
+  let credenciais = ["abc", "def"];
+  const apiFetch = async url => (url.endsWith("/credenciais") ? { credenciais } : carga);
+  const { el, app } = await renderizarCartoes(carga, null, apiFetch);
+  await esvaziarFila();
+  const toasts = [];
+  app.showToast = (texto, tipo) => toasts.push([texto, tipo]);
+  app.copiarTextoParaAreaTransferencia = async () => { throw new Error("negado"); };
+  const mostrar = () => cartaoAntigoDe(el, "UTIC-2026-1200").querySelector(".sebrae-senha__mostrar");
+  mostrar().dispatchEvent({ type: "click", currentTarget: mostrar() });
+  await esvaziarFila();
+  const copiar = cartaoAntigoDe(el, "UTIC-2026-1200").querySelectorAll(".sebrae-senha__copiar");
+  assert.deepEqual(copiar.map(b => b.getAttribute("aria-label")), ["Copiar senha 1", "Copiar senha 2"]);
+  copiar[0].dispatchEvent({ type: "click", currentTarget: copiar[0] });
+  await esvaziarFila();
+  assert.deepEqual(toasts.at(-1), ["Não foi possível copiar a senha.", "error"]);
+  mostrar().dispatchEvent({ type: "click", currentTarget: mostrar() }); // oculta
+  credenciais = ["so"];
+  mostrar().dispatchEvent({ type: "click", currentTarget: mostrar() });
+  await esvaziarFila();
+  assert.equal(cartaoAntigoDe(el, "UTIC-2026-1200").querySelector(".sebrae-senha__copiar").getAttribute("aria-label"), null);
+});
+
+test("PDF em envio trava Finalizar e Atualizar Dashboard até terminar", async () => {
+  const carga = UM_FINALIZAVEL();
+  const porta = portao();
+  const servidor = servidorBlocoC(carga);
+  const apiFetch = async (url, opcoes = {}) => {
+    if (opcoes.method === "POST" && url.endsWith("/anexo")) { await porta.espera; return { pdf: { nome: "a.pdf", tamanho: 10 } }; }
+    return servidor.apiFetch(url, opcoes);
+  };
+  const { el } = await renderizarCartoes(carga, null, apiFetch);
+  await esvaziarFila();
+  global.FormData = global.FormData || class { append() {} };
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  digitarCampo(cartao.querySelector('[data-sebrae-campo="B"]'), "REDE");
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  const arquivo = cartao.querySelector("input[data-sebrae-pdf]");
+  arquivo.files = [{ name: "a.pdf" }];
+  arquivo.dispatchEvent({ type: "change", currentTarget: arquivo });
+  await esvaziarFila();
+  assert.equal(botao.disabled, true);
+  assert.equal(el["btn-sebrae-atualizar"].disabled, true);
+  porta.abrir();
+  for (let i = 0; i < 5; i++) await esvaziarFila();
+  assert.equal(botao.disabled, false);
+  assert.equal(el["btn-sebrae-atualizar"].disabled, false);
+});
