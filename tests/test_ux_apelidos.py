@@ -27,10 +27,10 @@ class UploadUxRouteTests(chrome_tests.AutomationRouteTests):
         chamadas = []
         self.runner.start_ux_alias = lambda nome, dados: chamadas.append((nome, dados)) or {"rotina": "ux_apelidos"}
         dados = planilha()
-        resposta = self.client.post('/api/automacao/ux-apelidos', files={"file": ("mesmo.xlsx", dados)}, headers={"Origin": self.origin})
+        resposta = self.client.post('/api/automacao/ux-apelidos', files={"file": ("mesmo.xlsx", dados)}, data={"confirmado": "true"}, headers={"Origin": self.origin})
         self.assertEqual(resposta.status_code, 202)
         self.assertEqual(chamadas, [("mesmo.xlsx", dados)])
-        self.assertEqual(self.client.post('/api/automacao/ux-apelidos', files={"file": ("x.xlsx", dados)}, headers={"Origin": "https://evil.example"}).status_code, 403)
+        self.assertEqual(self.client.post('/api/automacao/ux-apelidos', files={"file": ("x.xlsx", dados)}, data={"confirmado": "true"}, headers={"Origin": "https://evil.example"}).status_code, 403)
         self.assertEqual(len(chamadas), 1)
 
     def test_upload_rejeita_arquivo_extra_e_campo_duplicado(self):
@@ -39,7 +39,8 @@ class UploadUxRouteTests(chrome_tests.AutomationRouteTests):
         dados = planilha()
         casos = [
             {"files": [("file", ("a.xlsx", dados)), ("file", ("b.xlsx", dados))]},
-            {"files": {"file": ("a.xlsx", dados)}, "data": {"extra": "valor"}},
+            {"files": {"file": ("a.xlsx", dados)}, "data": {"extra": "valor", "confirmado": "true"}},
+            {"files": [("file", ("a.xlsx", dados)), ("file", ("b.xlsx", dados))], "data": {"confirmado": "true"}},
         ]
         for campos in casos:
             with self.subTest(campos=tuple(campos)):
@@ -47,10 +48,20 @@ class UploadUxRouteTests(chrome_tests.AutomationRouteTests):
                 self.assertIn(resposta.status_code, (400, 422))
         self.assertEqual(chamadas, [])
 
+    def test_upload_sem_confirmado_true_nao_inicia_a_escrita_no_ux(self):
+        chamadas = []
+        self.runner.start_ux_alias = lambda nome, dados: chamadas.append((nome, dados)) or {"rotina": "ux_apelidos"}
+        dados = planilha()
+        for data in (None, {"confirmado": "false"}, {"confirmado": ""}, {"confirmado": "1"}):
+            with self.subTest(data=data):
+                resposta = self.client.post("/api/automacao/ux-apelidos", files={"file": ("x.xlsx", dados)}, data=data, headers={"Origin": self.origin})
+                self.assertEqual(resposta.status_code, 422)
+        self.assertEqual(chamadas, [])
+
     def test_upload_acima_de_um_mb_chega_ao_validador_e_nao_ao_limite_json(self):
         self.runner.start_ux_alias = lambda nome, dados: {"tamanho": len(dados)}
         dados = b"x" * (2 * 1024 * 1024)
-        resposta = self.client.post('/api/automacao/ux-apelidos', files={"file": ("grande.xlsx", dados)})
+        resposta = self.client.post('/api/automacao/ux-apelidos', files={"file": ("grande.xlsx", dados)}, data={"confirmado": "true"})
         self.assertEqual(resposta.status_code, 202)
         self.assertEqual(resposta.json()["tamanho"], len(dados))
 
