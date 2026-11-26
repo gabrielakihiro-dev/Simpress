@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from domains.assistant_lgpd import mascarar_cpfs  # single CPF rule
+
 TIPO_INCIDENTE = "INCIDENTE"
 TIPO_SOLICITACAO = "SOLICITAÇÃO"
 UNIDADE = "Sebrae"
@@ -45,7 +47,6 @@ MOTIVO_DATA_INVALIDA = "data_de_abertura_invalida"
 MOTIVO_SEM_TEXTO = "sem_descricao_nem_titulo"
 
 NUMERO_UTIC = re.compile(r"(?<![A-Za-z0-9])UTIC-(\d{4})-(\d+)(?!\d)", re.IGNORECASE)
-_CPF = re.compile(r"(?<!\d)(?:CPF\b\s*[:#-]?\s*)?(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})(?!\d)", re.IGNORECASE)
 
 # Evidence of an existing failure versus a request; matched on accent-free lowercase text.
 _INDICIOS_INCIDENTE = (
@@ -196,27 +197,6 @@ def interpretar_data(texto: Any) -> Optional[datetime]:
 def formatar_data_abertura(data: datetime) -> str:
     """Dashboard format of column Q: ``dd/MM/yyyy HH:mm``."""
     return data.strftime(FORMATO_DATA)
-
-
-def mascarar_cpfs(texto: str) -> str:
-    """Mascara CPFs pontuados ou identificados pelo rótulo; números puros exigem dígitos válidos."""
-    def substituir(match: re.Match[str]) -> str:
-        token = match.group(1)
-        prefixo = match.group(0)[: match.start(1) - match.start()]
-        if "." in token or prefixo:
-            return f"{prefixo}***.***.***-**"
-        digitos = token
-        if len(set(digitos)) == 1:
-            return match.group(0)
-        primeiro = (sum(int(digitos[i]) * (10 - i) for i in range(9)) * 10) % 11
-        primeiro = 0 if primeiro == 10 else primeiro
-        segundo = (sum(int(digitos[i]) * (11 - i) for i in range(10)) * 10) % 11
-        segundo = 0 if segundo == 10 else segundo
-        if int(digitos[9]) != primeiro or int(digitos[10]) != segundo:
-            return match.group(0)
-        return "***.***.***-**"
-
-    return _CPF.sub(substituir, texto)
 
 
 def descricao_do_chamado(chamado: ChamadoSoftExpert) -> str:

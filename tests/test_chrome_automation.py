@@ -528,13 +528,25 @@ class AutomationRouteTests(unittest.TestCase):
         self.addCleanup(self.client.close)
 
     def test_start_accepts_only_the_whitelist(self):
-        for rotina in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos"):
-            response = self.client.post("/api/automacao/executar", json={"rotina": rotina}, headers={"Origin": self.origin})
+        cabecalho = {"Origin": self.origin}
+        for rotina in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "antigos"):
+            response = self.client.post("/api/automacao/executar", json={"rotina": rotina}, headers=cabecalho)
             self.assertEqual(response.status_code, 202, rotina)
+        response = self.client.post("/api/automacao/executar", json={"rotina": "enviar", "confirmado": True}, headers=cabecalho)
+        self.assertEqual(response.status_code, 202)
         for body in ({"rotina": "rm -rf"}, {"rotina": "os", "extra": 1}, {}, {"rotina": ["os"]}):
             with self.subTest(body=body):
                 self.assertEqual(self.client.post("/api/automacao/executar", json=body).status_code, 422)
-        self.assertEqual(self.runner.started, ["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos"])
+        self.assertEqual(self.runner.started, ["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "antigos", "enviar"])
+
+    def test_external_writes_need_confirmation_and_fechar_has_no_generic_route(self):
+        for body in (
+            {"rotina": "enviar"}, {"rotina": "enviar", "confirmado": False}, {"rotina": "enviar", "confirmado": "true"},
+            {"rotina": "enviar", "confirmado": 1}, {"rotina": "fechar"}, {"rotina": "fechar", "confirmado": True},
+        ):
+            with self.subTest(body=body):
+                self.assertEqual(self.client.post("/api/automacao/executar", json=body, headers={"Origin": self.origin}).status_code, 422)
+        self.assertEqual(self.runner.started, [])
 
     def test_conflict_is_returned_as_409_with_message(self):
         message = "Já há uma rotina em andamento: Rotina de OS desde 08:00. Aguarde terminar ou cancele."

@@ -1,6 +1,6 @@
 import type { Janela, Qualquer } from "./tipos";
 import { criarTabelaOs } from "./tabela-os.ts";
-import { DENSITY_KEY, ENDPOINT, barPercentages, compareValues, divergenceTotal, formatNumber, nextDirection, painelCompartilhado, pluralize, sortKey, sortedOrder, toTsv } from "./utilitarios.ts";
+import { DENSITY_KEY, ENDPOINT, barPercentages, contagemLembretesAgendados, compareValues, divergenceTotal, formatNumber, nextDirection, painelCompartilhado, pluralize, sortKey, sortedOrder, toTsv } from "./utilitarios.ts";
 
 const REFRESH_MIN_MS = 15000;
 
@@ -241,9 +241,11 @@ export function criarPaineisDados() {
       const temRegional = (lista: Qualquer) => Array.isArray(lista) && lista.some(cidade => String(cidade ?? "").trim());
       const backupsAtivo = Boolean(backups) && typeof backups === "object" && !backups.indisponivel
         && (temRegional(backups.pendencias?.sem_backup) || temRegional(backups.pendencias?.conferir));
+      // Mesma regra do cartão #alerta-lembretes-agendados (contagemLembretesAgendados): disponível e com atrasados ou hoje; conta 1 aviso, não a quantidade de lembretes.
+      const lembretesAtivo = contagemLembretesAgendados(data?.lembretes_agendados) !== null;
       const total = Number(osParadas?.estado === "paradas" && Number(osParadas.total) > 0)
         + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0)
-        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo) + Number(falhasFinalizacaoAtivo) + Number(backupsAtivo);
+        + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo) + Number(falhasFinalizacaoAtivo) + Number(backupsAtivo) + Number(lembretesAtivo);
       const label = total
         ? `Notificações, ${pluralize(total, "aviso ativo", "avisos ativos")}`
         : "Notificações, nenhum aviso ativo";
@@ -316,7 +318,7 @@ export function criarPaineisDados() {
       });
     }
 
-    async function refresh(force: Qualquer) {
+    async function refresh(force: Qualquer, depoisDeMudanca = false) {
       if (!force && Date.now() - lastFetch < REFRESH_MIN_MS) return;
       lastFetch = Date.now();
       const serial = ++requestSerial;
@@ -325,7 +327,7 @@ export function criarPaineisDados() {
           const response = await win.fetch(ENDPOINT, { headers: { Accept: "application/json" } });
           if (!response.ok) throw new Error(String(response.status));
           return response.json();
-        });
+        }, { novo: depoisDeMudanca });
         if (serial !== requestSerial) return;
         painelOk = true;
         renderBadge(divergenceTotal(data.ultima_comparacao));
@@ -345,7 +347,7 @@ export function criarPaineisDados() {
       }
     }
 
-    doc.addEventListener("simpress:atualizar-notificacoes", () => refresh(true));
+    doc.addEventListener("simpress:atualizar-notificacoes", (evento: Qualquer) => refresh(true, (evento as CustomEvent)?.detail?.depoisDeMudanca === true));
 
     // Quem monta uma tabela .comparison-desktop-table dispara este evento (comparison-result.js, transfer-history.js).
     doc.addEventListener("simpress:tabelas-renderizadas", scanTables);

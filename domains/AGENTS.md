@@ -1,12 +1,12 @@
 # Regras de `domains/`
 
-Valem junto com o `AGENTS.md` da raiz (não repetidas aqui); texto integral no doc de cada tema, seção "Regras movidas do AGENTS.md (10/11/2026)" quando houver.
+Valem junto com o `AGENTS.md` da raiz; texto integral no doc de cada tema (seção "Regras movidas do AGENTS.md (10/11/2026)", quando houver).
 
 ## Sebrae e Chamados (F5) — doc `docs/operacao/sincronizar-chamados-sebrae.md`
 
 - Chamado novo = `UTIC-AAAA-N` ausente da coluna C do Dashboard; o Dashboard só é gravado no arquivo gerado, nunca no Excel Online nem no SharePoint (`sebrae_dashboard*.py`).
 - `Tabela3`: Q, T, U e V são fórmulas (nunca grave valor); W não se toca; C nunca é reescrita; campo em branco nunca apaga o existente, salvo `limpar_e` (a E, só por clique em Remover numa OS sem relação com o chamado, autorizado em 18/11/2026) (`sebrae_dashboard_gravacao.py`).
-- Senha do chamado (exceção de LGPD autorizada em 19/11/2026): só os valores omitidos, em `data/state/sebrae_credenciais.json`; tela só no clique em `Mostrar senha`, apagada ao finalizar; nunca em log, Dashboard, histórico ou Assistente (`sebrae_credenciais.py`).
+- Senha do chamado (exceção de LGPD autorizada em 19/11/2026): só os valores omitidos, em `data/state/sebrae_credenciais.json`; tela só no clique em `Mostrar senha`, apagada ao finalizar ou quando a importação traz o chamado encerrado; nunca em log, Dashboard, histórico ou Assistente (`sebrae_credenciais.py`).
 - Observação e destaque só em `data/state/sebrae_observacoes.json`, nunca em planilha, SharePoint ou SoftExpert (`sebrae_observacoes.py`).
 - Finalizar é irreversível, só a pedido do usuário, um a um; descrição vazia é recusada antes de qualquer clique (`sebrae_finalizacao.py`).
 - Sugestão de A, B e J nunca é salva sozinha; IA opcional só com `SIMPRESS_SUGESTAO_IA=1` e texto mascarado (`sebrae_categoria*.py`).
@@ -14,16 +14,16 @@ Valem junto com o `AGENTS.md` da raiz (não repetidas aqui); texto integral no d
 
 ## OS (F6) — doc `docs/cockpit-prompts/07-chamados-operacional.md`
 
-- Marca de OS finalizada é anotação local em `data/state/os_marcas_finalizacao.json`; desfazer nunca reabre o chamado (`os_marcas_finalizacao.py`).
+- Marca de OS finalizada é anotação em `data/state/os_marcas_finalizacao.json`; desfazer nunca reabre o chamado (`os_marcas_finalizacao.py`).
 - Marca ativa ou selo `Entregue` da Simpress (com ou sem vínculo UTIC) leva a OS a `Finalizadas`, senão `Abertas`; KPIs, triagem e `Atenção · 3+ dias` contam só `Abertas`; `Exportar Excel` leva só a sub-aba visível.
 - Marca ativa gera vínculo UTIC automático (`origem: "finalizacao"`) só na leitura de `GET /api/operacoes/chamados/vinculos-os`, prioridade manual > finalizacao > dashboard, nunca gravado em `os_chamados_vinculos.json`; `Desfazer` remove o vínculo e devolve a OS a `Abertas`, salvo com selo `Entregue` (`sebrae_vinculos.py`, `routers/operations.py`).
-- Observação por OS só em `data/state/os_observacoes.json`, fora de busca, filtros e exportação (`os_observacoes.py`).
-- Série sem OS vinculada some da aba OS (só a exibição muda); `envio_tecnico` e `dias_aberta` são calculados na leitura, nunca gravados (`ticket_reporting.py`).
+- Observação de OS só em `data/state/os_observacoes.json`, fora de busca, filtros e exportação (`os_observacoes.py`).
+- Série sem OS vinculada some da aba OS (só a exibição); `envio_tecnico` e `dias_aberta` são calculados na leitura, nunca gravados (`ticket_reporting.py`).
 
 ## Assistente (F9) — doc `docs/cockpit-prompts/15-assistente.md`
 
 - Cada ferramenta declara se consulta ou altera; toda alteração para no cartão de confirmação montado pelo programa, uma por turno (`assistant_tools.py`, `assistant_chat.py`).
-- Máscara de LGPD antes de qualquer envio ao modelo e no histórico em disco (`assistant_lgpd.py`); `OPENROUTER_API_KEY` nunca vai ao front-end nem a logs.
+- Máscara LGPD antes do envio ao modelo e no histórico (`assistant_lgpd.py`), salvo imagem e áudio, que só saem ao modelo e não são gravados (25/11/2026); `OPENROUTER_API_KEY` nunca vai ao front-end nem a logs.
 - Mudança de funcionalidade mantém ferramentas, `SYSTEM_PROMPT` e testes do Assistente alinhados.
 
 ## Cadastro e Histórico — doc `docs/operacao/regras-cadastro-historico.md`
@@ -37,11 +37,11 @@ Valem junto com o `AGENTS.md` da raiz (não repetidas aqui); texto integral no d
 
 ## Backups regionais (Resumo F3) — docs `docs/cockpit-prompts/05-resumo-kpis.md` e `docs/arquitetura/CONTRATOS_API_BACKEND.md`
 
-- Cálculo puro em `backups_regionais.py` (só Notebook; sem MacBook e séries do Sebrae; mínimo 1 em Cascavel, Londrina, Pato Branco, Maringá e Ponta Grossa); cadastro, Endpoint, Cobertura e manutenção são só leitura. `Confirmar Backup` (sem prazo) só em `data/state/backups_regionais.json` (`backups_regionais_store.py`), com `usuario_ref` (hash do usuário do Endpoint, pseudônimo, nunca fora do arquivo); usuário real novo derruba, e com apelido manual pergunta `Manter`/`Excluir`. `apelido` pode ser nome de pessoa: só na tela local, nunca no Assistente, toast ou log.
+- Cálculo puro em `backups_regionais.py` (só Notebook; sem MacBook e séries do Sebrae; mínimo 1 em Cascavel, Londrina, Pato Branco, Maringá e Ponta Grossa); o resto é só leitura. `Confirmar Backup` (sem prazo) só em `data/state/backups_regionais.json` (`backups_regionais_store.py`), com `usuario_ref` (hash do usuário do Endpoint, pseudônimo, nunca fora do arquivo); usuário real novo derruba, e com apelido manual pergunta `Manter`/`Excluir`. `apelido` pode ser nome de pessoa: só na tela local, nunca no Assistente, toast ou log.
 
 ## Transporte e representantes (F2) — doc `docs/arquitetura/CONTRATOS_API_BACKEND.md`
 
-- Padrão = código (`REGIONAL_REPRESENTATIVE_DEFAULTS` em `local_setup.py`: só cidades e horários, sem dado pessoal) + arquivo local `data/state/representantes_regionais_padrao.json` (dados pessoais, fora do Git; modelo em `config/representantes_regionais_padrao.exemplo.json`); só a alteração por cidade vai a `config/representantes_regionais.json`; arquivo local inválido: PUT recusado (503), nada gravado.
+- Padrão = código (`REGIONAL_REPRESENTATIVE_DEFAULTS` em `local_setup.py`: só cidades e horários) + arquivo local `data/state/representantes_regionais_padrao.json` (dados pessoais, fora do Git; modelo em `config/representantes_regionais_padrao.exemplo.json`); só a alteração por cidade vai a `config/representantes_regionais.json`; arquivo local inválido: PUT recusado (503), nada gravado.
 
 ## E-mail por modelo (Outlook, Home F1) — doc `docs/cockpit-prompts/03-home-split-view.md`
 

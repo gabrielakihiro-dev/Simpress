@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from core.integrity import atomic_write_json
+from core.integrity import atomic_write_json, lock_paths, quarantine_corrupt_file
 
 logger = logging.getLogger(__name__)
 
@@ -43,16 +43,27 @@ class ConversasStore:
         self._lock = threading.Lock()
 
     def _ler(self) -> List[Dict[str, Any]]:
-        """Saved conversations, or [] when there are none or the file is unreadable."""
+        """Saved conversations, or [] when there are none or the file is unreadable (never touches the file)."""
+        return self._ler_estado(para_gravar=False)[0]
+
+    def _ler_estado(self, para_gravar: bool) -> "tuple[List[Dict[str, Any]], bool]":
+        """(conversations, corrupted). ``corrupted`` is True only for invalid JSON or a wrong structure; the caller
+        passes it to ``_gravar``, which copies the original to quarantine right before overwriting.
+        Any other read error (a locked file): the reader gets [], the writer gets the OSError and writes nothing."""
         try:
             itens = json.loads(self._caminho.read_text(encoding="utf-8")).get("conversas", [])
         except FileNotFoundError:
-            return []
-        except (OSError, ValueError, AttributeError):
+            return [], False
+        except (ValueError, AttributeError):  # ValueError includes UnicodeDecodeError
             logger.warning("Não foi possível ler o histórico de conversas do assistente.")
-            return []
+            return [], True
+        except OSError:
+            if para_gravar:
+                raise
+            logger.warning("Não foi possível ler o histórico de conversas do assistente.")
+            return [], False
         if not isinstance(itens, list):
-            return []
+            return [], True
         conversas = []
         for item in itens:
             if not (isinstance(item, dict) and isinstance(item.get("id"), str) and isinstance(item.get("mensagens"), list)):
@@ -65,9 +76,12 @@ class ConversasStore:
                 "id": item["id"], "titulo": str(item.get("titulo") or ""), "criada_em": item.get("criada_em"),
                 "atualizada_em": item.get("atualizada_em"), "mensagens": mensagens,
             })
-        return conversas
+        return conversas, False
 
-    def _gravar(self, conversas: List[Dict[str, Any]]) -> None:
+    def _gravar(self, conversas: List[Dict[str, Any]], corrompido: bool = False) -> None:
+        if corrompido:  # copy first; if the copy fails nothing is written
+            quarantine_corrupt_file(self._caminho)
+            logger.warning("Histórico ilegível copiado para quarentena; recomeçando vazio.")
         atomic_write_json(self._caminho, {"conversas": conversas})
 
     def registrar(self, conversa_id: str, papel: str, texto: str) -> None:
@@ -76,8 +90,8 @@ class ConversasStore:
         if papel not in _PAPEIS or not texto:
             return
         agora = datetime.now().astimezone().isoformat(timespec="seconds")
-        with self._lock:
-            conversas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            conversas, corrompido = self._ler_estado(para_gravar=True)
             atual = next((c for c in conversas if c["id"] == conversa_id), None)
             if atual is None:
                 atual = {"id": conversa_id, "titulo": _titulo(texto), "criada_em": agora, "atualizada_em": agora, "mensagens": []}
@@ -86,7 +100,7 @@ class ConversasStore:
             conversas.append(atual)  # the file keeps the oldest first, so the touched one goes last
             atual["mensagens"] = (atual["mensagens"] + [{"papel": papel, "texto": texto[:LIMITE_TEXTO]}])[-LIMITE_MENSAGENS:]
             atual["atualizada_em"] = agora
-            self._gravar(conversas[-LIMITE_CONVERSAS:])
+            self._gravar(conversas[-LIMITE_CONVERSAS:], corrompido)
 
     def listar(self) -> List[Dict[str, Any]]:
         """Summaries, newest first (no message text)."""
@@ -102,10 +116,10 @@ class ConversasStore:
             return next((c for c in self._ler() if c["id"] == conversa_id), None)
 
     def apagar(self, conversa_id: str) -> bool:
-        with self._lock:
-            conversas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            conversas, corrompido = self._ler_estado(para_gravar=True)
             restantes = [c for c in conversas if c["id"] != conversa_id]
             if len(restantes) == len(conversas):
                 return False
-            self._gravar(restantes)
+            self._gravar(restantes, corrompido)
             return True

@@ -602,6 +602,7 @@ export type RevPayload = {
 
 export type RotinaPayload = {
   "rotina": "os" | "inventarios" | "usuarios" | "ambas" | "login" | "sebrae" | "dashboard" | "enviar" | "fechar" | "antigos";
+  "confirmado"?: boolean;
 };
 
 export type SalvarModeloPayload = {
