@@ -18,3 +18,16 @@ Opcional e desligado por padrão. Só liga ao abrir `iniciar_servidor_celular.ba
 - Quem tem o link tem acesso total (CPF, SoftExpert, Outlook): use só em rede confiável.
 
 Código: `security/network.py`, `security/local_requests.py`, `main.py`. Testes: `tests/test_acesso_rede.py`.
+
+## Fora do Wi-Fi (dados moveis) com Tailscale
+
+Dados moveis sem tunel nao funcionam (a operadora bloqueia entrada). Tailscale cria uma rede privada so entre seus aparelhos.
+
+1. Instale o Tailscale no PC e no iPhone e entre com a mesma conta.
+2. Execute `iniciar_servidor_celular_tailscale.bat` (define `SIMPRESS_ACESSO_TAILSCALE=1`).
+3. Abra no iPhone o link `CELULAR (Tailscale): http://100.x.y.z:<porta>/bootstrap?t=<token>` da janela.
+
+- Aceita so peers `100.64.0.0/10` (tailnet) e Host = IP Tailscale do PC (`tailscale ip -4`, ou `SIMPRESS_IP_TAILSCALE`). LAN so entra se `SIMPRESS_ACESSO_REDE=1` tambem estiver ligado.
+- O trafego do tunel e criptografado pelo Tailscale. O app continua em HTTP e exige o token.
+- Nao use "Funnel"/"Serve" do Tailscale: isso exporia o app publicamente e o app recusa proxy.
+

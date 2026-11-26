@@ -115,7 +115,7 @@ export function PainelCobertura() {
   useEffect(() => {
     if (bloqueado) setFolha(null);
   }, [bloqueado]);
-  // A folha não sobrevive ao painel: F1 a F9 e Voltar escondem a seção `#cockpit-tool-panels`, trocar de ferramenta esconde este painel; nos dois casos ela fecha.
+  // A folha não sobrevive ao painel: F1 a F10 e Voltar escondem a seção `#cockpit-tool-panels`, trocar de ferramenta esconde este painel; nos dois casos ela fecha.
   useEffect(() => {
     const raizes = ['[data-cockpit-tool-panel="cobertura"]', "#cockpit-tool-panels"].map(seletor => document.querySelector<HTMLElement>(seletor));
     const observador = new MutationObserver(() => { if (raizes.some(raiz => raiz?.hidden)) setFolha(null); });

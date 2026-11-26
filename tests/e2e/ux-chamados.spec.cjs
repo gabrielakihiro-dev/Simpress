@@ -33,7 +33,7 @@ test("Home prepares a UX ticket and separates the dry run from the final action"
   await modal.getByRole("button", { name: "Simular preenchimento" }).click();
   await expect(modal.getByRole("status")).toContainText("Nenhuma solicitação foi enviada");
   await modal.getByRole("button", { name: "Revisar e enviar" }).click();
-  const confirmacao = page.getByRole("dialog", { name: "Confirmar chamado no UX" });
+  const confirmacao = page.getByRole("alertdialog", { name: "Confirmar chamado no UX" });
   await expect(confirmacao).toContainText("O teclado do notebook não funciona.");
   expect(requests.filter(({ body }) => body.enviar === true)).toHaveLength(0);
   await confirmacao.getByRole("button", { name: "Enviar solicitação" }).click();
@@ -91,4 +91,42 @@ test("Home explains a failed UX preparation, keeps the description and disables 
     await expect(botao).toHaveAccessibleDescription(/preparação no UX não foi concluída/);
   }
   expect(requests).toEqual(["/api/ux/abrir-chamado/preparar"]);
+});
+
+test("Home keeps the UX ticket dialog open while a confirmed submission is in flight", async ({ page }) => {
+  let liberarEnvio;
+  const envioPendente = new Promise(resolve => { liberarEnvio = resolve; });
+  await page.route("**/api/ux/abrir-chamado/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/preparar")) {
+      await route.fulfill({ json: { status: "preparado", serial: "LENTO", modelo: "Notebook de teste", session_id: "fixture", opcoes: ["Notebook - Teclado"], solicitante: SOLICITANTE } });
+    } else if (path.endsWith("/enviar")) {
+      await envioPendente; // resposta falsa: nenhum envio real
+      await route.fulfill({ json: { status: "enviado", os: "98765" } });
+    } else {
+      await route.fulfill({ json: { status: "cancelado" } });
+    }
+  });
+  await page.goto("/");
+  await page.locator("#input-serial").fill("LENTO");
+  await page.getByRole("button", { name: "Buscar Equipamento" }).click();
+  await expect(page.locator("#card-serial")).toHaveText("LENTO");
+  await page.getByRole("tab", { name: "Kit teclado + mouse" }).click();
+  await page.locator("#texto-chamado-teclado-mouse").fill("O teclado do notebook não funciona.");
+  await page.getByRole("button", { name: "Abrir chamado no UX" }).click();
+  const modal = page.getByRole("dialog", { name: "Abrir chamado no UX" });
+  await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
+  await modal.getByRole("button", { name: "Revisar e enviar" }).click();
+  await page.getByRole("alertdialog", { name: "Confirmar chamado no UX" }).getByRole("button", { name: "Enviar solicitação" }).click();
+  await expect(modal.getByRole("status")).toContainText("Enviando a solicitação ao UX");
+  const fechar = modal.locator("#ux-chamado-fechar");
+  await expect(fechar).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.fecharChamadoUX());
+  await expect(modal).toBeVisible();
+  liberarEnvio();
+  await expect(modal.getByRole("status")).toContainText("OS #98765");
+  await expect(fechar).toBeEnabled();
+  await fechar.click();
+  await expect(modal).toBeHidden();
 });
