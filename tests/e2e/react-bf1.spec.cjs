@@ -557,7 +557,8 @@ test.describe("comportamento (só no desktop)", () => {
     await esperarToast(page, "Planilha Exportada com Sucesso!");
     expect(chamadasDe(ambiente, "POST", "/api/gerar-planilha")).toHaveLength(1);
     // Só a planilha, o histórico e a preparação do ticket saem; envio real ao UX nunca.
-    expect(escritas(ambiente).map(chamada => chamada.caminho).sort()).toEqual(
+    // O /preparar sai depois do toast (o React do ticket carrega sob demanda): espera a lista exata em vez de ler na hora.
+    await expect.poll(() => escritas(ambiente).map(chamada => chamada.caminho).sort(), { timeout: 8000 }).toEqual(
       ["/api/gerar-planilha", "/api/historico-transferencias", "/api/ux/gerar-ticket/preparar"],
     );
     expect(chamadasDe(ambiente, "POST", "/api/ux/gerar-ticket/enviar")).toHaveLength(0);
