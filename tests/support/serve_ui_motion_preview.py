@@ -922,7 +922,7 @@ class Handler(BaseHTTPRequestHandler):
             dias = 90 if parse_qs(url.query).get("dias", ["30"])[0] == "90" else 30
             totais = [47, 46, 48, 44, 45, 43, 44, 42, 41]
             self.send({
-                "dias": dias, "inicio": "2026-08-27" if dias == 90 else "2026-10-28", "data_corte": "2026-11-25",
+                "dias": dias, "inicio": "2026-08-28" if dias == 90 else "2026-10-27", "data_corte": "2026-11-25",
                 "tempo_medio_os": {"media_dias": 12.4, "encerradas": 38, "encerradas_sem_data": 2,
                                    "media_dias_anterior": 14.1 if dias == 30 else None, "encerradas_anterior": 30 if dias == 30 else 0},
                 "sem_acesso_7_dias": {"pontos": [{"horario": f"2026-11-{16 + i:02d}T09:00:00", "data": f"2026-11-{16 + i:02d}", "total": total}

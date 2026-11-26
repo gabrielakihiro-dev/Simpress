@@ -34,6 +34,10 @@ class AbasAtualizadasTests(unittest.TestCase):
             "Todos, Apelido, Usuário, Endereço, Avisos do Endpoint", "Somente com ação disponível",
         ):
             self.assertIn(trecho, texto)
+        # Tendências fica só na tela: o Assistente orienta abrir a aba em vez de informar os números.
+        self.assertIn("só na tela", texto)
+        self.assertIn("NÃO traz esses números", texto)
+        self.assertIn("não informa tempo médio de OS nem a série de sem acesso por período", texto)
         # The tool trims the monthly ticket list; the prompt must not call it complete.
         self.assertIn("resumo de cada sub-aba, com listas cortadas", texto)
         self.assertNotIn("traz os dados de todas", texto)

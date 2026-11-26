@@ -53,7 +53,8 @@ def event(event_id, moment, resumo=None, comparacao=None, **extra):
 HISTORY = [
     event("old", "2026-09-01T08:00:00", {"sem_acesso_7_dias": 7}),
     event("e2", "2026-11-10T08:00:00", {}, {"sem_acesso_7_dias": [
-        {"computador": SECRET_HOST, "serie": SECRET_SERIAL}, {"serie": "X"}, {"serie": "Y"}]}),
+        {"computador": SECRET_HOST, "serie": SECRET_SERIAL}, {"serie": "X"}, {"serie": "Y"},
+        {"serie": "ADM", "usuario_administrador": True}, {"serie": "BKP", "computador": "Backup Cascavel"}]}),
     event("e1", "2026-11-01T08:00:00", {"sem_acesso_7_dias": 41}),
     event("gap", "2026-11-12T08:00:00"),
     event("rest", "2026-11-13T08:00:00", {"sem_acesso_7_dias": 9}, tipo="restauracao"),
@@ -85,6 +86,31 @@ class BuildTrendsTests(unittest.TestCase):
         self.assertEqual(result["pontos"][0]["horario"], "2026-11-01T08:00:00")
         self.assertEqual(result["historico_desde"], "2026-09-01")
         self.assertEqual(len(trends(90)["sem_acesso_7_dias"]["pontos"]), 3)
+
+    def test_administrator_and_backup_items_are_not_counted(self):
+        history = [event("a", "2026-11-10T08:00:00", {"sem_acesso_7_dias": 50}, {"sem_acesso_7_dias": [
+            {"serie": "X"}, {"serie": "ADM", "usuario_administrador": True}, {"serie": "BKP", "computador": "Backup Cascavel"}]})]
+        self.assertEqual(trends(30, history=history)["sem_acesso_7_dias"]["pontos"][0]["total"], 1)
+
+    def test_day_edges_of_the_ticket_windows(self):
+        tickets = report(
+            oracle("A", "01/10/2026 08:00", "28/10/2026 08:00"),  # no inicio: entra, 27 dias
+            oracle("B", "01/10/2026 08:00", "27/10/2026 08:00"),  # dia anterior ao inicio: janela anterior, 26 dias
+            oracle("C", "20/11/2026 08:00", "26/11/2026 08:00"),  # hoje: entra, 6 dias
+        )
+        result = trends(30, tickets=tickets)["tempo_medio_os"]
+        self.assertEqual((result["encerradas"], result["media_dias"]), (2, 16.5))
+        self.assertEqual((result["encerradas_anterior"], result["media_dias_anterior"]), (1, 26.0))
+
+    def test_day_edges_of_the_no_access_series(self):
+        history = [
+            event("in", "2026-10-28T08:00:00", {"sem_acesso_7_dias": 5}),
+            event("out", "2026-10-27T23:00:00", {"sem_acesso_7_dias": 6}),
+            event("today", "2026-11-26T08:00:00", {"sem_acesso_7_dias": 7}),
+        ]
+        result = trends(30, history=history)["sem_acesso_7_dias"]
+        self.assertEqual([p["data"] for p in result["pontos"]], ["2026-10-28", "2026-11-26"])
+        self.assertEqual(result["historico_desde"], "2026-10-27")
 
     def test_empty_inputs(self):
         result = trends(30, history=[], tickets={})

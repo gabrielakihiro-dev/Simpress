@@ -23,6 +23,7 @@ from core.errors import DomainBusyError, DomainValidationError
 from domains import sebrae_finalizacao, sebrae_novos
 from domains.history_insights import is_restoration, PINNED_BASELINE_ID
 from domains.inventory_comparison import (
+    filtrar_backup_e_administrador,
     filter_curitiba_hostname_location_mismatches,
     filter_sebrae_owned_unmatched_items,
 )
@@ -526,12 +527,15 @@ def build_trends(
             continue
         moment = _event_local_date(event)
         summary, comparison = event.get("resumo"), event.get("comparacao")
-        total = summary.get("sem_acesso_7_dias") if isinstance(summary, dict) else None
-        if not isinstance(total, int) or isinstance(total, bool):
-            listed = comparison.get("sem_acesso_7_dias") if isinstance(comparison, dict) else None
-            total = len(listed) if isinstance(listed, list) else None
-        if moment is not None and total is not None:
-            points.append((moment, {"horario": str(event.get("horario")), "data": moment.date().isoformat(), "total": total}))
+        listed = comparison.get("sem_acesso_7_dias") if isinstance(comparison, dict) else None
+        raw = summary.get("sem_acesso_7_dias") if isinstance(summary, dict) else None
+        has_raw = isinstance(raw, int) and not isinstance(raw, bool)
+        if moment is None or not (isinstance(listed, list) or has_raw):
+            continue
+        in_window = start <= moment.date() <= today
+        # Mesma regra do F3 e do sino (sem Backup e Administrador); evento antigo sem lista usa o resumo.
+        total = (len(filtrar_backup_e_administrador(listed)) if isinstance(listed, list) else raw) if in_window else 0
+        points.append((moment, {"horario": str(event.get("horario")), "data": moment.date().isoformat(), "total": total}))
     points.sort(key=lambda entry: entry[0])
     return {
         "dias": dias,
