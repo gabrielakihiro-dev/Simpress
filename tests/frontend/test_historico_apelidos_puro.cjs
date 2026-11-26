@@ -58,3 +58,10 @@ test("série vazia não torna um registro elegível", () => {
     desfazer: false, excluir: false, rotuloExcluir: "Restaurar e excluir",
   });
 });
+
+test("evento automático de hostname de backup não oferece desfazer nem excluir", () => {
+  const evento = { id: "bk1", serial: "AAA111", tipo: "apelido", acao: "hostname_backup" };
+  assert.deepEqual(puro.acoesEventoHistorico(evento, [evento]), {
+    desfazer: false, excluir: false, rotuloExcluir: "Restaurar e excluir",
+  });
+});

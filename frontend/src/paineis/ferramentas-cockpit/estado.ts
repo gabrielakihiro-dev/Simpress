@@ -990,7 +990,9 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     }
     if (pair.children.length) actions.append(pair);
     if (!allowed.desfazer && !allowed.excluir) {
-      const reason = event.tipo === "endereco"
+      const reason = event.acao === "hostname_backup"
+        ? "Automático: hostname de backup"
+        : event.tipo === "endereco"
         ? "Endereços são atualizados pela planilha Simpress e não podem ser restaurados manualmente."
         : "Há uma alteração mais recente para este campo, ou nenhuma ação está disponível para este registro.";
       actions.append(element("p", "ck-nota", reason));
