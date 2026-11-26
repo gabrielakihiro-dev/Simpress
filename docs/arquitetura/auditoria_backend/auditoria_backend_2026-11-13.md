@@ -97,6 +97,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Evidência: `create_sebrae_dashboard_router` com 998 linhas, `create_inventory_history_router` com 798 e `create_operations_router` com 549 (seção 4).
 - Impacto: as funções internas não são testáveis isoladamente, e toda mudança no Sebrae (F5) mexe num bloco de quase mil linhas. É a continuação natural do passo 10, que tirou peso do `main.py` mas o levou para as rotas.
 - Solução: extrair para `domains/` a lógica que não depende de HTTP, como já foi feito com `domains/history_restore.py`, e deixar na fábrica só a validação do payload e a conversão de erros.
+- Andamento (26/11/2026): `create_operations_router` caiu de 568 para 454 linhas. A leitura e a chave dos vínculos manuais de OS e a mescla dos vínculos derivados foram para `domains/sebrae_vinculos.py`, as versões exibidas com cache para `domains/ticket_reporting.py`, e a gravação da anotação da linha do tempo e a seleção da exportação para `domains/ticket_import.py`. O router traduz o `DomainError` delas para `HTTPException`. Os logs, o `build_ticket_workbook` e a resposta de arquivo ficaram no router.
 
 **4. E-mails, login padrão e URL de OneDrive pessoal fixos no código.** Alta, confirmado (o repositório no GitHub é público).
 - Evidência (os valores não são repetidos aqui):

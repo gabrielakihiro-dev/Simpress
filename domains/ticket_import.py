@@ -5,6 +5,7 @@ snapshot to the ticket report and stages the inherited timeline annotations in
 the same transaction. Failures raise ``TicketImportError`` with the status and
 message the API already answers; the route turns them into ``HTTPException``
 and the inbox reads the status directly (409/503 keep the batch pending).
+The timeline annotation and export selection the route shares with the import live here too and raise ``DomainError``.
 """
 
 from __future__ import annotations
@@ -19,17 +20,20 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from uuid import uuid4
 
 from core.config import format_size_limit
-from core.errors import DomainError
+from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 from core.logging_setup import redact_reference
 from core.xlsx_safety import XlsxLimitExceeded, XlsxPackageError
 from domains.history_annotations import (
     AnnotationReadError,
+    annotation_view,
     build_history_annotation_record,
     history_annotation_record_path,
     history_annotation_row_fingerprint,
     load_history_annotations,
     resolve_history_annotations,
+    reuse_annotation_revision,
+    same_annotation_revision,
     save_history_annotation,
     sync_history_annotation,
 )
@@ -40,6 +44,7 @@ from domains.ticket_reporting import (
     TICKET_SNAPSHOT_FIELDS,
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TicketTimelineIndex,
+    build_ticket_timeline,
     build_ticket_timeline_index,
     normalize_ticket_snapshot,
     ticket_report_snapshots,
@@ -164,6 +169,94 @@ def sync_ticket_annotation(services: TicketImportServices, record: Dict[str, Any
     except Exception:
         logger.exception("Anotação do chamado %s salva e aguardando sincronização.", redact_reference(record.get("serie")))
         return False
+
+
+def ticket_timeline_with_annotations(
+    services: TicketImportServices, snapshots: Sequence[Dict[str, Any]], serial: str,
+    records: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
+    index: Optional[TicketTimelineIndex] = None,
+) -> List[Dict[str, Any]]:
+    records = records if records is not None else latest_ticket_annotations(services)
+    events = build_ticket_timeline(snapshots, serial, index=index)
+    for event in events:
+        event["anotacao_id"] = event["item_id"]
+        record = records.get((event["snapshot_id"], event["item_id"]))
+        event.update(annotation_view(record) if record else {"anotacao": "", "anotacao_revisoes": []})
+    return events
+
+
+def persist_ticket_annotation(
+    services: TicketImportServices, *, transaction_root: Path,
+    transaction_factory: Callable[[Path, Sequence[Path]], Any],
+    event_id: str, item_id: str, serial: str, event_time: str, row_hash: str, annotation: str,
+    revision_id: Optional[str] = None, base_revisions: Optional[List[str]] = None,
+) -> bool:
+    """Queue the annotation in the outbox (one transaction) and try to publish it; ``True`` when it was published.
+
+    Raises ``DomainValidationError`` (422), ``DomainConflictError`` (409) or ``DomainBusyError`` (503)."""
+    try:
+        record = build_history_annotation_record(
+            event_id=event_id,
+            event_time=event_time,
+            item_id=item_id,
+            serie=serial,
+            computador="",
+            motivo=TICKET_TIMELINE_ANNOTATION_REASON,
+            anotacao=annotation,
+            categoria=TICKET_TIMELINE_ANNOTATION_CATEGORY,
+            linha_hash=row_hash,
+            revision_id=revision_id, base_revisions=base_revisions,
+        )
+    except ValueError as error:
+        raise DomainValidationError(str(error), status_code=422) from None
+    pending_path = history_annotation_record_path(
+        services.annotation_outbox_directory(), event_id, item_id, record["revisao_id"],
+    )
+    try:
+        with transaction_factory(transaction_root, [pending_path]) as transaction:
+            try:
+                record = reuse_annotation_revision(services.annotation_directory(), record)
+            except ValueError as error:
+                raise DomainConflictError(str(error)) from None
+            if pending_path.exists():
+                existing = json.loads(pending_path.read_text(encoding="utf-8"))
+                if not same_annotation_revision(existing, record):
+                    raise DomainConflictError("A revisão já foi usada com outro conteúdo.")
+                record = existing
+            transaction.stage_bytes(
+                pending_path,
+                json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
+                lambda path: json.loads(path.read_text(encoding="utf-8")),
+            )
+            transaction.commit()
+    except (OSError, FileBusyError, FileTransactionError):
+        logger.exception("Não foi possível enfileirar a anotação do chamado %s.", redact_reference(serial))
+        raise DomainBusyError("Não foi possível salvar a anotação localmente.") from None
+
+    return sync_ticket_annotation(services, record)
+
+
+def ticket_export_selection(
+    services: TicketImportServices, snapshots: Sequence[Dict[str, Any]], snapshot_id: str,
+    select_tickets: Callable[[Sequence[Dict[str, Any]]], List[Dict[str, Any]]],
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
+    """``(snapshot, tickets, timelines)`` of the export; the snapshot defaults to the latest, and a missing one is a 404."""
+    selected_id = snapshot_id or (snapshots[-1].get("id", "") if snapshots else "")
+    snapshot = next((item for item in snapshots if item.get("id") == selected_id), None)
+    if snapshot is None:
+        raise DomainError("A versão selecionada não existe no histórico de chamados.", status_code=404)
+    tickets = select_tickets(snapshot.get("chamados", []))
+    selected_index = next((index for index, item in enumerate(snapshots) if item.get("id") == selected_id), len(snapshots) - 1)
+    timeline_snapshots = snapshots[:selected_index + 1]
+    annotation_records = latest_ticket_annotations(services)
+    timeline_index = build_ticket_timeline_index(timeline_snapshots)
+    timelines = {
+        str(ticket.get("serie") or ""): ticket_timeline_with_annotations(
+            services, timeline_snapshots, str(ticket.get("serie") or ""), annotation_records, timeline_index
+        )
+        for ticket in tickets
+    }
+    return snapshot, tickets, timelines
 
 
 @dataclass(frozen=True)
