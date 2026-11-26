@@ -84,25 +84,26 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 
 | Papel | Claude Code (agentes do projeto em `.claude/agents/`) | Codex | Antigravity |
 |---|---|---|---|
-| Análise: buscar e ler em volume | `batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` | Subagente `research` ou `batedor` (`Model: flash_lite`, sem write tools) |
-| Implementação decidida | `executor` (Sonnet 5.5) | GPT-6.1 Sol | Subagente `executor` (`Model: flash`) ou `self` |
-| Revisão independente | `revisor` (Opus 5.5) | GPT-6.1 Terra | Subagente `revisor` (`Model: pro`) |
-| Segunda opinião sobre texto ou plano | `segunda-opiniao` (Sonnet 5.5) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (`Model: flash` ou `pro`) |
-| Arquitetura ou estratégia cara de errar (raramente) | `arquiteto` (Fable 5.2) | GPT-6.1 Terra | Subagente `arquiteto` (`Model: pro`) |
+| Análise: buscar e ler em volume | `batedor` (Haiku 5.5, sem Bash) ou `Explore` | GPT-6 Luna, esforço `max` | Subagente `batedor` (Hydrogen Low, plugin `simpress-maestro`) ou `research` |
+| Implementação decidida | `executor` (Sonnet 5.5) | GPT-6.1 Sol | Subagente `executor` (Hydrogen Medium/High, plugin `simpress-maestro`) ou `self` |
+| Revisão independente | `revisor` (Opus 5.5) | GPT-6.1 Terra | Subagente `revisor` (Neon High, plugin `simpress-maestro`) |
+| Segunda opinião sobre texto ou plano | `segunda-opiniao` (Sonnet 5.5) | GPT-6 Luna, esforço `max` | Subagente `segunda-opiniao` (Hydrogen Medium, plugin `simpress-maestro`) |
+| Arquitetura ou estratégia cara de errar (raramente) | `arquiteto` (Fable 5.2) | GPT-6.1 Terra | Subagente `arquiteto` (Neon High → Carbon xHigh só se Neon não resolver) |
 
-- Agentes especializados (só Claude Code, pedidos do usuário, 24/11/2026; nenhum tem a ferramenta `Agent`, para não aninhar subagentes):
-  - `leitor-logs` (Haiku 5.5): resumir log ou saída longa de teste em erro exato e arquivo:linha.
-  - `documentador` (Haiku 5.5): alinhar os `.md` de aba e doc depois de uma mudança pronta; só edita `.md`.
-  - `conferente-glossario` (Haiku 5.5): conferir termos contra o `GLOSSARY.md`; só aponta.
-  - `testador` (Sonnet 5.5): escrever e rodar testes Python com TDD, um arquivo ou shard por vez.
-  - `testador-e2e` (Sonnet 5.5): specs Playwright em `tests/e2e/` pela fixture `ui-fixture`, um spec por vez.
-  - `depurador` (Sonnet 5.5): achar a causa raiz de bug ou teste que falha e corrigir só ela.
-  - `front-react` (Sonnet 5.5): telas e componentes da migração React/Vite em `frontend/src/`.
-  - `implementador` (Opus 5.5): código delicado (portal, SharePoint, OS, Endpoint) que o `executor` não deve fazer.
-  - `auditor-seguranca` (Opus 5.5): auditoria de segurança e LGPD só leitura, com severidade e arquivo:linha.
-  - `auditor-dependencias` (Haiku 5.5): `pip-audit` e `npm audit` só leitura, sem `--fix` nem instalar nada.
-  - `refatorador` (Sonnet 5.5): refatoração sem mudar comportamento, em passos pequenos com testes verdes antes e depois.
-  - `testador-acessibilidade` (Haiku 5.5): WCAG 2.2 AA na fixture `ui-fixture`; só aponta.
+- Agentes especializados (Claude Code em `.claude/agents/` e espelhados no Antigravity pelo plugin `.agents/plugins/simpress-maestro/agents/`; nenhum tem ferramenta de delegação, para não aninhar subagentes):
+  - `leitor-logs` (Haiku 5.5 / Hydrogen Low): resumir log ou saída longa de teste em erro exato e arquivo:linha.
+  - `documentador` (Haiku 5.5 / Hydrogen Medium): alinhar os `.md` de aba e doc depois de uma mudança pronta; só edita `.md`.
+  - `conferente-glossario` (Haiku 5.5 / Hydrogen Low): conferir termos contra o `GLOSSARY.md`; só aponta.
+  - `testador` (Sonnet 5.5 / Hydrogen Medium): escrever e rodar testes Python com TDD, um arquivo ou shard por vez.
+  - `testador-e2e` (Sonnet 5.5 / Hydrogen Medium): specs Playwright em `tests/e2e/` pela fixture `ui-fixture`, um spec por vez.
+  - `depurador` (Sonnet 5.5 / Hydrogen High): achar a causa raiz de bug ou teste que falha e corrigir só ela.
+  - `front-react` (Sonnet 5.5 / Hydrogen Medium): telas e componentes da migração React/Vite em `frontend/src/`.
+  - `implementador` (Opus 5.5 / Neon High): código delicado (portal, SharePoint, OS, Endpoint) que o `executor` não deve fazer.
+  - `auditor-seguranca` (Opus 5.5 / Neon High): auditoria de segurança e LGPD só leitura, com severidade e arquivo:linha.
+  - `auditor-dependencias` (Haiku 5.5 / Hydrogen Low): `pip-audit` e `npm audit` só leitura, sem `--fix` nem instalar nada.
+  - `refatorador` (Sonnet 5.5 / Hydrogen Medium): refatoração sem mudar comportamento, em passos pequenos com testes verdes antes e depois.
+  - `testador-acessibilidade` (Haiku 5.5 / Hydrogen Low): WCAG 2.2 AA na fixture `ui-fixture`; só aponta.
+  - No Antigravity (25/11/2026, plano AI Pro): o plugin de workspace `.agents/plugins/simpress-maestro/` entrega os 17 subagentes acima usando **exclusivamente** **Hydrogen**, **Neon** e **Carbon** (sem Flash nem 3.1 Pro): Hydrogen (Low) para leitura/auditorias baratas, Hydrogen (Medium/High) para execuções diretas (mesmo papel do Sonnet), Neon (High) para revisão, segurança e código crítico, e Carbon (High/xHigh) só quando o Neon não resolver. Traz `rules/AGENTS.md`, `hooks.json` (`SessionStart` para perguntar o par esforço/modelo via `ask_question`, revisar antes do PR e seguir o ciclo automático autorizado pelo usuário em 25/11/2026: abrir `#PR`, acompanhar a `#CI` da `#PR`, fazer `gh pr merge` após verde respeitando a ordem numérica e executar `git pull` na `main` após a CI da `main`; e `PreToolUse` para bloquear edição direta de dados operacionais). As skills em `.agents/skills/` acompanham `.claude/skills/`, e a skill `swarm-simpress` orquestra execuções paralelas via `/swarm` com modelos por faixa e `workspace: share` para autores.
   - Depois de criar ou alterar skill ou agente, rode `python scripts/conferir_ferramentas_ia.py` (sem `--instalado` confere só o repositório).
 
 - Os agentes do Claude Code são adaptados do [model-super-power](https://github.com/johnnyhelder/claude-model-super-power) (MIT), versionados em `.claude/agents/` sem instalar o plugin; numa máquina nova, o `git clone` já os traz e o `instalar_primeira_vez.bat` roda `scripts/conferir_ferramentas_ia.py --instalado`, que confere skills, agentes, plugins, MCP, hooks e instruções, e o próprio `.bat` (não o script) avisa se o plugin externo `model-super-power` estiver instalado (ele duplicaria os agentes com outros modelos). Em sessão de worktree, o app desktop lê `.claude/agents/` da pasta principal do repositório, não a do worktree: agente novo ou alterado só aparece depois do merge e do `git pull` na pasta principal (testado em 20/11/2026); a segunda opinião usa Sonnet 5.5 e o arquiteto, Fable 5.2 (escolha do usuário, 20/11/2026). Se um modelo não estiver no plano, troque o `model` do arquivo.

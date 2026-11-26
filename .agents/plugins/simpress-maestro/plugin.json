@@ -1,0 +1,6 @@
+{
+  "name": "simpress-maestro",
+  "displayName": "Simpress Maestro",
+  "version": "1.0.0",
+  "description": "Subagentes especializados (Hydrogen, Neon e Carbon) e hooks de proteção de dados operacionais do Simpress para o Antigravity."
+}
