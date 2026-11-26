@@ -34,6 +34,7 @@ from core.xlsx_safety import validate_xlsx_archive
 from domains.configuracao_local import _CONTRATO, CONTAS, LINKS, validar_valor
 from domains.history_restore import sha256_file
 from domains.local_setup import cnpj_valido
+from domains.user_holds import holds_file
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +51,12 @@ ALLOWLIST: tuple[str, ...] = tuple(_rel(path) for path in (
     config.DETAILS_UPLOAD_FILE,
     config.ENDPOINT_UPLOAD_FILE,
     config.TEMPLATE_FILE,
+    config.INPUT_DIR / "_modelos" / "transferencia.xlsx",  # modelo importado; vence TEMPLATE_FILE
     config.EXPORT_MODEL_FILE,
     config.CUSTOM_UNIDADES_FILE,
     config.MODIFIED_APELIDOS_FILE,
     config.MANUAL_USERS_FILE,
+    holds_file(config.MANUAL_USERS_FILE),  # decisões pendentes de usuário, par de usuarios_manuais.json
     config.ENTRA_USERS_FILE,
     config.MANUAL_PERSON_NAMES_FILE,
     config.REMOVED_ENDPOINT_HOSTNAMES_FILE,
@@ -100,6 +103,10 @@ FORA: tuple[str, ...] = (
     "data/state/outlook_email_modelos.json",
     "data/state/sebrae_config.json",
     "data/state/sebrae_novos.json",
+    "data/state/dashboard_agendamento.json",  # agenda envio ao SharePoint (sistema externo)
+    "data/state/sebrae_*",  # demais estados do Sebrae: ligados ao SharePoint e ao SoftExpert do momento
+    "data/state/inventory_update_idempotency.json",  # controle interno contra importação repetida
+    "data/state/assinatura_tecnico.svg",  # o pacote leva só .json e .xlsx
     # Travas: pertencem ao processo que as criou.
     "data/state/automacao_chrome.lock",
     "data/state/automacao_chrome.cancelar",
@@ -348,12 +355,17 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
                     pacote.writestr(rel, dados)
             saida.flush()
             os.fsync(saida.fileno())
-        try:
-            os.link(temporario, final)  # os.replace sobrescreveria um pacote existente
+        try:  # reserva o nome: os.replace sozinho sobrescreveria um pacote existente
+            os.close(os.open(final, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
         except FileExistsError:
             raise DomainError(
                 "Já existe um pacote com este nome; tente de novo em instantes.", status_code=409,
             ) from None
+        try:
+            os.replace(temporario, final)
+        except BaseException:
+            final.unlink(missing_ok=True)
+            raise
     finally:
         try:
             os.unlink(temporario)
@@ -648,7 +660,7 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
             raise DomainError("Este pacote já corresponde ao estado atual.", status_code=409)
 
         erro_interno: Optional[BaseException] = None
-        estado: Any = None
+        gravado = False
         try:
             with services.inventory_state_transaction([base / rel for rel in ALLOWLIST]) as transacao:
                 try:
@@ -673,10 +685,18 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
                     if (base / _rel(config.DETAILS_UPLOAD_FILE)).is_file() and not isinstance(estado, dict):
                         raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
                     transacao.commit()
+                    gravado = True
+                    if isinstance(estado, dict):
+                        services.publish_database_state(estado)  # dentro da transação, como history_restore
                 except BaseException as error:
                     erro_interno = error
                     raise
         except Exception as error:
+            if gravado:
+                _falhou(pacote["sha256"], error)
+                raise DomainError(
+                    "A restauração foi gravada, mas o site não recarregou os dados; reinicie o app.", status_code=500,
+                ) from None
             if erro_interno is not None and error is not erro_interno:
                 _falhou(pacote["sha256"], error)
                 raise _sem_recuperacao() from None  # a volta automática (rollback) também falhou
@@ -691,8 +711,6 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
                 raise _recusa_restauracao("o estado mudou desde a prévia; abra a prévia de novo") from None
             raise DomainError(MSG_FALHA, status_code=500) from None
 
-    if isinstance(estado, dict):
-        services.publish_database_state(estado)
     resultado = {
         "substituidos": totais["substituir"], "criados": totais["criar"], "apagados": totais["apagar"],
         "mantidos": totais["manter"], "pacote_desfazer": desfazer["arquivo"],

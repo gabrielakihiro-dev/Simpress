@@ -5,11 +5,13 @@ gravados. Os serviços do app (transação, carga da base, guardas) entram por i
 """
 
 import contextlib
+import fnmatch
 import hashlib
 import io
 import json
 import logging
 import os
+import re
 import tempfile
 import threading
 import unittest
@@ -133,6 +135,24 @@ class AllowlistTests(unittest.TestCase):
             if rel not in ALLOWLIST and rel not in FORA:
                 faltando.append(nome)
         self.assertEqual(faltando, [])
+
+    def test_arquivos_persistentes_sem_constante_estao_na_allowlist_ou_fora(self):
+        """Nomes literais em main.py (STATE_DIR / "x") e os conhecidos sem constante; nunca varre o data/ real."""
+        literais = re.findall(r'STATE_DIR / "([^"]+)"', (BASE_DIR / "main.py").read_text(encoding="utf-8"))
+        conhecidos = [
+            "data/planilhas_entrada/_modelos/transferencia.xlsx", "data/state/usuarios_manuais/usuarios_pendencias.json",
+            "data/state/dashboard_agendamento.json", "data/state/inventory_update_idempotency.json",
+            "data/state/assinatura_tecnico.svg", "data/state/sebrae_historico.json", "data/state/sebrae_os_recusadas.json",
+            "data/state/sebrae_excel_diario.json", "data/state/sebrae_categoria_indice.json",
+        ]
+        faltando = [
+            rel for rel in [f"data/state/{nome}" for nome in literais] + conhecidos
+            if rel not in ALLOWLIST and not any(fnmatch.fnmatchcase(rel, padrao) for padrao in FORA)
+        ]
+        self.assertGreater(len(literais), 5)
+        self.assertEqual(faltando, [])
+        self.assertIn("data/planilhas_entrada/_modelos/transferencia.xlsx", ALLOWLIST)
+        self.assertIn("data/state/usuarios_manuais/usuarios_pendencias.json", ALLOWLIST)
 
     def test_allowlist_so_json_e_xlsx_e_sem_sobreposicao_com_fora(self):
         self.assertTrue(all(rel.endswith((".json", ".xlsx")) for rel in ALLOWLIST))
@@ -351,6 +371,17 @@ class RestaurarTests(PacoteLocalBase):
         self.assertEqual(resposta.status_code, 422)
         self.assertEqual(self.estado(), self.alterado)
 
+    def test_estado_atual_invalido_barra_o_desfazer_sem_gravar(self):
+        nome = self.preparar()
+        self.gravar(cliente_rel(), {"contrato": "123", "cnpj_faturamento": "11.111.111/1111-11"})
+        self.alterado = self.estado()
+        resposta = self.restaurar(nome, self.previa(nome).json()["preview_token"])
+        self.assertEqual(resposta.status_code, 409)
+        self.assertTrue(resposta.json()["detail"].startswith(
+            "Restauração recusada: o pacote de desfazer do estado atual não passou na conferência"))
+        self.assertEqual([p.name for p in self.pasta.iterdir()], [nome])
+        self.assertEqual(self.estado(), self.alterado)
+
     def test_falha_depois_de_gravar_volta_os_arquivos(self):
         nome = self.preparar()
         token = self.previa(nome).json()["preview_token"]
@@ -408,6 +439,14 @@ class PastaTests(PacoteLocalBase):
         self.gravar("config/pacote_local.json", {"pasta": str(self.base / "sumiu")})
         lista = self.client.get("/api/pacote-local").json()
         self.assertEqual((lista["pacotes"], lista["erro_pasta"]), ([], "A pasta não existe ou não aceita escrita."))
+
+
+class AssistenteTests(unittest.TestCase):
+    def test_prompt_diz_que_o_assistente_nao_mexe_no_pacote(self):
+        from domains.assistant_chat import SYSTEM_PROMPT
+
+        self.assertIn("Pacote local (fim da Configuração local)", SYSTEM_PROMPT)
+        self.assertIn("Você não exporta, não lista e não restaura pacotes.", SYSTEM_PROMPT)
 
 
 class AcessoTests(PacoteLocalBase):
