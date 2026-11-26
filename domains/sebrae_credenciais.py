@@ -12,6 +12,7 @@ decisão do usuário 25/11/2026). Chamado novo, ainda fora da coluna C, e chamad
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence
@@ -20,6 +21,7 @@ from core.integrity import atomic_write_json, lock_paths
 from domains.sebrae_arquivo import STATUS_FINALIZADO
 from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
 
+logger = logging.getLogger(__name__)
 ARQUIVO = "sebrae_credenciais.json"
 MAX_VALORES = 10
 MAX_VALOR = 200
@@ -50,13 +52,13 @@ def extrair(*textos: Any) -> List[str]:
 
 
 class CredenciaisIlegiveisError(RuntimeError):
-    """O arquivo de senhas existe mas não pôde ser lido; nada é regravado para não perder o que havia nele."""
+    """O arquivo de senhas existe mas não pôde ser lido; nada é regravado para não perder o que havia nele.
 
-    def __init__(self) -> None:
-        super().__init__(
-            "O arquivo de senhas guardadas dos chamados está ilegível; nada foi alterado nele. "
-            "Restaure o arquivo ou apague-o manualmente e tente de novo."
-        )
+    ``tipo`` é só o nome da exceção de leitura (para o log); nunca carrega conteúdo."""
+
+    def __init__(self, tipo: str = "") -> None:
+        super().__init__("Não foi possível ler o arquivo de senhas guardadas dos chamados; nada foi gravado nele.")
+        self.tipo = tipo
 
 
 def _ler_tudo(arquivo: Path) -> Dict[str, List[str]]:
@@ -65,10 +67,10 @@ def _ler_tudo(arquivo: Path) -> Dict[str, List[str]]:
         dados = json.loads(arquivo.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
-    except (OSError, ValueError):
-        raise CredenciaisIlegiveisError() from None
+    except (OSError, ValueError) as erro:  # JSON inválido, texto não UTF-8 ou arquivo travado: nada é regravado
+        raise CredenciaisIlegiveisError(type(erro).__name__) from None
     if not isinstance(dados, dict) or not all(isinstance(vs, list) for vs in dados.values()):
-        raise CredenciaisIlegiveisError()
+        raise CredenciaisIlegiveisError("EstruturaInvalida")
     return {str(n): [str(v) for v in vs] for n, vs in dados.items()}
 
 
@@ -76,7 +78,8 @@ def _ler_para_tela(arquivo: Path) -> Dict[str, List[str]]:
     """Leitura para a tela: ilegível vale vazio e nunca regrava."""
     try:
         return _ler_tudo(arquivo)
-    except CredenciaisIlegiveisError:
+    except CredenciaisIlegiveisError as erro:
+        logger.warning("Arquivo de senhas guardadas ilegível (%s); nada foi alterado nele.", erro.tipo)
         return {}
 
 
