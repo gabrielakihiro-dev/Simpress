@@ -17,7 +17,7 @@ from openpyxl.cell.cell import MergedCell
 
 from core.config import format_size_limit
 from core.errors import DomainError, DomainValidationError
-from core.integrity import atomic_write_json, load_workbook_safely
+from core.integrity import atomic_write_json, load_workbook_safely, lock_paths, quarantine_corrupt_file
 from core.openpyxl_compat import stored_cells
 
 
@@ -150,6 +150,26 @@ def _read_origin_contact_file(path: Path, label: str = "contato de origem") -> t
     return stored, False
 
 
+def _read_for_write(path: Path) -> tuple[dict, bool]:
+    """(stored values, corrupted) for a read-change-write cycle; call it under ``lock_paths``.
+
+    Only invalid JSON (``ValueError``, which includes bad UTF-8) or a non-object counts as corrupted. Any other
+    ``OSError`` (a locked file) is raised: the caller writes nothing and makes no copy."""
+    try:
+        stored = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return {}, False
+    except ValueError:
+        return {}, True
+    return (stored, False) if isinstance(stored, dict) else ({}, True)
+
+
+def _quarantine_before_write(path: Path, label: str) -> None:
+    """Copy the unreadable file aside right before it is overwritten; if the copy fails nothing is written."""
+    quarantine_corrupt_file(path)
+    logger.warning("Arquivo de %s ilegível copiado para quarentena antes de regravar.", label)
+
+
 def load_origin_contact(path: Path, environment: Optional[Mapping[str, str]] = None) -> dict:
     """Resolve each origin contact field: environment variable, then local file, then empty."""
     env = os.environ if environment is None else environment
@@ -243,16 +263,19 @@ def save_client_config(
 ) -> None:
     """Write the already validated client data to the git-ignored file; a None field keeps the stored value."""
     target = Path(path)
-    stored, _ = _read_origin_contact_file(target, "dados do cliente")
-    if contrato is None:
-        contrato = str(stored.get("contrato") or "")
-    if cnpj_faturamento is None:
-        cnpj_faturamento = str(stored.get("cnpj_faturamento") or "")
-    if series is None:
-        kept = stored.get("series_sebrae_fora")
-        series = [str(item) for item in kept] if isinstance(kept, list) else []
-    target.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(target, {"contrato": contrato, "cnpj_faturamento": cnpj_faturamento, "series_sebrae_fora": series})
+    with lock_paths([target]):
+        stored, corrupted = _read_for_write(target)
+        if contrato is None:
+            contrato = str(stored.get("contrato") or "")
+        if cnpj_faturamento is None:
+            cnpj_faturamento = str(stored.get("cnpj_faturamento") or "")
+        if series is None:
+            kept = stored.get("series_sebrae_fora")
+            series = [str(item) for item in kept] if isinstance(kept, list) else []
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if corrupted:
+            _quarantine_before_write(target, "dados do cliente")
+        atomic_write_json(target, {"contrato": contrato, "cnpj_faturamento": cnpj_faturamento, "series_sebrae_fora": series})
 
 
 # The 22 regional representatives of SEBRAE/PR (Transferência screen). The front end loads the effective defaults from
@@ -349,8 +372,9 @@ def save_regional_representative(path: Path, city: str, values: dict, defaults_p
     target = Path(path)
     default = effective_regional_representative_defaults(defaults_path)[0][city]
     changed = {f: values[f] for f in REGIONAL_REPRESENTATIVE_FIELDS if f in values and values[f] != default[f]}
-    with _regional_representatives_lock:
-        current, _ = load_regional_representatives(target)
+    with _regional_representatives_lock, lock_paths([target]):
+        stored, corrupted = _read_for_write(target)
+        current = {c: v for c, v in stored.items() if c in REGIONAL_REPRESENTATIVE_CITIES and isinstance(v, dict)}
         if changed:
             current[city] = changed
         elif city in current:
@@ -358,6 +382,8 @@ def save_regional_representative(path: Path, city: str, values: dict, defaults_p
         else:
             return  # nothing differs and nothing was saved: leave the file (or its absence) alone
         target.parent.mkdir(parents=True, exist_ok=True)
+        if corrupted:
+            _quarantine_before_write(target, "representantes regionais")
         atomic_write_json(target, current)
 
 

@@ -6,12 +6,26 @@ export const ENDPOINT = "/api/painel";
 // só requisição. Nada fica guardado depois da resposta (o próximo pedido busca de novo) e cada um recebe a sua cópia.
 let painelEmVoo: Promise<unknown> | null = null;
 
-export function painelCompartilhado<T>(buscar: () => Promise<T>): Promise<T> {
-  if (!painelEmVoo) {
-    const pedido: Promise<unknown> = buscar().finally(() => { if (painelEmVoo === pedido) painelEmVoo = null; });
+// Com `novo` (depois de uma mutação) e um pedido em voo, a busca espera esse pedido e começa só depois dele, para não
+// reaproveitar uma resposta que partiu antes da mudança; quem chegar depois divide o pedido novo.
+export function painelCompartilhado<T>(buscar: () => Promise<T>, opcoes?: { novo?: boolean }): Promise<T> {
+  const anterior = painelEmVoo;
+  if (!anterior || opcoes?.novo) {
+    const base: Promise<unknown> = anterior ? anterior.catch(() => undefined).then(() => buscar()) : buscar();
+    const pedido: Promise<unknown> = base.finally(() => { if (painelEmVoo === pedido) painelEmVoo = null; });
     painelEmVoo = pedido;
   }
-  return painelEmVoo.then(dados => structuredClone(dados) as T);
+  return (painelEmVoo as Promise<unknown>).then(dados => structuredClone(dados) as T);
+}
+
+// Cartão e badge do sino (lembretes agendados) usam a mesma regra: só contagens; null = nada a mostrar.
+export function contagemLembretesAgendados(dados: unknown): { atrasados: number; hoje: number } | null {
+  if (!dados || typeof dados !== "object") return null;
+  const { atrasados, hoje, indisponivel } = dados as { atrasados?: unknown; hoje?: unknown; indisponivel?: unknown };
+  if (indisponivel) return null;
+  const contar = (valor: unknown): number => { const n = Number(valor); return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0; };
+  const resultado = { atrasados: contar(atrasados), hoje: contar(hoje) };
+  return resultado.atrasados + resultado.hoje === 0 ? null : resultado;
 }
 export const DENSITY_KEY = "simpress:table-density";
 const DIVERGENCE_FIELDS = Object.freeze(["divergencias_local", "divergencias_apelidos_manuais"]);

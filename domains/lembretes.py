@@ -181,6 +181,41 @@ def _item_valido(item: Any) -> bool:
     )
 
 
+def resumo_agendados(lembretes: list[dict[str, Any]], hoje: date) -> dict[str, Any]:
+    """Só contagens dos pendentes com data válida: atrasados (antes de hoje) e de hoje; a hora não conta.
+
+    Nunca devolve texto de lembrete (descrição, termo, id): o resumo vai ao painel e ao sino.
+    """
+    atrasados = hoje_n = 0
+    for item in lembretes:
+        if not isinstance(item, dict) or item.get("concluido"):
+            continue
+        data = _como_data(item.get("data_agendada"))
+        if data is None:
+            continue
+        if data < hoje:
+            atrasados += 1
+        elif data == hoje:
+            hoje_n += 1
+    return {"total": atrasados + hoje_n, "atrasados": atrasados, "hoje": hoje_n, "indisponivel": False}
+
+
+def ler_resumo_agendados(arquivo: Path, hoje: Optional[date] = None) -> dict[str, Any]:
+    """Resumo dos lembretes agendados, somente leitura: nunca grava, cria nem repara o arquivo.
+
+    Arquivo ausente conta zero; ilegível ou ocupado (``ErroLembrete``, inclusive ``PermissionError``) vira ``indisponivel``.
+    """
+    try:
+        itens = Lembretes(arquivo)._carregar()
+    except ErroLembrete as erro:
+        # Só a classe e o código fixo (literal); nunca str(erro) nem conteúdo do arquivo.
+        logger.warning(
+            "Falha ao ler os lembretes agendados do painel: %s (%s).", type(erro).__name__, erro.codigo,
+        )
+        return {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": True}
+    return resumo_agendados(itens, hoje if hoje is not None else _hoje_local())
+
+
 class Lembretes:
     """Lembretes em um JSON local: leitura sem trava, escrita atômica sob trava de arquivo."""
 
