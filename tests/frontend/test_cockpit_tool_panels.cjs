@@ -1466,6 +1466,79 @@ test("Relatório mensal (F8): Tendências carrega na primeira abertura, troca de
   });
 });
 
+test("Relatório mensal (F8): Tendências tenta de novo depois de erro (reabrir a aba e clicar no período ativo)", async () => {
+  await comRelatorio(async ({ aba, painel, servidor, esperar }) => {
+    const buscas = () => servidor.pedidos.filter(url => url.startsWith("/api/relatorio-mensal/tendencias"));
+    const normal = servidor.tendencias;
+    servidor.tendencias = () => { throw new Error("503 momentâneo"); };
+    aba("tendencias").click();
+    await esperar();
+    assert.match(textoDe(painel("tendencias")), /503 momentâneo/);
+    aba("visao").click();
+    servidor.tendencias = normal;
+    aba("tendencias").click(); // reabrir sem dado bom busca de novo
+    await esperar();
+    assert.equal(buscas().length, 2);
+    assert.match(textoDe(painel("tendencias")), /Tempo médio das OS.*12,4 dias/);
+    servidor.tendencias = () => { throw new Error("503 de novo"); };
+    painel("tendencias").querySelector('[data-rel-periodo="90"]').click();
+    await esperar();
+    assert.match(textoDe(painel("tendencias")), /503 de novo/);
+    servidor.tendencias = normal;
+    painel("tendencias").querySelector('[data-rel-periodo="90"]').click(); // período ativo, último estado erro: recarrega
+    await esperar();
+    assert.equal(buscas().length, 4);
+    assert.equal(buscas().at(-1), "/api/relatorio-mensal/tendencias?dias=90");
+    assert.match(textoDe(painel("tendencias")), /Tempo médio das OS.*12,4 dias/);
+    painel("tendencias").querySelector('[data-rel-periodo="90"]').click(); // com dado bom, o clique repetido não busca
+    await esperar();
+    assert.equal(buscas().length, 4);
+  });
+});
+
+test("Relatório mensal (F8): Tendências descarta resposta antiga (30 chegando depois de 90)", async () => {
+  await comRelatorio(async ({ aba, painel, servidor, esperar }) => {
+    const normal = servidor.tendencias;
+    const pendentes = {};
+    servidor.tendencias = dias => new Promise(resolver => { pendentes[dias] = () => resolver(normal(dias)); });
+    aba("tendencias").click();
+    await esperar();
+    painel("tendencias").querySelector('[data-rel-periodo="90"]').click();
+    await esperar();
+    pendentes[90]();
+    await esperar();
+    pendentes[30](); // a resposta de 30 chega por último
+    await esperar();
+    const texto = textoDe(painel("tendencias"));
+    assert.match(texto, /Tempo médio das OS/);
+    assert.doesNotMatch(texto, /últimos 30 dias/);
+    assert.match(texto, /últimos 90 dias/);
+  });
+});
+
+test("Relatório mensal (F8): OS importadas marcam as Tendências como velhas; recarregam na próxima abertura ou já, se a aba está à vista", async () => {
+  await comRelatorio(async ({ aba, servidor, esperar, emite }) => {
+    const buscas = () => servidor.pedidos.filter(url => url.startsWith("/api/relatorio-mensal/tendencias"));
+    aba("tendencias").click();
+    await esperar();
+    assert.equal(buscas().length, 1);
+    aba("visao").click();
+    emite("simpress:chamados-atualizados");
+    await esperar();
+    assert.equal(buscas().length, 1, "com a aba fora de vista, só marca");
+    aba("tendencias").click();
+    await esperar();
+    assert.equal(buscas().length, 2, "a próxima abertura recarrega");
+    emite("simpress:chamados-atualizados");
+    await esperar();
+    assert.equal(buscas().length, 3, "com a aba à vista, recarrega já");
+    aba("visao").click();
+    aba("tendencias").click();
+    await esperar();
+    assert.equal(buscas().length, 3, "sem nova mudança, reabrir não busca");
+  });
+});
+
 test("Relatório mensal (F8): Ver lista e Ver chamados trocam a aba antes de focar o título", async () => {
   await comRelatorio(async ({ el, painel, visiveis, selecionada }) => {
     const botoes = el("cockpit-monthly-kpis").querySelectorAll("button");
