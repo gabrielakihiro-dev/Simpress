@@ -13,7 +13,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from core.integrity import atomic_write_json
+from core.integrity import atomic_write_json, lock_paths, quarantine_corrupt_file
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +55,24 @@ class NotasStore:
         self._caminho = Path(caminho)
         self._lock = threading.Lock()
 
-    def _ler(self) -> List[Dict[str, Any]]:
-        """Saved notes, or [] when there are none or the file is unreadable."""
+    def _ler(self, para_gravar: bool = False) -> List[Dict[str, Any]]:
+        """Saved notes, or [] when there are none or the file is unreadable.
+
+        With ``para_gravar`` an unreadable file is first copied to a quarantine file (never overwritten without the copy)."""
         try:
             itens = json.loads(self._caminho.read_text(encoding="utf-8")).get("notas", [])
         except FileNotFoundError:
             return []
         except (OSError, ValueError, AttributeError):
             logger.warning("Não foi possível ler os lembretes do assistente.")
+            if para_gravar:
+                quarantine_corrupt_file(self._caminho)
+                logger.warning("Lembretes ilegíveis copiados para quarentena; recomeçando vazio.")
             return []
         if not isinstance(itens, list):
+            if para_gravar:
+                quarantine_corrupt_file(self._caminho)
+                logger.warning("Lembretes com estrutura inesperada copiados para quarentena; recomeçando vazio.")
             return []
         return [
             {**{campo: item.get(campo) for campo in _CAMPOS}, "concluida": bool(item.get("concluida"))} for item in itens
@@ -91,8 +99,8 @@ class NotasStore:
             return _validar(texto, prazo, len(self._ler()))
 
     def criar(self, texto: Any, prazo: Any = None) -> Dict[str, Any]:
-        with self._lock:
-            notas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            notas = self._ler(para_gravar=True)
             dados = _validar(texto, prazo, len(notas))
             existentes = {n["id"] for n in notas}
             nota_id = secrets.token_hex(6)
@@ -104,8 +112,8 @@ class NotasStore:
 
     def marcar(self, nota_id: str, concluida: bool = True) -> Optional[Dict[str, Any]]:
         """Mark done (or open again); None when the id does not exist."""
-        with self._lock:
-            notas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            notas = self._ler(para_gravar=True)
             nota = next((n for n in notas if n["id"] == nota_id), None)
             if nota is None:
                 return None
@@ -114,8 +122,8 @@ class NotasStore:
             return nota
 
     def apagar(self, nota_id: str) -> bool:
-        with self._lock:
-            notas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            notas = self._ler(para_gravar=True)
             restantes = [n for n in notas if n["id"] != nota_id]
             if len(restantes) == len(notas):
                 return False

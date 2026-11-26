@@ -17,7 +17,7 @@ from openpyxl.cell.cell import MergedCell
 
 from core.config import format_size_limit
 from core.errors import DomainError, DomainValidationError
-from core.integrity import atomic_write_json, load_workbook_safely
+from core.integrity import atomic_write_json, load_workbook_safely, quarantine_corrupt_file
 from core.openpyxl_compat import stored_cells
 
 
@@ -243,7 +243,10 @@ def save_client_config(
 ) -> None:
     """Write the already validated client data to the git-ignored file; a None field keeps the stored value."""
     target = Path(path)
-    stored, _ = _read_origin_contact_file(target, "dados do cliente")
+    stored, invalid_file = _read_origin_contact_file(target, "dados do cliente")
+    if invalid_file:
+        quarantine_corrupt_file(target)  # never overwrite an unreadable file without a copy
+        logger.warning("Arquivo de dados do cliente ilegível copiado para quarentena antes de regravar.")
     if contrato is None:
         contrato = str(stored.get("contrato") or "")
     if cnpj_faturamento is None:
@@ -350,7 +353,7 @@ def save_regional_representative(path: Path, city: str, values: dict, defaults_p
     default = effective_regional_representative_defaults(defaults_path)[0][city]
     changed = {f: values[f] for f in REGIONAL_REPRESENTATIVE_FIELDS if f in values and values[f] != default[f]}
     with _regional_representatives_lock:
-        current, _ = load_regional_representatives(target)
+        current, invalid_file = load_regional_representatives(target)
         if changed:
             current[city] = changed
         elif city in current:
@@ -358,6 +361,9 @@ def save_regional_representative(path: Path, city: str, values: dict, defaults_p
         else:
             return  # nothing differs and nothing was saved: leave the file (or its absence) alone
         target.parent.mkdir(parents=True, exist_ok=True)
+        if invalid_file:
+            quarantine_corrupt_file(target)  # never overwrite an unreadable file without a copy
+            logger.warning("Arquivo de representantes regionais ilegível copiado para quarentena antes de regravar.")
         atomic_write_json(target, current)
 
 

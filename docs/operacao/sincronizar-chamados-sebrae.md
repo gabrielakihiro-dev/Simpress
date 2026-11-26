@@ -228,6 +228,7 @@ Chamado que estava aberto na importação anterior e agora está `FINALIZADO` (D
 - Na primeira importação com esta versão o arquivo ainda não existe: os chamados já `FINALIZADO` do Dashboard são semeados. Antes disso não há registro de saídas passadas.
 - Chamados sem UTIC único (chave `linha:<n>`) não dá para acompanhar entre importações; só são contados (`nao_rastreaveis`).
 - Falha ao gravar bloqueia a importação (503, mensagem em português), para a saída não se perder; arquivo ilegível nunca é sobrescrito. Chamados ainda abertos (`sebrae_dashboard_existentes.json`) também ficam com CPF e senha mascarados.
+- Senhas guardadas (`sebrae_credenciais.json`) ilegíveis (26/11/2026): a tela mostra vazio e nada é regravado; `guardar` e `remover` levantam `CredenciaisIlegiveisError` (mensagem sem conteúdo) e o arquivo fica intacto, sem cópia (uma cópia seria um segundo arquivo com senhas). Na importação do Dashboard e depois do `Finalizar` a falha só vai ao log (tipo do erro), sem repetir o clique nem mudar o resultado.
 
 ### Enviar ao SharePoint (rotina `enviar`)
 

@@ -22,7 +22,9 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from core.errors import DomainBusyError, DomainConflictError, DomainValidationError
-from core.integrity import FileBusyError, FileTransactionError, atomic_write_bytes, atomic_write_json, lock_paths
+from core.integrity import (
+    FileBusyError, FileTransactionError, atomic_write_bytes, atomic_write_json, lock_paths, quarantine_corrupt_file,
+)
 from domains import sebrae_novos
 from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
 from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
@@ -1029,6 +1031,14 @@ def ler_conflitos(state_dir: Path) -> Optional[Dict[str, Any]]:
     return _ler_json(caminho_conflitos(state_dir))
 
 
+def _escolhas_para_gravar(state_dir: Path) -> Dict[str, str]:
+    """Escolhas a manter ao regravar o arquivo de conflitos; se ele existe e está ilegível, vai antes para quarentena."""
+    caminho = caminho_conflitos(state_dir)
+    if caminho.exists() and ler_conflitos(state_dir) is None:
+        quarantine_corrupt_file(caminho)
+    return escolhas_dos_conflitos(state_dir)
+
+
 def escolhas_dos_conflitos(state_dir: Path) -> Dict[str, str]:
     escolhas = (ler_conflitos(state_dir) or {}).get("escolhas")
     return {str(chave): str(valor) for chave, valor in escolhas.items()} if isinstance(escolhas, dict) else {}
@@ -1040,7 +1050,7 @@ def gravar_conflitos(
     """Os valores das células ficam só neste arquivo (lido pela tela); as escolhas já feitas são mantidas."""
     atomic_write_json(caminho_conflitos(state_dir), {
         "base_sha256": base_sha256, "sharepoint_sha256": sharepoint_sha256, "gerado_sha256": gerado_sha256,
-        "criado_em": agora_iso(), "conflitos": [dict(conflito) for conflito in conflitos], "escolhas": escolhas_dos_conflitos(state_dir),
+        "criado_em": agora_iso(), "conflitos": [dict(conflito) for conflito in conflitos], "escolhas": _escolhas_para_gravar(state_dir),
     })
 
 
@@ -1053,7 +1063,7 @@ def concluir_conflitos(state_dir: Path) -> None:
 
     O arquivo gerado continua com o valor do site; sem a escolha "sharepoint" guardada, o próximo envio da mesma importação
     acusaria de novo o mesmo conflito."""
-    escolhas = escolhas_dos_conflitos(state_dir)
+    escolhas = _escolhas_para_gravar(state_dir)
     if not escolhas:
         limpar_conflitos(state_dir)
         return

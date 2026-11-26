@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from core.integrity import atomic_write_json
+from core.integrity import atomic_write_json, lock_paths, quarantine_corrupt_file
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +42,24 @@ class ConversasStore:
         self._caminho = Path(caminho)
         self._lock = threading.Lock()
 
-    def _ler(self) -> List[Dict[str, Any]]:
-        """Saved conversations, or [] when there are none or the file is unreadable."""
+    def _ler(self, para_gravar: bool = False) -> List[Dict[str, Any]]:
+        """Saved conversations, or [] when there are none or the file is unreadable.
+
+        With ``para_gravar`` an unreadable file is first copied to a quarantine file (never overwritten without the copy)."""
         try:
             itens = json.loads(self._caminho.read_text(encoding="utf-8")).get("conversas", [])
         except FileNotFoundError:
             return []
         except (OSError, ValueError, AttributeError):
             logger.warning("Não foi possível ler o histórico de conversas do assistente.")
+            if para_gravar:
+                quarantine_corrupt_file(self._caminho)
+                logger.warning("Histórico ilegível copiado para quarentena; recomeçando vazio.")
             return []
         if not isinstance(itens, list):
+            if para_gravar:
+                quarantine_corrupt_file(self._caminho)
+                logger.warning("Histórico com estrutura inesperada copiado para quarentena; recomeçando vazio.")
             return []
         conversas = []
         for item in itens:
@@ -76,8 +84,8 @@ class ConversasStore:
         if papel not in _PAPEIS or not texto:
             return
         agora = datetime.now().astimezone().isoformat(timespec="seconds")
-        with self._lock:
-            conversas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            conversas = self._ler(para_gravar=True)
             atual = next((c for c in conversas if c["id"] == conversa_id), None)
             if atual is None:
                 atual = {"id": conversa_id, "titulo": _titulo(texto), "criada_em": agora, "atualizada_em": agora, "mensagens": []}
@@ -102,8 +110,8 @@ class ConversasStore:
             return next((c for c in self._ler() if c["id"] == conversa_id), None)
 
     def apagar(self, conversa_id: str) -> bool:
-        with self._lock:
-            conversas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            conversas = self._ler(para_gravar=True)
             restantes = [c for c in conversas if c["id"] != conversa_id]
             if len(restantes) == len(conversas):
                 return False

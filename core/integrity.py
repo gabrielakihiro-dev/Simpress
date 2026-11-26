@@ -328,6 +328,25 @@ def atomic_write_json(path: Path, value: Any) -> None:
     atomic_write_bytes(Path(path), payload, lambda temp: json.loads(temp.read_text(encoding="utf-8")))
 
 
+def quarantine_corrupt_file(path: Path) -> Path:
+    """Copy an unreadable state file byte for byte to ``<name>.corrompido-AAAAMMDD-HHMMSS<ext>`` beside it.
+
+    The original stays in place; callers copy first and only then overwrite. Raises OSError when the copy fails,
+    so a caller never overwrites without the copy."""
+    path = Path(path)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    for n in range(100):
+        suffix = "" if n == 0 else f"-{n}"
+        target = path.with_name(f"{path.stem}.corrompido-{stamp}{suffix}{path.suffix}")
+        try:
+            with open(path, "rb") as source, open(target, "xb") as dest:
+                shutil.copyfileobj(source, dest)
+            return target
+        except FileExistsError:
+            continue
+    raise OSError("Não foi possível criar a cópia de quarentena.")
+
+
 def atomic_copy_file(source: Path, destination: Path, validator: Optional[Callable[[Path], None]] = None) -> None:
     source = Path(source).resolve(strict=False)
     destination = Path(destination).resolve(strict=False)

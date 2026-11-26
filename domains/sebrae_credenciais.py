@@ -49,18 +49,41 @@ def extrair(*textos: Any) -> List[str]:
     return valores[:MAX_VALORES]
 
 
+class CredenciaisIlegiveisError(RuntimeError):
+    """O arquivo de senhas existe mas não pôde ser lido; nada é regravado para não perder o que havia nele."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "O arquivo de senhas guardadas dos chamados está ilegível; nada foi alterado nele. "
+            "Restaure o arquivo ou apague-o manualmente e tente de novo."
+        )
+
+
 def _ler_tudo(arquivo: Path) -> Dict[str, List[str]]:
+    """Senhas por chamado. Arquivo ausente vale vazio; ilegível levanta ``CredenciaisIlegiveisError`` (sem conteúdo na mensagem)."""
     try:
         dados = json.loads(arquivo.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
     except (OSError, ValueError):
+        raise CredenciaisIlegiveisError() from None
+    if not isinstance(dados, dict) or not all(isinstance(vs, list) for vs in dados.values()):
+        raise CredenciaisIlegiveisError()
+    return {str(n): [str(v) for v in vs] for n, vs in dados.items()}
+
+
+def _ler_para_tela(arquivo: Path) -> Dict[str, List[str]]:
+    """Leitura para a tela: ilegível vale vazio e nunca regrava."""
+    try:
+        return _ler_tudo(arquivo)
+    except CredenciaisIlegiveisError:
         return {}
-    if not isinstance(dados, dict):
-        return {}
-    return {str(n): [str(v) for v in vs] for n, vs in dados.items() if isinstance(vs, list)}
 
 
 def guardar(state_dir: Path, numero: str, *textos: Any) -> bool:
-    """Guarda as senhas achadas nos textos do chamado; sem senha, nada muda. True quando gravou."""
+    """Guarda as senhas achadas nos textos do chamado; sem senha, nada muda. True quando gravou.
+
+    Arquivo ilegível: levanta ``CredenciaisIlegiveisError`` sem tocar nele (nenhuma cópia: seria um segundo arquivo com senhas)."""
     valores = extrair(*textos)
     if not numero or not valores:
         return False
@@ -74,15 +97,16 @@ def guardar(state_dir: Path, numero: str, *textos: Any) -> bool:
 
 
 def ler(state_dir: Path, numero: str) -> List[str]:
-    return _ler_tudo(caminho(state_dir)).get(numero, [])
+    return _ler_para_tela(caminho(state_dir)).get(numero, [])
 
 
 def numeros(state_dir: Path) -> frozenset:
     """Chamados com senha guardada (sem os valores): a tela só mostra o botão nesses."""
-    return frozenset(_ler_tudo(caminho(state_dir)))
+    return frozenset(_ler_para_tela(caminho(state_dir)))
 
 
 def remover(state_dir: Path, *numeros: str) -> None:
+    """Apaga as senhas dos chamados; arquivo ilegível levanta ``CredenciaisIlegiveisError`` sem regravar."""
     arquivo = caminho(state_dir)
     with lock_paths([arquivo]):
         dados = _ler_tudo(arquivo)
