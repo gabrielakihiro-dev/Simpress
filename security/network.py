@@ -2,13 +2,41 @@
 
 import ipaddress
 import os
+import shutil
 import socket
+import subprocess
 from typing import Any, Mapping
 
 
 def acesso_rede_ativo() -> bool:
     """Opt-in (SIMPRESS_ACESSO_REDE=1): also accept peers on the private LAN, e.g. a phone on the same Wi-Fi."""
     return os.environ.get("SIMPRESS_ACESSO_REDE") == "1"
+
+
+TAILSCALE_REDE = ipaddress.ip_network("100.64.0.0/10")
+
+
+def acesso_tailscale_ativo() -> bool:
+    """Opt-in (SIMPRESS_ACESSO_TAILSCALE=1): also accept peers from the Tailscale tailnet (100.64.0.0/10)."""
+    return os.environ.get("SIMPRESS_ACESSO_TAILSCALE") == "1"
+
+
+def ip_tailscale() -> str | None:
+    """This PC's tailnet IPv4: SIMPRESS_IP_TAILSCALE, else `tailscale ip -4`; None when unavailable."""
+    valor = os.environ.get("SIMPRESS_IP_TAILSCALE", "").strip()
+    if not valor:
+        exe = shutil.which("tailscale")
+        if not exe:
+            return None
+        try:
+            saida = subprocess.run([exe, "ip", "-4"], capture_output=True, text=True, timeout=5).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+        valor = saida.split()[0] if saida.split() else ""
+    try:
+        return valor if ipaddress.ip_address(valor) in TAILSCALE_REDE else None
+    except ValueError:
+        return None
 
 
 def ip_da_rede() -> str | None:
@@ -42,7 +70,8 @@ def is_direct_loopback_request(scope: Mapping[str, Any]) -> bool:
     if isinstance(peer, ipaddress.IPv6Address) and peer.ipv4_mapped is not None:
         peer = peer.ipv4_mapped
     if not peer.is_loopback and not (
-        acesso_rede_ativo() and peer.is_private and not peer.is_link_local
+        (acesso_rede_ativo() and peer.is_private and not peer.is_link_local)
+        or (acesso_tailscale_ativo() and peer in TAILSCALE_REDE)
     ):
         return False
     return not any(
