@@ -1,0 +1,38 @@
+name: Docs
+
+# Complemento da CI: ela ignora docs/** e **/*.md; aqui só o teste de links da documentação.
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "**/*.md", ".github/workflows/docs.yml"]
+  pull_request:
+    paths: ["docs/**", "**/*.md", ".github/workflows/docs.yml"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs-links:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      # O teste importa `main`, então precisa das dependências do projeto.
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Check documentation links
+        run: python -B -m unittest -v test_project_layout.ProjectLayoutTests.test_documentation_links_resolve_from_each_new_folder
+        working-directory: tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          SIMPRESS_CHROME_OCIOSO_S: "0"
+          SIMPRESS_SUGESTAO_IA: "0"

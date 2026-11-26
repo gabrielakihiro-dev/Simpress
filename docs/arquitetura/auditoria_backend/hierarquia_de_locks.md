@@ -10,7 +10,7 @@ Toda thread adquire locks nesta ordem. Ela pode pular níveis, mas nunca voltar 
 | :--- | :--- | :--- | :--- |
 | 1 | Global `.atomic-transactions` | `AtomicFileTransaction.__enter__`, `recover_pending_transactions`, `load_database()` (`core/integrity.py`, `main.py`) | `lock_paths([root / ".atomic-transactions"])` |
 | 2 | Locks de arquivo | `lock_paths(...)`: `RLock` por caminho e `.<arquivo>.lock` do sistema operacional | Uma única chamada com todos os caminhos, em ordem canônica. Fora de transação, só leitura (prévia, modelo de transferência) |
-| 3 | Locks Python (folha) | `STATE_LOCK`, `ALIAS_HISTORY_LOCK`, `COMPARISON_HISTORY_LOCK`, `MODIFIED_APELIDOS_LOCK`, `_READINESS_VALIDATION_LOCK` e o lock de `ReadinessReportCache` (`domains/readiness.py`), `_TRANSACTION_RECOVERY_BLOCK_LOCK`, `_EXPORT_STATUS_LOCK`, `_EXPORT_COUNTS_LOCK` (`main.py`); `_LOCK` (`routers/transfer_history.py`, só na leitura do GET); `_PATH_CACHE_LOCK` (`core/xlsx_safety.py`); `_equipment_search_index_lock` (`persistence/postgres.py`) | `with LOCK:` em volta de memória ou de uma única leitura de arquivo |
+| 3 | Locks Python (folha) | `STATE_LOCK`, `ALIAS_HISTORY_LOCK`, `COMPARISON_HISTORY_LOCK`, `MODIFIED_APELIDOS_LOCK`, `_READINESS_VALIDATION_LOCK` e o lock de `ReadinessReportCache` (`domains/readiness.py`), `_TRANSACTION_RECOVERY_BLOCK_LOCK`, `_EXPORT_STATUS_LOCK`, `_EXPORT_COUNTS_LOCK` (`main.py`); `_LOCK` (`routers/transfer_history.py`, só na leitura do GET); `_PATH_CACHE_LOCK` (`core/xlsx_safety.py`) | `with LOCK:` em volta de memória ou de uma única leitura de arquivo |
 
 `AtomicFileTransaction.add_target` pega mais locks de arquivo depois dos primeiros. Isso é seguro porque só acontece com o lock global preso, que serializa todas as transações.
 

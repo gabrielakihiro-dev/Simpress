@@ -122,6 +122,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Evidência: o pipeline tem testes em `motor_ia/tests/`, mas nem `npm run verify` nem a CI os executam, e nenhum módulo do servidor importa `motor_ia`.
 - Impacto: o código pode deixar de funcionar sem que ninguém perceba.
 - Solução: incluir os testes no verify ou criar um `README.md` na pasta dizendo que é experimental e não mantido.
+- Destino decidido em 26/11/2026: `motor_ia/` fica como experimental isolado, fora do `npm run verify` e da CI; remoção só a pedido do usuário.
 
 **8. Documento de locks cita módulo que não existe.** Baixa, confirmado.
 - Evidência: `docs/arquitetura/auditoria_backend/hierarquia_de_locks.md:13` cita `_equipment_search_index_lock` em `persistence/postgres.py`, removido com o piloto de banco.
@@ -130,6 +131,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 **9. Script sem uso.** Baixa, confirmado.
 - Evidência: `scripts/_replace_sidebar.py` vem de um único commit (`baf17f0`) e nada o referencia.
 - Solução: remover, depois de confirmar que não é usado à mão.
+- Resolvido em 26/11/2026: removido.
 
 **10. Dependência sem versão exata.** Baixa, confirmado.
 - Evidência: `package.json` declara `typescript` como `^6.0.3`; as demais dependências têm versão exata.
