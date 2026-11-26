@@ -60,7 +60,7 @@ def _utic(links_by_key: Mapping[str, Any], link_key: Callable[[str, str, str], s
     return {"chamado": str(link["chamado"]), "origem": "Dashboard" if link.get("origem") == "dashboard" else "Manual"}
 
 
-def _current_orders(rows: Sequence[Dict[str, Any]], links_by_key: Mapping[str, Any],
+def current_orders(rows: Sequence[Dict[str, Any]], links_by_key: Mapping[str, Any],
                     link_key: Callable[[str, str, str], str]) -> List[Dict[str, Any]]:
     """Orders of every row of the series in the latest import; one entry per (source, OS without spaces, upper)."""
     simpress: Dict[str, Dict[str, Any]] = {}
@@ -126,7 +126,7 @@ def build_os_section(snapshots: Sequence[Dict[str, Any]], serial: str, links_by_
         presente_na_ultima=bool(rows),
         # Never "encerrada": the series may only have left the report.
         ultima_vez_observada_em=None if rows else str(events[-1].get("atualizado_em") or ""),
-        ordens=_current_orders(rows, links_by_key, link_key),
+        ordens=current_orders(rows, links_by_key, link_key),
         historico={
             "titulo": HISTORY_TITLE,
             "eventos": [

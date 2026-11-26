@@ -2230,6 +2230,30 @@ def _equipment_dossier_header(serial: str) -> Optional[Dict[str, Any]]:
         return None if equipment is None else {"serie": clean_serial, "modelo": str(equipment.get("modelo") or "")}
 
 
+def _sebrae_ticket_numbers() -> Dict[str, List[str]]:
+    """Números UTIC das listas do F5 (novos, antigos, finalizados), só o número; fonte ausente ou ilegível vira lista vazia."""
+    caminhos = sebrae_novos.caminhos_padrao(STATE_DIR)
+
+    def ler(leitor: Callable[[], List[str]]) -> List[str]:
+        try:
+            return leitor()
+        except (OSError, ValueError) as error:  # ArquivoIlegivel is a ValueError; log only the type, never the term
+            logger.warning("Fonte de chamados da busca indisponível (%s).", type(error).__name__)
+            return []
+
+    def antigos() -> List[str]:
+        return [str(a.get("chamado") or "") for a in (sebrae_novos.ler_existentes(caminhos.existentes) or {}).get("abertos", [])]
+
+    def novos() -> List[str]:
+        lancados = (sebrae_novos.ler_existentes(caminhos.existentes) or {}).get("numeros", ())
+        return [c.numero for c in (sebrae_novos.ler_novos(caminhos.novos, ja_lancados=lancados) or {}).get("chamados", [])]
+
+    return {
+        "novos": ler(novos), "antigos": ler(antigos),
+        "finalizados": ler(lambda: [str(f["numero"]) for f in sebrae_finalizacao.finalizados_no_dashboard(STATE_DIR)]),
+    }
+
+
 operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=_inventory_history_exports.history_annotation_view,
@@ -2246,6 +2270,7 @@ operations_router = create_operations_router(
     ticket_os_marks_file=lambda: os_marcas_finalizacao.caminho_marcas(STATE_DIR),
     ticket_os_marks_sources=_marcas_fontes,
     equipment_header=_equipment_dossier_header,
+    sebrae_ticket_numbers=_sebrae_ticket_numbers,
 )
 app.include_router(operations_router)
 
