@@ -25,7 +25,8 @@ def ip_tailscale() -> str | None:
     """This PC's tailnet IPv4: SIMPRESS_IP_TAILSCALE, else `tailscale ip -4`; None when unavailable."""
     valor = os.environ.get("SIMPRESS_IP_TAILSCALE", "").strip()
     if not valor:
-        exe = shutil.which("tailscale")
+        padrao = r"C:\Program Files\Tailscale\tailscale.exe"  # not on PATH until a new login
+        exe = shutil.which("tailscale") or (padrao if os.path.isfile(padrao) else None)
         if not exe:
             return None
         try:
