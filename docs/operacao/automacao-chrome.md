@@ -51,6 +51,12 @@ mantém a aba aberta até lá. Falha ao fechar é ignorada e nunca altera o resu
 exige nova conferência.
 O teste ao vivo da série de validação deve sempre usar simulação.
 
+Fechar durante o envio (pedido do usuário de 26/11/2026): depois de `Enviar solicitação` no cartão e até a
+resposta do servidor (OS, incerto ou erro), o botão `Fechar` (`#ux-chamado-fechar`) fica desabilitado e Esc ou
+`fecharChamadoUX` não fecham o modal, para o número da OS não sumir sem aviso. Terminado o envio, tudo volta ao
+normal e o resultado fica na linha de status. Mesmo padrão do ticket UX do Transporte (F2). Durante a preparação e
+a simulação, `Fechar` continua cancelando a sessão como antes.
+
 ### Travas contra envio real
 - **Série de teste:** `BRM551RN1Y` (`SERIES_SEM_ENVIO_REAL` em `domains/ux_chamados.py`) nunca gera envio real:
   `enviar: true` é recusado com 422 (`Esta série é de teste: só a simulação é permitida.`); a simulação funciona.
