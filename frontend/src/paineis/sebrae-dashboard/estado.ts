@@ -1916,7 +1916,13 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     }
     // O R confirmado no diálogo é o mesmo enviado em `encerramento` (regra de 24/11/2026: digitado pelo usuário, nunca a hora atual).
     const encerramento = encerramentoInformado(valores.R);
-    const dialogo = {
+    // incerto (26/11/2026): Finalizar já foi clicado; o novo pedido só confere a central de tarefas, sem clicar de novo
+    const dialogo = soft?.finalizacao?.status === "incerto" ? {
+      titulo: "Conferir no SoftExpert",
+      mensagem: `O Finalizar de ${numero} já foi clicado e o resultado não foi confirmado. Este pedido não clica de novo: só confere a central de tarefas.`
+        + ` Fora dela, o chamado é registrado como finalizado com a DT ENCERRAMENTO (R): ${encerramento}. Ainda nela, finalize à mão no SoftExpert.`,
+      confirmar: "Conferir", cancelar: "Cancelar",
+    } : {
       titulo: "Finalizar no SoftExpert",
       mensagem: `Finalizar ${numero} no SoftExpert? Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada`
         + `${soft.pdf ? " e o PDF anexado será enviado" : ""}. DT ENCERRAMENTO (R): ${encerramento}.`
@@ -1978,7 +1984,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const aoVivo = f.emAndamento && Boolean(res?.em_andamento);
     const pulados = f.pulados.length ? f.pulados : res?.pulados || [];
     // Os finalizados saem daqui na hora (vão para "Chamados finalizados"); sobram só avisos, erros e pulados.
-    const restantes = (res?.resultados || []).filter((r: Registro) => !STATUS_DESFEITOS.includes(r.status));
+    const restantes = (res?.resultados || []).filter((r: Registro) => !STATUS_DESFEITOS.includes(r.status) || r.pdf_nao_reenviado === true);
     let status = "";
     if (f.emAndamento) status = `Finalizando no SoftExpert…${aoVivo && f.numeros.length ? ` ${(res?.resultados || []).length} de ${f.numeros.length} concluído(s).` : ""}`;
     else if (f.mensagemInicio) status = f.mensagemInicio;

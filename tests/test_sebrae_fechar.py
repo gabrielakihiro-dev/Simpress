@@ -131,7 +131,7 @@ def com_escritas(erro, *escritas):
 
 
 def ok():
-    return {"numero": "", "status": "ok", "detalhes": {"mensagem": "feito", "escritas": ["Finalizar"]}}
+    return {"numero": "", "status": "ok", "detalhes": {"mensagem": "feito", "escritas": ["finalizar"]}}
 
 
 def com_status(status, **detalhes):
@@ -509,7 +509,7 @@ class IncertoTest(FecharBase):
         erro = com_status("erro", mensagem="Anexo: o envio de laudo.pdf não terminou em 120 s; nada foi finalizado.", escritas=["anexo"])
         self.rodar({A: erro}, [A])
         self.assertEqual(self.por_numero()[A]["status"], "erro")
-        self.assertIn("sem enviá-lo de novo", self.por_numero()[A]["mensagem"])
+        self.assertIn("sem enviar este PDF", self.por_numero()[A]["mensagem"])
         self.assertTrue(fin.pdf_ja_enviado(self.dir, A))
         _, mod = self.rodar({A: ok()}, [A])
         self.assertIsNone(mod.chamadas[0]["pdf"])  # finaliza sem anexar o mesmo PDF de novo
@@ -549,6 +549,50 @@ class IncertoTest(FecharBase):
         _, mod = self.rodar({A: ok()}, [A], central={A: False})
         self.assertEqual(mod.chamadas, [])
         self.assertEqual(self.por_numero()[A]["status"], "ok")
+
+    def test_cancelamento_so_com_anexo_registra_o_pdf_e_nao_vira_incerto(self):
+        self.descrever(A)
+        fin.anexar_pdf(self.dir, A, "laudo.pdf", PDF)
+        with self.assertRaises(RotinaCancelada):
+            self.rodar({A: com_escritas(RotinaCancelada(), "anexo")}, [A])
+        self.assertTrue(fin.pdf_ja_enviado(self.dir, A))
+        self.assertIsNone(self.estado(A))
+        self.assertEqual(self.resultado()["resultados"], [])
+
+    def test_pdf_pulado_aparece_no_item_do_resultado(self):
+        self.descrever(A)
+        fin.anexar_pdf(self.dir, A, "laudo.pdf", PDF)
+        self.rodar({A: com_status("erro", mensagem="Anexo: não terminou", escritas=["anexo"])}, [A])
+        self.assertIn("antes de pedir de novo", self.por_numero()[A]["mensagem"])
+        self.rodar({A: ok()}, [A])
+        item = self.por_numero()[A]
+        self.assertTrue(item["pdf_nao_reenviado"])
+        self.assertIn(sebrae_fechar.AVISO_PDF_NAO_REENVIADO, item["mensagem"])
+
+    def test_incerto_que_vira_ok_com_falha_no_registro_avisa_no_sino(self):
+        self.descrever(A)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_INCERTO)
+        with patch.object(sebrae_fechar.fin, "registrar_finalizacao", side_effect=FileBusyError("ocupado")):
+            codigo, mod = self.rodar({}, [A], central={A: False})
+        self.assertEqual(mod.chamadas, [])
+        item = self.por_numero()[A]
+        self.assertEqual((item["status"], item["registro_local"], item["planilha"]), ("ok", "falhou", "gravado"))
+        self.assertIn(sebrae_fechar.AVISO_REGISTRO, item["mensagem"])
+        self.assertIn({"numero": A, "motivo": "registro_local"}, fin.falhas_da_finalizacao(self.dir, lambda: False)["itens"])
+        self.assertEqual(codigo, 0)
+
+    def test_erro_ao_abrir_o_softexpert_na_conferencia_mantem_incerto_e_para_os_seguintes(self):
+        self.descrever(A, B)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_INCERTO)
+        fin.gravar_job(self.dir, [A, B], confirmar_final=True, encerramentos={A: R_USUARIO, B: R_USUARIO})
+        mod = modulo({B: ok()}, self.aba, central={})
+        mod.abrir_softexpert = lambda contexto: (_ for _ in ()).throw(Rotinas.RotinaErro("Chrome caiu"))
+        sebrae_fechar.executar(None, self.rotinas, state_dir=self.dir, modulo=mod, agora=lambda: AGORA)
+        achados = self.por_numero()
+        self.assertEqual((mod.chamadas, mod.conferidos), ([], []))
+        self.assertEqual(achados[A]["status"], fin.STATUS_INCERTO)
+        self.assertEqual(achados[B]["motivo"], "softexpert_indisponivel")
+        self.assertEqual(self.estado(A), fin.STATUS_INCERTO)
 
     def test_falha_em_registrar_finalizacao_nao_perde_o_ok_nem_o_r(self):
         self.descrever(A, B)

@@ -219,7 +219,9 @@ export function textoResultado(item: Qualquer): string {
   const base = ROTULOS_RESULTADO[item?.status] || "Sem resultado";
   const extra = STATUS_DESFEITOS.includes(item?.status) && item.encerrado_em ? ` (encerrado em ${item.encerrado_em})` : "";
   const mensagem = ["erro", "nao_encontrado", "incerto"].includes(item?.status) && item.mensagem ? `: ${item.mensagem}` : "";
-  return `${base}${extra}${mensagem}`;
+  // o PDF já enviado num pedido anterior não sobe de novo (26/11/2026): a tela diz isso também no "ok"
+  const pdf = item?.pdf_nao_reenviado === true && !mensagem ? ". O PDF já tinha sido enviado num pedido anterior e não foi enviado de novo; confira o anexo no SoftExpert." : "";
+  return `${base}${extra}${mensagem}${pdf}`;
 }
 
 export function textoPulado(pulado: Qualquer): string {

@@ -51,6 +51,7 @@ ORIGEM = "Sebrae fechar"
 _ERROS_ENVIO_LOCAL = (DomainBusyError, DomainConflictError, FileBusyError, FileTransactionError, OSError)
 MOTIVO_SESSAO = "O SoftExpert pediu login de novo; entre no SoftExpert no Chrome de automação e finalize outra vez."
 AVISO_REGISTRO = "O registro local falhou; não peça de novo antes de conferir no SoftExpert."
+AVISO_PDF_NAO_REENVIADO = "O PDF já tinha sido enviado num pedido anterior e não foi enviado de novo; confira o anexo no SoftExpert."
 
 
 def _incertos_pendentes(state_dir: Path, log: Callable[[str], None]) -> List[str]:
@@ -413,9 +414,13 @@ def _processar(
     pagina: Optional["Page"] = None
     parada = ""  # preenchido quando o SoftExpert fica indisponível: os que faltam viram erro com esse motivo
 
+    pdf_pulado: set[str] = set()  # PDF já enviado num pedido anterior: o item do resultado diz que não foi enviado de novo
+
     def anotar(numero: str, status: str, **extras: Any) -> Dict[str, Any]:
         item = {"numero": numero, "status": status, "em": fin.agora_iso(), "mensagem": "", "motivo": "", "captura": "",
                 "encerrado_em": "", "planilha": "", **extras}
+        if numero in pdf_pulado:
+            item.update(pdf_nao_reenviado=True, mensagem=" ".join(filter(None, [item["mensagem"], AVISO_PDF_NAO_REENVIADO])))
         resultado["resultados"].append(item)
         salvar()
         return item
@@ -435,8 +440,8 @@ def _processar(
         """``ok``: R do usuário (regra de 24/11/2026, nunca a hora atual), anotado ANTES do registro local, e senha apagada."""
         encerramentos[numero] = quando
         item = anotar(numero, fin.STATUS_OK, encerrado_em=quando, **extras)
-        if not registrar(numero, fin.STATUS_OK, quando):
-            item["mensagem"] = " ".join(filter(None, [item.get("mensagem"), AVISO_REGISTRO]))
+        if not registrar(numero, fin.STATUS_OK, quando):  # ``registro_local`` leva o caso ao sino
+            item.update(mensagem=" ".join(filter(None, [item.get("mensagem"), AVISO_REGISTRO])), registro_local="falhou")
             salvar()
         log(f"{numero}: finalizado no SoftExpert.")
         try:  # senha guardada para o F5 sai junto com o chamado (regra do usuário, 19/11/2026)
@@ -460,7 +465,8 @@ def _processar(
         except Exception as erro:  # noqa: BLE001
             log(f"{numero}: não consegui registrar o PDF já enviado ({type(erro).__name__}).")
             return "O PDF pode já estar no chamado e o registro local falhou: confira o anexo no SoftExpert antes de pedir de novo."
-        return "O PDF pode já estar no chamado: confira o anexo no SoftExpert; o próximo pedido finaliza sem enviá-lo de novo."
+        return ("O PDF pode já estar no chamado. Confira o anexo no SoftExpert antes de pedir de novo: "
+                "o próximo pedido finaliza sem enviar este PDF.")
 
     def escritas_de(erro: BaseException) -> List[str]:
         """O que ``finalizar_chamado`` já gravou no SoftExpert antes da exceção (atributo ``escritas``)."""
@@ -480,6 +486,7 @@ def _processar(
         descricao, pdf = fin.dados_para_finalizar(state_dir, numero)
         if pdf is None and fin.pdf_ja_enviado(state_dir, numero):
             log(f"{numero}: o PDF já foi enviado ao chamado num pedido anterior; não é enviado de novo.")
+            pdf_pulado.add(numero)
         if not descricao:
             log(f"{numero}: sem descrição para finalizar; pulado.")
             anotar(numero, fin.STATUS_SEM_DESCRICAO, mensagem="Preencha a descrição para finalizar o chamado.")

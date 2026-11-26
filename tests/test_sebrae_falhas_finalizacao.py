@@ -63,6 +63,21 @@ class FalhasDaFinalizacaoTest(unittest.TestCase):
         fin.registrar_finalizacao(self.pasta, "UTIC-2026-0007", fin.STATUS_OK, "24/11/2026 10:00")
         self.assertEqual(fin.falhas_da_finalizacao(self.pasta, PARADA)["itens"], [])
 
+    def test_incerto_do_estado_continua_no_sino_depois_de_outra_rotina(self):
+        fin.registrar_finalizacao(self.pasta, "UTIC-2026-0007", fin.STATUS_INCERTO)
+        self.gravar([item("UTIC-2026-0008", fin.STATUS_NAO_ENCONTRADO)])  # outra fechar substituiu o resultado
+        self.assertEqual(fin.falhas_da_finalizacao(self.pasta, PARADA)["itens"], [{"numero": "UTIC-2026-0007", "motivo": "incerto"}])
+        self.gravar([], acao=fin.ACAO_REENVIAR)  # reenvio ao SharePoint também
+        self.assertEqual(fin.falhas_da_finalizacao(self.pasta, PARADA), {"total": 1, "itens": [{"numero": "UTIC-2026-0007", "motivo": "incerto"}]})
+        self.gravar([item("UTIC-2026-0007", fin.STATUS_INCERTO)])  # o mesmo chamado no resultado não aparece duas vezes
+        self.assertEqual(fin.falhas_da_finalizacao(self.pasta, PARADA)["total"], 1)
+
+    def test_registro_local_que_falhou_no_ok_avisa_ate_o_estado_ter_o_ok(self):
+        self.gravar([{**item("UTIC-2026-0009", fin.STATUS_OK), "planilha": "gravado", "registro_local": "falhou"}])
+        self.assertEqual(fin.falhas_da_finalizacao(self.pasta, PARADA)["itens"], [{"numero": "UTIC-2026-0009", "motivo": "registro_local"}])
+        fin.registrar_finalizacao(self.pasta, "UTIC-2026-0009", fin.STATUS_OK, "24/11/2026 10:00")
+        self.assertEqual(fin.falhas_da_finalizacao(self.pasta, PARADA)["itens"], [])
+
     def test_chamado_finalizado_depois_sai_do_aviso(self):
         self.gravar([item("UTIC-2026-0001"), item("UTIC-2026-0002")])
         fin.registrar_finalizacao(self.pasta, "UTIC-2026-0001", fin.STATUS_OK, "24/11/2026 10:00")

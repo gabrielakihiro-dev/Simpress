@@ -57,6 +57,14 @@ test("incerto: Finalizar clicado sem confirmação nunca vira \"não foi finaliz
   } finally { cena.restaurar(); }
 });
 
+test("registro local que falhou depois do ok: finalizado, sem contar como falha de finalização", () => {
+  const cena = montar();
+  try {
+    cena.dashboard.renderizarAlertaFalhasFinalizacao({ total: 1, itens: [{ numero: "UTIC-2026-9", motivo: "registro_local" }] });
+    assert.equal(cena.texto.textContent, `UTIC-2026-9: finalizado no SoftExpert, mas o registro local falhou. ${DICA}`);
+  } finally { cena.restaurar(); }
+});
+
 test("R não gravado no Dashboard: finalizado, sem contar como falha de finalização", () => {
   const cena = montar();
   try {
