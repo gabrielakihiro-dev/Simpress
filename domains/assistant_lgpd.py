@@ -31,13 +31,16 @@ PHONE_PATTERN = re.compile(
 )
 TOKEN_PATTERN = re.compile(r"\[PESSOA_\d+\]")
 # Single CPF rule for the whole project (assistant and Sebrae ticket text), hybrid:
-# - a label ("CPF", "CPF:", "CPF #") before a formatted or 11-digit number masks it always, keeping the label;
+# - a label ("CPF", "C.P.F.", "CPF:", "CPF n\u00ba", "CPF/MF") before a formatted or 11-digit number masks it always, keeping the label;
 # - a formatted CPF (ddd.ddd.ddd-dd) is always masked;
-# - 11 loose digits are masked only with valid check digits (not all equal) and rigid borders (no \w or "-" around).
+# - 11 loose digits are masked only with valid check digits (not all equal) and rigid borders (no \w or "-" around; \u00ba/\u00b0 before is allowed).
 CPF_PATTERN = re.compile(
-    r"(?<!\w)(?P<rotulo>CPF\b\s*[:#-]?\s*)(?P<rotulado>\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})(?!\d)"
+    # Label "CPF"/"C.P.F." (no letter right before; optional "s") + short separator + number: always masked.
+    r"(?<![^\W\d_])(?P<rotulo>(?:CPF|C\.P\.F)s?(?:\s|[:#\-./_\u00ba\u00b0]|n[\u00ba\u00b0.]|MF){0,8})"
+    r"(?P<rotulado>\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})(?!\d)"
     r"|(?<!\d)(?P<formatado>\d{3}\.\d{3}\.\d{3}-\d{2})(?!\d)"
-    r"|(?<![\w-])(?P<solto>\d{11})(?![\w-])",
+    # Loose digits: rigid borders, but a ordinal sign right before ("n\u00ba52998224725") does not block.
+    r"|(?:(?<![\w-])|(?<=[\u00ba\u00b0]))(?P<solto>\d{11})(?![\w-])",
     re.IGNORECASE,
 )
 SENHA_PATTERN = re.compile(
