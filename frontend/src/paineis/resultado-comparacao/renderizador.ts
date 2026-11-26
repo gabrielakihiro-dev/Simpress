@@ -406,7 +406,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${estimado ? "~" : ""}${Number(item.dias || 0).toLocaleString("pt-BR")}</td>
-          <td class="px-3 py-2">${estimado ? "Saiu para Ausentes no Endpoint" : "Ainda em Sem acesso há 7 dias ou mais"}</td>
+          <td class="px-3 py-2">${estimado ? "Saiu para Ausentes no Endpoint" : "Ainda no Endpoint, sem acesso"}</td>
           ${renderizarCampoAnotacao(item, `o hostname ${item.computador || "sem hostname"}, série ${item.serie || "vazia"}`)}
         </tr>`;
     });
@@ -927,7 +927,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
           `<p class="ck-bento-nota">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="/api/config/local/endpoint/som-computadores" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="ck-bento-nota">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está de 7 a 59 dias sem verificação com êxito.", "sem_acesso_7_dias")}`)}
         ${semAcesso60 ? cartaoSecaoBento("fucsia", 1,
-          cabecalhoSecaoBento(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "comparacao-secao-sem-acesso-60", "Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram de “Sem acesso há 7 dias ou mais” e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam."),
+          cabecalhoSecaoBento(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "comparacao-secao-sem-acesso-60", "Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram do Endpoint e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam. Quem está aqui não aparece em “Sem acesso de 7 a 59 dias”."),
           `<p class="ck-bento-nota">Os hostnames que somem do Endpoint ficam em <a href="/api/config/local/endpoint/staged-computers" target="_blank" rel="noopener noreferrer" data-endpoint-staged-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Staged computers)</a>.</p>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Dias sem acesso", "Situação", ...annotationHeaders], linhasSemAcesso60(semAcesso60, colunas), "Nenhum notebook passou de 60 dias sem acesso nesta atualização.", "sem_acesso_60_dias")}`,
           " data-sem-acesso-60-secao") : avisoListaAusente}

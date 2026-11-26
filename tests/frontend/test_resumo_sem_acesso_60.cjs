@@ -31,7 +31,7 @@ test("Resumo lists notebooks past 60 days after the 7+ table, with estimated day
   const linhas = [...html.matchAll(/<tr [^>]*data-sem-acesso-60-situacao="([^"]+)"[\s\S]*?<\/tr>/g)];
   assert.deepEqual(linhas.map(([, situacao]) => situacao), ["saiu_endpoint", "passou"]);
   assert.match(linhas[0][0], /~64[\s\S]*Saiu para Ausentes no Endpoint/);
-  assert.match(linhas[1][0], />61<[\s\S]*Ainda em Sem acesso há 7 dias ou mais/);
+  assert.match(linhas[1][0], />61<[\s\S]*Ainda no Endpoint, sem acesso/);
   assert.match(linhas[1][0], /&lt;b&gt;PRNOTE-N1/);
   assert.match(html, /href="\/api\/config\/local\/endpoint\/staged-computers"[^>]*data-endpoint-staged-link/);
 });

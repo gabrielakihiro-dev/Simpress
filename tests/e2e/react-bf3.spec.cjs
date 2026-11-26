@@ -457,6 +457,7 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(painelSemAcesso.locator('tr[data-comparison-category="sem_acesso_7_dias"] td:nth-child(2)')).toHaveText(["BRJ100HHHH"]);
     await expect(painelSemAcesso.locator('tr[data-comparison-category="sem_acesso_60_dias"] td:nth-child(2)')).toHaveText(["BRJ100IIII", "BRJ100JJJJ"]);
     await expect(painelSemAcesso).toContainText("Sem acesso de 7 a 59 dias");
+    await expect(painelSemAcesso.locator('tr[data-comparison-category="sem_acesso_60_dias"] td:nth-child(4)')).toHaveText(["Ainda no Endpoint, sem acesso", "Saiu para Ausentes no Endpoint"]);
     await irParaAba(page, "visao-geral");
     await expect(page.locator("#nf3-num-divergencias")).toHaveText("7");
     await page.locator('[data-nf3-cartao="usuarios"] [data-nf3-ver]').click();
