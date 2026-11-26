@@ -1397,9 +1397,11 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.bancada.chamados = [chamado(1566, finalizacao=True, somente_filtro=True, finalizar_falha=True)]
         page = self.abrir_lista()
         resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL)
-        self.assertEqual(resultado["status"], "erro", resultado)
+        # Finalizar já foi clicado: nunca "erro" repetível (26/11/2026)
+        self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)
         self.assertEqual(len(self.bancada.finalizados), 1)
-        self.assertIn("continua na central", resultado["detalhes"]["mensagem"])
+        self.assertEqual(resultado["detalhes"]["mensagem"], se.MENSAGEM_INCERTO)
+        self.assertEqual(resultado["detalhes"]["escritas"], ["finalizar"])
         self.assertSemEscrita()
 
     def test_filtro_vazio_sem_spinner_confirma_ausencia_sem_timeout(self):
@@ -1488,12 +1490,21 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(self.abas_do_registro(), [])
         self.assertSemEscrita()
 
-    def test_finalizar_que_nao_tira_o_cartao_da_lista_e_erro(self):
+    def test_finalizar_que_nao_tira_o_cartao_da_lista_e_incerto(self):
         self.bancada.chamados = [chamado(1, finalizacao=True, finalizar_falha=True)]
         page = self.abrir_lista()
         resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
-        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)
         self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
+
+    def test_cartao_na_central_so_le_a_lista(self):
+        # Novo pedido de um chamado incerto: só confere a central, sem abrir o formulário nem clicar.
+        self.bancada.chamados = [chamado(1, finalizacao=True)]
+        page = self.abrir_lista()
+        self.assertTrue(se.cartao_na_central(page, "UTIC-2026-0001"))
+        self.assertFalse(se.cartao_na_central(page, "UTIC-2026-0002"))
+        self.assertEqual((self.bancada.abertos, self.bancada.associados, self.bancada.finalizados), ([], [], []))
         self.assertSemEscrita()
 
     def test_confirmacao_nativa_do_finalizar_e_aceita(self):
@@ -1507,7 +1518,8 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.bancada.chamados = [chamado(1, finalizacao=True, confirmacao_final="estranha")]
         page = self.abrir_lista()
         resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
-        self.assertEqual(resultado["status"], "erro", resultado)
+        # Finalizar já foi clicado antes da confirmação estranha: incerto, nunca erro repetível
+        self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)
         self.assertEqual(resultado["detalhes"]["motivo"], se.MOTIVO_CONFIRMACAO_INESPERADA)
         self.assertEqual(self.bancada.finalizados, [])
         self.assertEqual(self.abas_do_registro(), [])
@@ -1518,7 +1530,7 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         logs: list = []
         with patch.object(se, "_log", side_effect=logs.append):
             resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
-        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)  # depois do clique em Finalizar
         self.assertEqual(resultado["detalhes"]["motivo"], se.MOTIVO_CONFIRMACAO_INESPERADA)
         self.assertNotIn("Sigiloso", " ".join(logs) + repr(resultado))
         self.assertEqual(self.bancada.finalizados, [])

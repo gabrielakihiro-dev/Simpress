@@ -197,10 +197,12 @@ export const MAX_DESCRICAO = 4000;
 export const NUMERO_UTIC = /^UTIC-\d{4}-\d+$/i;
 export const INTERVALO_FECHAR_MS = 1500;
 export const STATUS_OUTRO_TECNICO = "finalizado_outro_tecnico"; // fora da central, com D=FINALIZADO e R do usuário (regra de 12/11/2026)
-export const STATUS_DESFEITOS: readonly string[] = Object.freeze(["ok", STATUS_OUTRO_TECNICO]); // nada mais a fazer no SoftExpert (ja_finalizado e nao_encontrado não bloqueiam: espelha ja_finalizado() do backend)
+export const STATUS_DESFEITOS: readonly string[] = Object.freeze(["ok", STATUS_OUTRO_TECNICO]); // nada mais a fazer no SoftExpert (ja_finalizado, nao_encontrado e incerto não bloqueiam: espelha ja_finalizado() do backend)
 export const ROTULOS_RESULTADO: Readonly<Record<string, string>> = Object.freeze({
   ok: "Finalizado no SoftExpert", [STATUS_OUTRO_TECNICO]: "Finalizado por outro técnico (confirmado por você): Dashboard atualizado com a DT ENCERRAMENTO informada", ja_finalizado: "Já estava finalizado no SoftExpert", erro: "Erro ao finalizar",
   sem_descricao: "Sem descrição para finalizar", sem_encerramento: "Sem DT ENCERRAMENTO (R)", nao_encontrado: "Não encontrado na central de tarefas", pronto: "Formulário conferido; Finalizar não foi clicado",
+  // Finalizar clicado sem confirmação (26/11/2026): pedir de novo só confere a central de tarefas, nunca clica de novo
+  incerto: "Finalizar clicado, resultado não confirmado",
 });
 export const MOTIVOS_PULADO: Readonly<Record<string, string>> = Object.freeze({
   sem_descricao: "sem descrição para finalizar", sem_encerramento: "sem DT ENCERRAMENTO (R)", ja_finalizado: "já finalizado no SoftExpert", sem_numero: "sem número UTIC",
@@ -216,8 +218,10 @@ export function formatarTamanho(bytes: Qualquer): string {
 export function textoResultado(item: Qualquer): string {
   const base = ROTULOS_RESULTADO[item?.status] || "Sem resultado";
   const extra = STATUS_DESFEITOS.includes(item?.status) && item.encerrado_em ? ` (encerrado em ${item.encerrado_em})` : "";
-  const mensagem = (item?.status === "erro" || item?.status === "nao_encontrado") && item.mensagem ? `: ${item.mensagem}` : "";
-  return `${base}${extra}${mensagem}`;
+  const mensagem = ["erro", "nao_encontrado", "incerto"].includes(item?.status) && item.mensagem ? `: ${item.mensagem}` : "";
+  // o PDF já enviado num pedido anterior não sobe de novo (26/11/2026): a tela diz isso também no "ok"
+  const pdf = item?.pdf_nao_reenviado === true && !mensagem ? ". O PDF já tinha sido enviado num pedido anterior e não foi enviado de novo; confira o anexo no SoftExpert." : "";
+  return `${base}${extra}${mensagem}${pdf}`;
 }
 
 export function textoPulado(pulado: Qualquer): string {
@@ -325,8 +329,8 @@ export function resumoResultado(resultado: Qualquer): string {
   const contar = (status: string) => lista.filter(r => r.status === status).length;
   const partes = ([
     [contar("ok"), "finalizado(s)"], [contar(STATUS_OUTRO_TECNICO), "finalizado(s) por outro técnico"], [contar("ja_finalizado"), "já finalizado(s)"], [contar("erro"), "com erro"],
-    [contar("nao_encontrado"), "não encontrado(s)"],
-    [contar("sem_descricao"), "sem descrição"], [contar("pronto"), "só conferido(s)"],
+    [contar("incerto"), "incerto(s): confira no SoftExpert"], [contar("nao_encontrado"), "não encontrado(s)"],
+    [contar("sem_descricao"), "sem descrição"], [contar("sem_encerramento"), "sem DT ENCERRAMENTO (R)"], [contar("pronto"), "só conferido(s)"],
   ] as Qualquer[][]).filter(([n]) => n > 0).map(([n, texto]) => `${n} ${texto}`);
   return `${resultado.cancelado ? "Finalização cancelada" : "Finalização no SoftExpert terminada"}: ${partes.join(", ")}.`;
 }
