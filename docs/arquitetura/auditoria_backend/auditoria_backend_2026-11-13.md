@@ -92,12 +92,13 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
   - os módulos `domains/ux_*` repetem o padrão.
 - Impacto: uma falha real na importação do Dashboard ou numa consulta ao Endpoint some sem rastro, e o diagnóstico depende de reproduzir o erro.
 - Solução: `logger.debug` (ou `warning`, quando muda o resultado) com o tipo da exceção, sem mensagem nem dado pessoal, como `core/logging_setup.py` já faz. Nos fallbacks do Playwright, um `debug` basta.
-- Resolvido em parte em 26/11/2026 (PARCIAL): logados, só com o tipo da exceção, os pontos de `domains/endpoint_lookup.py`, `domains/ux_chamados.py` e 3 de `routers/sebrae_dashboard.py`. Continuam silenciosos `routers/sebrae_dashboard.py:384`, `domains/ux_ticket.py:202, 218, 416`, `domains/ux_ticket_browser.py:104, 127` e `domains/ux_chamados_browser.py:306, 434`.
+- Resolvido em parte em 26/11/2026 (PARCIAL): logados, só com o tipo da exceção, os pontos de `domains/endpoint_lookup.py`, `domains/ux_chamados.py` e 3 de `routers/sebrae_dashboard.py`. Continuam silenciosos `routers/sebrae_dashboard.py:225` (era `:384` antes da extração do achado 3), `domains/ux_ticket.py:202, 218, 416`, `domains/ux_ticket_browser.py:104, 127` e `domains/ux_chamados_browser.py:306, 434`.
 
 **3. Fábricas de router gigantes.** Média, confirmado.
 - Evidência: `create_sebrae_dashboard_router` com 998 linhas, `create_inventory_history_router` com 798 e `create_operations_router` com 549 (seção 4).
 - Impacto: as funções internas não são testáveis isoladamente, e toda mudança no Sebrae (F5) mexe num bloco de quase mil linhas. É a continuação natural do passo 10, que tirou peso do `main.py` mas o levou para as rotas.
 - Solução: extrair para `domains/` a lógica que não depende de HTTP, como já foi feito com `domains/history_restore.py`, e deixar na fábrica só a validação do payload e a conversão de erros.
+- Resolvido em parte em 26/11/2026 (PARCIAL, 1ª etapa): o estado da tela F5 (`GET /api/sebrae/novos`), os leitores compartilhados (relatório, índice do Endpoint, leitura dos antigos) e `SebraeDashboardServices` foram para `domains/sebrae_dashboard_tela.py`. `create_sebrae_dashboard_router` caiu de 1.236 para 983 linhas (`routers/sebrae_dashboard.py:175`). Faltam a importação (`_importar_bloqueado` e auxiliares), a gravação (`_gravar_atualizacao`, `_linhas_novas`, `_edicoes`) e a finalização (`_finalizar_marcados`, `_disparar`).
 
 **4. E-mails, login padrão e URL de OneDrive pessoal fixos no código.** Alta, confirmado (o repositório no GitHub é público).
 - Evidência (os valores não são repetidos aqui):
