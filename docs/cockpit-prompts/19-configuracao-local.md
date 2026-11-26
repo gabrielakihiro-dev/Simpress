@@ -70,6 +70,8 @@ Regras:
 
 Reaproveita o que já existe: `GET` e `PUT /api/config/cliente` (`routers/local_setup.py`, `load_client_config` e `save_client_config` em `domains/local_setup.py`). Nada é duplicado; o modal só chama essas rotas.
 
+Arquivo ilegível (26/11/2026): se `config/cliente.json` ou `config/representantes_regionais.json` estiver com JSON inválido, o `PUT` copia o original para `<nome>.corrompido-AAAAMMDD-HHMMSS.json` na mesma pasta (fora do Git) logo antes de regravar e segue com os valores recebidos; arquivo travado não grava nem copia, e se a cópia falhar nada é gravado.
+
 | Campo | Validação |
 |---|---|
 | Contrato | só dígitos, até 12, sem zero à esquerda (já existe) |

@@ -22,7 +22,9 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from core.errors import DomainBusyError, DomainConflictError, DomainValidationError
-from core.integrity import FileBusyError, FileTransactionError, atomic_write_bytes, atomic_write_json, lock_paths
+from core.integrity import (
+    FileBusyError, FileTransactionError, atomic_write_bytes, atomic_write_json, lock_paths, quarantine_corrupt_file,
+)
 from domains import sebrae_novos
 from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
 from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
@@ -1029,6 +1031,28 @@ def ler_conflitos(state_dir: Path) -> Optional[Dict[str, Any]]:
     return _ler_json(caminho_conflitos(state_dir))
 
 
+def _escolhas_para_gravar(state_dir: Path) -> "tuple[Dict[str, str], bool]":
+    """(escolhas a manter, arquivo corrompido) para um ciclo ler→gravar; chame sob ``lock_paths``.
+
+    Só JSON inválido ou que não é objeto conta como corrompido; outro ``OSError`` (arquivo travado) sobe e nada é gravado."""
+    try:
+        dados = json.loads(caminho_conflitos(state_dir).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}, False
+    except ValueError:
+        return {}, True
+    if not isinstance(dados, dict):
+        return {}, True
+    escolhas = dados.get("escolhas")
+    return ({str(c): str(v) for c, v in escolhas.items()} if isinstance(escolhas, dict) else {}), False
+
+
+def _quarentena_dos_conflitos(state_dir: Path) -> None:
+    """Copia o arquivo ilegível logo antes de regravá-lo ou apagá-lo; se a cópia falhar, nada é gravado."""
+    quarantine_corrupt_file(caminho_conflitos(state_dir))
+    logger.warning("Arquivo de conflitos do Dashboard ilegível copiado para quarentena antes de regravar.")
+
+
 def escolhas_dos_conflitos(state_dir: Path) -> Dict[str, str]:
     escolhas = (ler_conflitos(state_dir) or {}).get("escolhas")
     return {str(chave): str(valor) for chave, valor in escolhas.items()} if isinstance(escolhas, dict) else {}
@@ -1038,10 +1062,14 @@ def gravar_conflitos(
     state_dir: Path, *, base_sha256: str, sharepoint_sha256: str, gerado_sha256: str, conflitos: Sequence[Mapping[str, Any]],
 ) -> None:
     """Os valores das células ficam só neste arquivo (lido pela tela); as escolhas já feitas são mantidas."""
-    atomic_write_json(caminho_conflitos(state_dir), {
-        "base_sha256": base_sha256, "sharepoint_sha256": sharepoint_sha256, "gerado_sha256": gerado_sha256,
-        "criado_em": agora_iso(), "conflitos": [dict(conflito) for conflito in conflitos], "escolhas": escolhas_dos_conflitos(state_dir),
-    })
+    with lock_paths([caminho_conflitos(state_dir)]):
+        escolhas, corrompido = _escolhas_para_gravar(state_dir)
+        if corrompido:
+            _quarentena_dos_conflitos(state_dir)
+        atomic_write_json(caminho_conflitos(state_dir), {
+            "base_sha256": base_sha256, "sharepoint_sha256": sharepoint_sha256, "gerado_sha256": gerado_sha256,
+            "criado_em": agora_iso(), "conflitos": [dict(conflito) for conflito in conflitos], "escolhas": escolhas,
+        })
 
 
 def limpar_conflitos(state_dir: Path) -> None:
@@ -1053,11 +1081,14 @@ def concluir_conflitos(state_dir: Path) -> None:
 
     O arquivo gerado continua com o valor do site; sem a escolha "sharepoint" guardada, o próximo envio da mesma importação
     acusaria de novo o mesmo conflito."""
-    escolhas = escolhas_dos_conflitos(state_dir)
-    if not escolhas:
-        limpar_conflitos(state_dir)
-        return
-    atomic_write_json(caminho_conflitos(state_dir), {"criado_em": agora_iso(), "conflitos": [], "escolhas": escolhas})
+    with lock_paths([caminho_conflitos(state_dir)]):
+        escolhas, corrompido = _escolhas_para_gravar(state_dir)
+        if corrompido:
+            _quarentena_dos_conflitos(state_dir)
+        if not escolhas:
+            limpar_conflitos(state_dir)
+            return
+        atomic_write_json(caminho_conflitos(state_dir), {"criado_em": agora_iso(), "conflitos": [], "escolhas": escolhas})
 
 
 def nome_pendente(momento: datetime, ordem_criacao: int) -> str:
