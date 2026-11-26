@@ -36,7 +36,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.integrity import FileBusyError, FileTransactionError, atomic_write_bytes, lock_paths  # noqa: E402
-from core.errors import DomainBusyError, DomainConflictError  # noqa: E402
+from core.errors import DomainBusyError, DomainConflictError, DomainValidationError  # noqa: E402
 from domains import sebrae_dashboard_gravacao as gravacao  # noqa: E402
 from domains import sebrae_finalizacao as fin  # noqa: E402
 from domains import sebrae_credenciais, sebrae_novos  # noqa: E402
@@ -50,6 +50,34 @@ STATE_DIR = ROOT / "data" / "state"
 ORIGEM = "Sebrae fechar"
 _ERROS_ENVIO_LOCAL = (DomainBusyError, DomainConflictError, FileBusyError, FileTransactionError, OSError)
 MOTIVO_SESSAO = "O SoftExpert pediu login de novo; entre no SoftExpert no Chrome de automação e finalize outra vez."
+AVISO_REGISTRO = "O registro local falhou; não peça de novo antes de conferir no SoftExpert."
+
+
+def _incertos_pendentes(state_dir: Path, log: Callable[[str], None]) -> List[str]:
+    """Defesa em camadas: chamados que o resultado anterior deixou ``incerto`` (ou com Finalizar clicado sem ``ok``) e que o
+    estado não guarda como incerto nem finalizado, porque o registro local falhou. Lido ANTES de o resultado ser sobrescrito;
+    cada um é regravado no estado e, se ainda falhar, segue em ``incertos_pendentes`` do novo resultado: nunca é clicado de novo."""
+    anterior = fin.ler_resultado(state_dir) or {}
+    numeros = {str(n) for n in anterior.get("incertos_pendentes") or []}
+    for item in anterior.get("resultados") or []:
+        if isinstance(item, dict) and (item.get("status") == fin.STATUS_INCERTO or (
+                "finalizar" in (item.get("escritas") or []) and item.get("status") not in fin.STATUS_FINALIZADOS)):
+            numeros.add(str(item.get("numero") or ""))
+    pendentes: List[str] = []
+    for bruto in sorted(numeros):
+        try:
+            numero = fin.validar_numero(bruto)
+            status = (fin.ler_estado(state_dir).get(numero, {}).get("finalizacao") or {}).get("status")
+            if status in fin.STATUS_FINALIZADOS or status == fin.STATUS_INCERTO:
+                continue
+            fin.registrar_finalizacao(state_dir, numero, fin.STATUS_INCERTO)
+            log(f"{numero}: o incerto da finalização anterior foi registrado agora.")
+        except DomainValidationError:
+            continue
+        except Exception as erro:  # noqa: BLE001 - estado ocupado ou ilegível: o número segue protegido pela lista
+            log(f"{numero}: o incerto anterior continua sem registro local ({type(erro).__name__}); {AVISO_REGISTRO}")
+            pendentes.append(numero)
+    return pendentes
 
 
 def _fechar_aba(pagina: Optional["Page"]) -> None:
@@ -311,6 +339,7 @@ def executar(
     job = fin.consumir_job(state_dir)
     if job is None:
         raise rotinas.RotinaErro("Não há pedido de finalização válido (ele vale por 2 horas); peça de novo pelo site.")
+    pendentes = _incertos_pendentes(state_dir, log)  # antes de qualquer ação sobrescrever o resultado anterior
     if job["acao"] == fin.ACAO_REENVIAR:
         return _reenviar_pendente(context, rotinas, state_dir, log)
     if job["acao"] == fin.ACAO_REENVIAR_SNAPSHOT:
@@ -320,7 +349,7 @@ def executar(
     resultado: Dict[str, Any] = {
         "acao": fin.ACAO_FINALIZAR, "iniciado_em": fin.agora_iso(), "terminado_em": None, "em_andamento": True,
         "confirmar_final": confirmar, "cancelado": False, "resultados": [], "pulados": list(job["pulados"]), "sharepoint": None,
-        "planilha": "",
+        "planilha": "", "incertos_pendentes": pendentes,
     }
     salvar = lambda: fin.gravar_resultado(state_dir, resultado)  # noqa: E731
     salvar()
@@ -332,7 +361,7 @@ def executar(
     try:
         try:
             _processar(context, rotinas, modulo, state_dir, job["numeros"], confirmar, resultado, encerramentos, salvar, agora, abas,
-                       job.get("encerramentos_manuais") or {}, job.get("encerramentos") or {})
+                       job.get("encerramentos_manuais") or {}, job.get("encerramentos") or {}, set(pendentes))
         except rotinas.RotinaCancelada:
             resultado["cancelado"] = True
             raise
@@ -373,11 +402,13 @@ def _processar(
     context: "BrowserContext", rotinas: Any, modulo: Any, state_dir: Path, numeros: List[str], confirmar: bool,
     resultado: Dict[str, Any], encerramentos: Dict[str, str], salvar: Callable[[], None], agora: Callable[[], datetime],
     abas: List[Any], manuais: Optional[Dict[str, str]] = None, datas: Optional[Dict[str, str]] = None,
+    pendentes: Optional[set] = None,
 ) -> None:
     """Um chamado por vez; a falha de um nunca interrompe os outros. A aba aberta entra em ``abas``.
 
     ``datas`` = DT ENCERRAMENTO (R) digitada pelo usuário para cada chamado (obrigatória; vai à coluna R no ``ok``).
-    ``manuais`` = o mesmo R, só dos que a leitura não achou; só vale para ``nao_encontrado`` e nunca no modo sem finalizar."""
+    ``manuais`` = o mesmo R, só dos que a leitura não achou; só vale para ``nao_encontrado`` e nunca no modo sem finalizar.
+    ``pendentes`` = ``incerto`` do resultado anterior sem registro no estado (``_incertos_pendentes``): tratados como ``incerto``."""
     log = lambda texto: rotinas.log(ORIGEM, texto)  # noqa: E731
     pagina: Optional["Page"] = None
     parada = ""  # preenchido quando o SoftExpert fica indisponível: os que faltam viram erro com esse motivo
@@ -389,20 +420,24 @@ def _processar(
         salvar()
         return item
 
-    def registrar(item: Dict[str, Any], status: str, quando: str = "") -> None:
-        """Estado do chamado depois de anotado o resultado: a falha local vira aviso no item, nunca derruba o lote nem perde o R."""
-        try:
-            fin.registrar_finalizacao(state_dir, item["numero"], status, quando)
-        except Exception as erro:  # noqa: BLE001 - DomainBusyError, FileBusyError, OSError: só o tipo vai ao log
-            log(f"{item['numero']}: o registro local da finalização falhou ({type(erro).__name__}).")
-            item["mensagem"] = " ".join(filter(None, [
-                item.get("mensagem"), "O registro local falhou; não peça de novo antes de conferir no SoftExpert."]))
-            salvar()
+    def registrar(numero: str, status: str, quando: str = "") -> bool:
+        """Estado do chamado, com uma nova tentativa (cada uma já espera a trava por até 15 s). False = não gravou; nunca levanta."""
+        for tentativa in (1, 2):
+            try:
+                fin.registrar_finalizacao(state_dir, numero, status, quando)
+                return True
+            except Exception as erro:  # noqa: BLE001 - DomainBusyError, FileBusyError, OSError: só o tipo vai ao log
+                log(f"{numero}: o registro local da finalização falhou ({type(erro).__name__}, tentativa {tentativa}).")
+        log(f"{numero}: {AVISO_REGISTRO}")
+        return False
 
     def finalizado(numero: str, quando: str, **extras: Any) -> None:
         """``ok``: R do usuário (regra de 24/11/2026, nunca a hora atual), anotado ANTES do registro local, e senha apagada."""
         encerramentos[numero] = quando
-        registrar(anotar(numero, fin.STATUS_OK, encerrado_em=quando, **extras), fin.STATUS_OK, quando)
+        item = anotar(numero, fin.STATUS_OK, encerrado_em=quando, **extras)
+        if not registrar(numero, fin.STATUS_OK, quando):
+            item["mensagem"] = " ".join(filter(None, [item.get("mensagem"), AVISO_REGISTRO]))
+            salvar()
         log(f"{numero}: finalizado no SoftExpert.")
         try:  # senha guardada para o F5 sai junto com o chamado (regra do usuário, 19/11/2026)
             sebrae_credenciais.remover(state_dir, numero)
@@ -410,8 +445,11 @@ def _processar(
             log(f"{numero}: senha guardada não apagada ({type(erro).__name__}).")
 
     def incerto(numero: str, mensagem: str = fin.MENSAGEM_INCERTO, **extras: Any) -> None:
+        """Estado ANTES do resultado: se o resultado não for salvo, o estado ainda impede um segundo clique (e vice-versa)."""
         log(f"{numero}: Finalizar clicado sem confirmação (incerto); o site não clica de novo.")
-        registrar(anotar(numero, fin.STATUS_INCERTO, mensagem=mensagem, **extras), fin.STATUS_INCERTO)
+        if not registrar(numero, fin.STATUS_INCERTO):
+            mensagem = f"{mensagem} {AVISO_REGISTRO}"
+        anotar(numero, fin.STATUS_INCERTO, mensagem=mensagem, **extras)
 
     def anexo_enviado(numero: str, pdf: Optional[Path], escritas: List[str]) -> str:
         """``anexo`` sem ``finalizar``: o PDF não sobe de novo no próximo pedido. Devolve o aviso para a mensagem."""
@@ -451,7 +489,7 @@ def _processar(
             log(f"{numero}: sem DT ENCERRAMENTO (coluna R) informada; pulado.")
             anotar(numero, fin.STATUS_SEM_ENCERRAMENTO, mensagem="Informe a DT ENCERRAMENTO (coluna R) para finalizar o chamado.")
             continue
-        ja_incerto = fin.finalizacao_incerta(state_dir, numero)
+        ja_incerto = numero in (pendentes or set()) or fin.finalizacao_incerta(state_dir, numero)
         if parada:
             if ja_incerto:  # Finalizar já clicado antes: nunca "finalize outra vez"
                 anotar(numero, fin.STATUS_INCERTO, mensagem=fin.MENSAGEM_INCERTO, motivo="softexpert_indisponivel")

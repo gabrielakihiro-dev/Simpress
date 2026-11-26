@@ -525,6 +525,31 @@ class IncertoTest(FecharBase):
         self.assertIn("PDF", self.por_numero()[A]["mensagem"])
         self.assertTrue(fin.pdf_ja_enviado(self.dir, A))
 
+    def test_falha_ao_gravar_incerto_e_novo_pedido_nao_clica_de_novo(self):
+        # Defesa em camadas: o estado não guardou o incerto (duas tentativas falharam); o resultado anterior protege o próximo pedido.
+        self.descrever(A)
+        with patch.object(sebrae_fechar.fin, "registrar_finalizacao", side_effect=FileBusyError("ocupado")) as registrar:
+            self.rodar({A: com_escritas(SessaoExpirada("login"), "finalizar")}, [A])
+        self.assertEqual(registrar.call_count, 2)  # uma nova tentativa
+        self.assertIsNone(self.estado(A))
+        self.assertIn("não peça de novo antes de conferir no SoftExpert", self.por_numero()[A]["mensagem"])
+        _, mod = self.rodar({A: ok()}, [A], central={A: True})
+        self.assertEqual(mod.chamadas, [])  # finalizar_chamado nunca chamado: nenhum clique
+        self.assertEqual(mod.conferidos, [A])  # só a conferência da central
+        self.assertEqual(self.por_numero()[A]["status"], fin.STATUS_INCERTO)
+        self.assertEqual(self.estado(A), fin.STATUS_INCERTO)  # o registro foi refeito no início da nova rotina
+
+    def test_incerto_sem_registro_segue_protegido_mesmo_quando_outro_chamado_e_pedido(self):
+        self.descrever(A, B)
+        with patch.object(sebrae_fechar.fin, "registrar_finalizacao", side_effect=FileBusyError("ocupado")):
+            with self.assertRaises(RotinaCancelada):
+                self.rodar({A: com_escritas(RotinaCancelada(), "finalizar")}, [A])
+            self.rodar({B: com_status("nao_encontrado")}, [B])  # o estado continua sem gravar: A segue na lista
+        self.assertEqual(self.resultado()["incertos_pendentes"], [A])
+        _, mod = self.rodar({A: ok()}, [A], central={A: False})
+        self.assertEqual(mod.chamadas, [])
+        self.assertEqual(self.por_numero()[A]["status"], "ok")
+
     def test_falha_em_registrar_finalizacao_nao_perde_o_ok_nem_o_r(self):
         self.descrever(A, B)
         with patch.object(sebrae_fechar.fin, "registrar_finalizacao", side_effect=FileBusyError("ocupado")):
