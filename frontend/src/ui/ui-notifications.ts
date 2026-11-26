@@ -49,8 +49,11 @@ export function createNotifications(options: Qualquer) {
     let foco = false;
     const pausar = () => window.clearTimeout(timer);
     const retomar = () => { if (!sumindo && !mouse && !foco) { pausar(); timer = window.setTimeout(sumir, 4000); } };
-    toast.addEventListener("mouseenter", () => { mouse = true; pausar(); });
-    toast.addEventListener("mouseleave", () => { mouse = false; retomar(); });
+    // Só com mouse de verdade: no toque, o toque deixa um "mouse em cima" que nunca sai e o toast ficaria preso sobre os botões.
+    if (window.matchMedia?.("(hover: hover)").matches) {
+      toast.addEventListener("mouseenter", () => { mouse = true; pausar(); });
+      toast.addEventListener("mouseleave", () => { mouse = false; retomar(); });
+    }
     toast.addEventListener("focusin", () => { foco = true; pausar(); });
     toast.addEventListener("focusout", (evento: Qualquer) => { if (toast.contains(evento.relatedTarget)) return; foco = false; retomar(); });
   }

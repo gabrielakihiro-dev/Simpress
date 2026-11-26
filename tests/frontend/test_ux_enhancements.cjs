@@ -155,7 +155,9 @@ test("toast pausa com o mouse em cima ou o foco dentro e some 4 s depois de sair
   const window = {
     setTimeout: (fn, ms) => { timers.set(proximo, { fn, em: agora + ms }); return proximo++; },
     clearTimeout: id => timers.delete(id),
+    matchMedia: consulta => ({ matches: consulta === "(hover: hover)" && comMouse }),
   };
+  let comMouse = true;
   const passar = ms => {
     agora += ms;
     for (const [id, t] of [...timers]) if (t.em <= agora) { timers.delete(id); t.fn(); }
@@ -197,6 +199,16 @@ test("toast pausa com o mouse em cima ou o foco dentro e some 4 s depois de sair
   notifications.show("Salvo.");
   passar(4000);
   assert.equal(removido, true, "sem interação, segue os 4 s");
+
+  // Tela de toque (sem hover): só o foco pausa; o toque não prende o toast sobre os botões.
+  comMouse = false;
+  for (const tipo of Object.keys(ouvintes)) delete ouvintes[tipo];
+  removido = false;
+  notifications.show("Cidade, endereço e CNPJ são campos obrigatórios.", "warning");
+  assert.equal(ouvintes.mouseenter, undefined);
+  assert.equal(typeof ouvintes.focusin, "function");
+  passar(4000);
+  assert.equal(removido, true, "no toque o toast some nos 4 s");
 });
 
 test("index loads the refinement layer last and links every transfer label", () => {
