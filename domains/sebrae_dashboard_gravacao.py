@@ -1071,15 +1071,14 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
             if "xl/styles.xml" in arquivo.namelist():
                 estilos = arquivo.read("xl/styles.xml").decode("utf-8")
                 ElementTree.fromstring(estilos)
-                lido = _cellxfs(estilos)
-                if lido is not None and any(
-                    int(m.group(2)) >= 2 and int(m.group(2)) <= pacote.tabela_ultima_linha and not (
-                        int((re.search(r'\bs="(\d+)"', m.group(3)) or [0, 0])[1]) < len(lido[1])
-                        and _a_esquerda(lido[1][int((re.search(r'\bs="(\d+)"', m.group(3)) or [0, 0])[1])])
-                    )
-                    for m in _CELULA_FGH.finditer(folha)
-                ):
-                    raise GravacaoInvalida("F, G e H da cópia não ficaram alinhadas à esquerda; nada foi entregue.")
+                novo, original = _cellxfs(estilos), _cellxfs(pacote.texto("xl/styles.xml"))
+                if novo is not None and original is not None:  # else ``_alinhar_a_esquerda`` left the styles alone
+                    for m in _CELULA_FGH.finditer(folha):
+                        indice = re.search(r'\bs="(\d+)"', m.group(3))
+                        estilo = int(indice.group(1)) if indice else 0
+                        # a cell whose style pointed outside the original list is left as it was (not blocking)
+                        if 2 <= int(m.group(2)) <= pacote.tabela_ultima_linha and estilo < len(original[1]) and not (estilo < len(novo[1]) and _a_esquerda(novo[1][estilo])):
+                            raise GravacaoInvalida("F, G e H da cópia não ficaram alinhadas à esquerda; nada foi entregue.")
             if categorias and not _categorias_conferem(arquivo, pacote):
                 raise GravacaoInvalida("A lista de categorias da cópia não confere com a original; nada foi entregue.")
         if ler_coluna_c(conteudo) != anteriores | frozenset(novos):

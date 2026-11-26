@@ -1215,6 +1215,12 @@ class AlinhamentoAEsquerdaTest(unittest.TestCase):
         self.assertEqual(partes_de(saida)["xl/styles.xml"], partes_de(errado)["xl/styles.xml"])
         self.assertEqual(estilo_de(saida, "G2"), 112)
 
+    def test_estilo_fora_do_intervalo_nao_bloqueia_e_fica_como_estava(self):
+        base = com_s(com_estilos(tres()), "F2", 999)
+        saida = G.registrar_encerramentos(base, {"UTIC-2026-0001": "26/11/2026 10:00"})[0].conteudo
+        self.assertEqual(estilo_de(saida, "F2"), 999)
+        self.assertIn('horizontal="left"', xfs_de(saida)[estilo_de(saida, "H2")])
+
     def test_reaplicar_parte_do_styles_do_sharepoint(self):
         extra = '<xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0"/>'
         base = com_estilos(tres())
