@@ -319,6 +319,22 @@ test("localStorage que lança erro ou guarda lixo não quebra o vínculo", async
   assert.deepEqual(env.vinculo.pendenciaSemVinculo(), []);
 });
 
+test("pendência sem vínculo expira em 7 dias; item antigo sem data é carimbado e fica", async () => {
+  const DIA = 24 * 60 * 60 * 1000;
+  const storage = fakeStorage();
+  const item = (id, extra) => ({ movimentacao: { id }, payload: PAYLOAD, chave: id, ...extra });
+  storage.data.set("simpress:cobertura:sem-vinculo", JSON.stringify({
+    velho: item("velho", { criadoEm: Date.now() - 8 * DIA }),
+    novo: item("novo", { criadoEm: Date.now() - 6 * DIA }),
+    legado: item("legado"),
+  }));
+  const env = await installHistory({ storage, responses: [] });
+  assert.deepEqual(env.vinculo.pendenciaSemVinculo().map(p => p.movimentacao.id).sort(), ["legado", "novo"]);
+  const gravado = JSON.parse(storage.data.get("simpress:cobertura:sem-vinculo"));
+  assert.deepEqual(Object.keys(gravado).sort(), ["legado", "novo"]);
+  assert.ok(Math.abs(gravado.legado.criadoEm - Date.now()) < 5000);
+});
+
 test("Alterar Endereço: texto com os endereços reais; botão Transporte (#btn-alterar-endereco) aceso só com série e os dois endereços", () => {
   const env = bootTransferForm();
   const botao = env.document.getElementById("btn-alterar-endereco");
