@@ -29,6 +29,7 @@ from xml.etree import ElementTree
 from domains.sebrae_chamados import extrair_numeros
 from domains.sebrae_dashboard import ABA, DashboardInvalido, EDITAVEIS_PELO_SITE, MANUAIS, _validar_pacote, ler_coluna_c
 from domains.sebrae_novos import STATUS_FINALIZADO
+from domains.sebrae_vinculos import _os_chave
 
 logger = logging.getLogger(__name__)
 
@@ -1154,6 +1155,7 @@ def _bruto_do_site(folha: _Folha, numero: int, letra: str) -> str:
 
 def reaplicar(
     base: bytes, gerado: bytes, sharepoint: bytes, *, enviado: Optional[bytes] = None, escolhas: Optional[Mapping[str, str]] = None,
+    removidas: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> ResultadoMerge:
     """Re-applies what the site changed (``gerado`` against ``base``) onto the newer ``sharepoint`` file, cell by cell.
 
@@ -1168,9 +1170,12 @@ def reaplicar(
     ``base`` one in every data column; otherwise each operation is a conflict. A UTIC repeated in ``base`` or in SharePoint is
     a conflict too. These cannot be settled with ``site`` (no certain target row), only with ``sharepoint``. A row of
     ``base`` edited by the site and absent in SharePoint is a ``linha_apagada`` conflict: ``site`` puts it back, ``sharepoint`` drops it.
+    So is a new row of ``gerado`` that ``enviado`` already had and SharePoint no longer has (its ``site`` is empty: only the letters).
 
     ``escolhas``: ``{id: "sharepoint" | "site"}``; an id that matches no conflict is ignored. The id is the first 12 hex of
     the sha256 of ``chamado|coluna|sharepoint|site``, so a choice never settles a conflict with other values.
+    ``removidas``: ``{UTIC: [OS]}`` of ``sebrae_os_recusadas.removidas``; given (even empty), an empty E erases only when the ``base``
+    E is one of the ticket's removed OS (``base`` may be the copy already sent, whose E the site did not fill); ``None``: any empty E.
     Raises ``DashboardInvalido`` (message without cell values) when a copy is not the expected Dashboard.
     """
     escolhas = escolhas or {}
@@ -1205,6 +1210,11 @@ def reaplicar(
         if n_b is None and not utic:
             raise GravacaoInvalida(f"A cópia a enviar tem uma linha sem número UTIC que não estava na importação (linha {n_g}); nada foi entregue.")
         if n_b is None and utic not in s.por_utic:
+            if e is not None and utic in e.por_utic:  # already sent and deleted in SharePoint since: never comes back by itself
+                colunas = ",".join(letra for letra in COLUNAS_DE_DADO if letra != "C" and g.valor(n_g, letra) != "")
+                if vale_o_site(utic, colunas, "", "", "linha_apagada"):  # only the letters: no cell text in the conflicts file
+                    acrescentar.append(n_g)
+                continue
             acrescentar.append(n_g)  # new ticket, not in SharePoint yet
             continue
         n_e = e.por_utic[utic][0] if e is not None and utic and len(e.por_utic.get(utic, [])) == 1 else None
@@ -1213,7 +1223,8 @@ def reaplicar(
             site = g.valor(n_g, letra)
             no_base = b.valor(n_b, letra) if n_b is not None else ""
             # única operação de apagar: a E vazia no site sobre uma E preenchida na base só vem de limpar_e (Remover, 18/11/2026)
-            apagar_e = letra == "E" and site == "" and no_base != ""
+            apagar_e = letra == "E" and site == "" and no_base != "" and (
+                removidas is None or (bool(utic) and _os_chave(no_base) in {_os_chave(os_) for os_ in removidas.get(utic, ())}))
             if letra == "C" or (site == "" and not apagar_e) or site == no_base:
                 continue
             if n_e is not None and e.valor(n_e, letra) == site:  # type: ignore[union-attr]

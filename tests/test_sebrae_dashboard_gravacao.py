@@ -1,5 +1,6 @@
 import hashlib
 import io
+import json
 import re
 import unittest
 import zipfile
@@ -881,6 +882,15 @@ class ReaplicarTest(unittest.TestCase):
         self.assertIsNone(resultado.conteudo)
         self.assertEqual([(c["coluna"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("E", "999", "")])
 
+    def test_com_removidas_a_e_vazia_so_apaga_a_os_que_o_usuario_removeu(self):
+        # Ancestor = copy already sent: an E filled by that send and empty now is not a Remover unless the registry says so.
+        base = _antes_da_coluna_p(tres(), 2, texto("E2", "7365311"))
+        gerado = G.atualizar(base, limpar_e={"UTIC-2026-0001": "7365311"}).conteudo
+        for removidas, apaga in (({}, False), ({"UTIC-2026-0001": ["999"]}, False), ({"UTIC-2026-0002": ["7365311"]}, False), ({"UTIC-2026-0001": [" 7365311 "]}, True)):
+            with self.subTest(removidas=removidas):
+                saida = self.ok(base, gerado, base, removidas=removidas)
+                self.assertEqual("E" not in por_chamado(saida)["UTIC-2026-0001"], apaga)
+
     def test_ac2_mesma_celula_com_valores_diferentes_e_conflito_sem_conteudo(self):
         base = tres()
         gerado = do_site(base, {"UTIC-2026-0001": {"B": "REDE", "J": "INCIDENTE"}})
@@ -982,6 +992,27 @@ class ReaplicarTest(unittest.TestCase):
         self.assertIn("<v>46000.5</v>", linha_xml(reinserida, 3))  # the date cell comes from the site as it is
         descartada = self.ok(base, gerado, sp, escolhas={identificador: "sharepoint"})
         self.assertTrue(G.mesmos_valores(descartada, sp))
+
+    def test_chamado_novo_ja_enviado_e_apagado_no_sharepoint_e_conflito_so_com_as_letras(self):
+        # Sent in the last send, then deleted in SharePoint: it does not come back by itself, and the conflict keeps no cell text.
+        nova = {**NOVA, "C": "UTIC-2026-0010", "H": "DESCRICAO-SINTETICA-X", "I": "NOME-SINTETICO-X"}
+        base = tres()
+        enviado = do_site(base, novas=[nova])
+        gerado = do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}}, novas=[nova])
+        sp = _antes_da_coluna_p(base, 3, texto("I3", "Ana"))  # SharePoint without the new ticket
+        resultado = G.reaplicar(base, gerado, sp, enviado=enviado)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["chamado"], c["tipo"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("UTIC-2026-0010", "linha_apagada", "", "")])
+        self.assertEqual(resultado.conflitos[0]["coluna"], "A,B,D,E,F,G,H,I,J,P")
+        gravado = json.dumps(resultado.conflitos, ensure_ascii=False)
+        for sensivel in ("DESCRICAO-SINTETICA-X", "NOME-SINTETICO-X"):
+            self.assertNotIn(sensivel, gravado)
+        identificador = resultado.conflitos[0]["id"]
+        self.assertNotIn("UTIC-2026-0010", por_chamado(self.ok(base, gerado, sp, enviado=enviado, escolhas={identificador: "sharepoint"})))
+        de_volta = por_chamado(self.ok(base, gerado, sp, enviado=enviado, escolhas={identificador: "site"}))
+        self.assertEqual(de_volta["UTIC-2026-0010"], por_chamado(gerado)["UTIC-2026-0010"])
+        # never sent: still a plain new ticket that is appended
+        self.assertIn("UTIC-2026-0010", por_chamado(self.ok(base, gerado, sp, enviado=base)))
 
     def test_r_com_serial_inteiro_e_so_data_sem_00_00(self):
         self.assertEqual(G._valor_legivel("R", "<c r=\"R2\"><v>46331</v></c>", []), "05/11/2026")
