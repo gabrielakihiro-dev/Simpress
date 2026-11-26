@@ -225,6 +225,53 @@ class EdicaoManualNoSharePointTests(unittest.TestCase):
                 self.assertEqual(self.saida.read_bytes(), pendente)
                 self.assertFalse(self.preservados.exists())
 
+    # 3c. merged send: SharePoint got the output merged with its hand edits, so the sent hash is not the output's
+    def gravar_envio(self, status: str, sha256: str, sha256_origem=None) -> dict:
+        registro = {"id": "a" * 32, "status": status, "sha256": sha256, "sha256_origem": sha256_origem, "mesclado": sha256_origem is not None,
+                    "copias": [], "limpeza_pendente": status in ("preparado", "incerto", "confirmado")}
+        fin._gravar_envio(Path(self.tmp.name), registro)
+        self.assertEqual(fin.ler_envio(Path(self.tmp.name)), registro)  # a valid record: a rejected one would pass for the wrong reason
+        return registro
+
+    def test_merged_send_confirmed_covers_the_output_and_unblocks_the_automatic_import(self):
+        pendente = self.importar_e_gerar_saida_pendente()
+        mesclado = linha_preenchida_a_mao(pendente)  # what went to SharePoint: the output plus a row typed there
+        fin.gravar_enviado(Path(self.tmp.name), hashlib.sha256(mesclado).hexdigest(), mesclado)
+        self.gravar_envio("concluido", hashlib.sha256(mesclado).hexdigest(), hashlib.sha256(pendente).hexdigest())
+        self.assertFalse(sebrae_novos.dashboard_saida_pendente(self.caminhos))
+        corpo = self.importar(mesclado, True)  # before the fix: 409 "aguardando envio"
+        self.assertNotIn("aviso", corpo)
+        self.assertNovaBaseIgual(mesclado)
+
+    def test_send_record_covering_the_output_by_status(self):
+        pendente = self.importar_e_gerar_saida_pendente()
+        digest = hashlib.sha256(pendente).hexdigest()
+        outro = hashlib.sha256(b"merged file").hexdigest()
+        casos = {("confirmado", digest, None): False, ("concluido", outro, digest): False,
+                 ("confirmado", outro, digest): False, ("falhou", outro, digest): True,
+                 ("incerto", outro, digest): True, ("preparado", outro, digest): True,
+                 ("concluido", outro, hashlib.sha256(b"older output").hexdigest()): True}
+        for (status, sha256, origem), esperado in casos.items():
+            with self.subTest(status=status, sha256=sha256 == digest, origem=origem == digest):
+                self.gravar_envio(status, sha256, origem)
+                self.assertEqual(sebrae_novos.dashboard_saida_pendente(self.caminhos), esperado)
+
+    def test_new_output_after_a_merged_send_is_pending(self):
+        pendente = self.importar_e_gerar_saida_pendente()
+        self.gravar_envio("concluido", hashlib.sha256(b"merged file").hexdigest(), hashlib.sha256(pendente).hexdigest())
+        self.assertFalse(sebrae_novos.dashboard_saida_pendente(self.caminhos))
+        self.atualizar(edicoes=[ChamadoManual(numero=TICKETS[1], B="REDE")])
+        self.assertNotEqual(self.saida.read_bytes(), pendente)
+        self.assertTrue(sebrae_novos.dashboard_saida_pendente(self.caminhos))
+
+    def test_unreadable_send_record_keeps_the_output_pending(self):
+        pendente = self.importar_e_gerar_saida_pendente()
+        self.gravar_envio("concluido", hashlib.sha256(b"merged file").hexdigest(), hashlib.sha256(pendente).hexdigest())
+        fin.caminho_envio(Path(self.tmp.name)).write_text("{corrompido", encoding="utf-8")
+        self.assertTrue(sebrae_novos.dashboard_saida_pendente(self.caminhos))  # no exception: the safe default
+        with self.assertRaisesRegex(DomainConflictError, "aguardando envio"):
+            self.importar(self.base, True)
+
     # 4. only a reorder
     def test_only_reordered_rows_import_and_the_output_is_preserved(self):
         pendente = self.importar_e_gerar_saida_pendente()
