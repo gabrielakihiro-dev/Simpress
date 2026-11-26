@@ -67,6 +67,19 @@ def hostname_de_curitiba(hostname: Any) -> bool:
     return normalizado.startswith("PRNOTE") and normalizado[len("PRNOTE"):].startswith(PREFIXOS_HOSTNAME_CURITIBA)
 
 
+def hostname_backup_com_cidade(hostname: Any, siglas: Iterable[str]) -> bool:
+    """`PRNOTEBK` ou `PRNOTEBKP` + sigla de cidade conhecida + número opcional (hífen e espaço ignorados).
+
+    `PRNOTEBKPAB01` tem duas leituras (BKP+AB, BK+PAB); basta uma ser sigla conhecida.
+    """
+    normalizado = normalize_reference_value(hostname)
+    if not normalizado.startswith("PRNOTEBK"):
+        return False
+    conhecidas = {normalize_reference_value(sigla) for sigla in siglas}
+    restos = (normalizado[len(forma):].rstrip("0123456789") for forma in ("PRNOTEBKP", "PRNOTEBK"))
+    return any(resto and resto in conhecidas for resto in restos)
+
+
 def hostname_e_macbook(hostname: Any) -> bool:
     """Lado do Endpoint: hostname de MacBook começa com `PRMAC`."""
     return normalize_reference_value(hostname).startswith("PRMAC")

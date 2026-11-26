@@ -319,7 +319,7 @@ SERIE_LOCAL_MAP = {
     "PAB": "Pato Branco", "PG": "Ponta Grossa", "PTU": "Porecatu",
     "RIO": "Rio Negro", "SJP": "São José dos Pinhais", "TBO": "Telêmaco Borba",
     "TOL": "Toledo", "UMU": "Umuarama", "UDV": "União da Vitória",
-    "BAR": "Barracão",
+    "BAR": "Barracão", "CWB": "Curitiba",
 }
 
 # Nomes antigos das regras de domains/regras_negocio.py, mantidos para quem já os importa.
