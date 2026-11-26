@@ -10,7 +10,21 @@ const PENDING_KEY = "simpress:cobertura:sem-vinculo";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Registro = Record<string, any>;
-export interface ItemPendente { movimentacao: Registro; payload: Payload; chave?: unknown }
+export interface ItemPendente { movimentacao: Registro; payload: Payload; chave?: unknown; criadoEm?: number }
+
+// LGPD: o payload tem nome, e-mail e celular do destinatário; a pendência expira em 7 dias (decisão de 26/11/2026).
+const PRAZO_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Carimba itens sem data (gravados antes do prazo existir) e apaga os vencidos. Devolve true se mudou algo.
+function podarVencidos(data: Record<string, ItemPendente>): boolean {
+  const agora = Date.now();
+  let mudou = false;
+  for (const [id, item] of Object.entries(data)) {
+    if (typeof item?.criadoEm !== "number") { item.criadoEm = agora; mudou = true; }
+    else if (agora - item.criadoEm > PRAZO_MS) { delete data[id]; mudou = true; }
+  }
+  return mudou;
+}
 
 interface Resposta { ok: boolean; status: number; corpo: Registro | null; rede: boolean; erro?: unknown }
 
@@ -22,7 +36,9 @@ const notify = (message: string, type = "success") => {
 function readPending(): Record<string, ItemPendente> {
   try {
     const data = JSON.parse(window.localStorage?.getItem(PENDING_KEY) || "{}");
-    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+    if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+    if (podarVencidos(data)) writePending(data);
+    return data;
   } catch {
     return {};
   }
@@ -39,7 +55,10 @@ function writePending(data: Record<string, ItemPendente>) {
 
 // Pendências desta página valem mesmo se o localStorage falhar.
 const memoryPending: Record<string, ItemPendente> = {};
-const allPending = (): Record<string, ItemPendente> => ({ ...memoryPending, ...readPending() });
+const allPending = (): Record<string, ItemPendente> => {
+  podarVencidos(memoryPending);
+  return { ...memoryPending, ...readPending() };
+};
 
 function errorMessage(body: Registro | null): string {
   const detail = body?.detail;
@@ -109,6 +128,7 @@ export async function linkToMovement(item: ItemPendente) {
       : "A planilha também não entrou no histórico."}`, "error");
     return { ok: false, status, detail: body?.detail };
   }
+  item.criadoEm ??= Date.now(); // nova tentativa mantém a data original: o prazo não renova
   memoryPending[movimentacao.id] = item;
   pending[movimentacao.id] = item;
   writePending(pending);
