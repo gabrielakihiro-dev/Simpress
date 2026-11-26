@@ -2727,15 +2727,20 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const descricoes: Record<string, string> = {};
     const observacoes: Record<string, string> = {};
     const lapis: Record<string, string> = {};
+    const lapisAbertos: string[] = []; // editor aberto sem nada digitado: volta aberto, sem aviso (nenhum texto em risco)
     Object.entries(estado.soft).forEach(([numero, soft]) => { const ref = estado.refs.get(numero); if (ref && ref.texto.value !== soft.enviado) descricoes[numero] = ref.texto.value; });
     Object.entries(estado.observacoes).forEach(([numero, reg]) => { if (reg.textarea && reg.textarea.value !== reg.enviado) observacoes[numero] = reg.textarea.value; });
-    document.querySelectorAll<ElementoSebrae>(".sebrae-descricao__editor[data-sujo] textarea[data-sebrae-descricao-editada]")
-      .forEach(campo => { lapis[campo.dataset.sebraeDescricaoEditada as string] = campo.value; });
-    return { descricoes, observacoes, lapis, restaurarFoco: guardarFoco() };
+    document.querySelectorAll<ElementoSebrae>(".sebrae-descricao__editor textarea[data-sebrae-descricao-editada]").forEach(campo => {
+      const editor = campo.closest<ElementoSebrae>(".sebrae-descricao__editor");
+      const numero = campo.dataset.sebraeDescricaoEditada as string;
+      if (editor?.dataset.sujo) lapis[numero] = campo.value;
+      else if (editor && !editor.hidden) lapisAbertos.push(numero);
+    });
+    return { descricoes, observacoes, lapis, lapisAbertos, restaurarFoco: guardarFoco() };
   }
 
   /** Reaplica o texto não salvo nos campos novos do mesmo chamado (o temporizador volta a salvar); chamado que saiu da lista é avisado uma vez e descartado. */
-  function reaplicarNaoSalvos({ descricoes, observacoes, lapis, restaurarFoco }: ReturnType<typeof guardarNaoSalvos>) {
+  function reaplicarNaoSalvos({ descricoes, observacoes, lapis, lapisAbertos, restaurarFoco }: ReturnType<typeof guardarNaoSalvos>) {
     const saiu = new Set<string>();
     let mantidos = 0;
     const digitar = (campo: ElementoSebrae, texto: string) => { campo.value = texto; campo.dispatchEvent(new Event("input")); mantidos += 1; };
@@ -2754,6 +2759,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       const campo = document.querySelector<ElementoSebrae>(`textarea[data-sebrae-descricao-editada="${numero}"]`);
       if (campo) digitar(campo, texto);
     });
+    lapisAbertos.forEach(numero => document.querySelector<ElementoSebrae>(`button[data-sebrae-editar-descricao="${numero}"]`)?.click());
     restaurarFoco();
     if (saiu.size) app.showToast(`${[...saiu].join(", ")}: o chamado saiu da lista; o texto não salvo foi descartado.`, "warning");
     else if (mantidos) app.showToast("Texto não salvo mantido nos campos.", "warning");
@@ -2765,17 +2771,24 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     reaplicarNaoSalvos(naoSalvos);
   }
 
-  /** Guarda o campo de texto em foco (descrição ou observação) e devolve quem o restaura no cartão refeito. */
+  /** Guarda o elemento em foco e devolve quem o restaura: nas listas, o do cartão refeito com os mesmos `data-*` (campo, lápis, botão),
+   * reabrindo o antigo que a recarga recolheu; fora delas, o próprio elemento (o clique que reabre o lápis não pode levar o foco). */
   function guardarFoco() {
     const ativo = document.activeElement as ElementoSebrae | null;
-    const [atributo, numero] = ativo?.dataset?.sebraeDescricao ? ["data-sebrae-descricao", ativo.dataset.sebraeDescricao]
-      : ativo?.dataset?.sebraeObservacao ? ["data-sebrae-observacao", ativo.dataset.sebraeObservacao] : [];
-    if (!atributo) return () => {};
-    const [inicio, fim] = [ativo!.selectionStart, ativo!.selectionEnd];
+    if (!ativo || ativo === document.body) return () => {};
+    const lista = ["sebrae-novos-lista", "sebrae-antigos-lista", "sebrae-finalizados-lista"].map(el).find(no => no?.contains(ativo));
+    const dados: Record<string, string | undefined> = { ...ativo.dataset };
+    const chaves = Object.keys(dados);
+    const [inicio, fim, rolagem] = [ativo.selectionStart, ativo.selectionEnd, ativo.scrollTop];
     return () => {
-      const novo = document.querySelector<ElementoSebrae>(`textarea[${atributo}="${numero}"]`);
-      novo?.focus();
-      if (novo && inicio != null && fim != null) novo.setSelectionRange?.(inicio, fim);
+      const novo = ativo.isConnected ? ativo : lista && chaves.length
+        ? [...lista.querySelectorAll<ElementoSebrae>(ativo.tagName)].find(no => Object.keys(no.dataset).length === chaves.length && chaves.every(chave => no.dataset[chave] === dados[chave]))
+        : null;
+      if (!novo) return;
+      if (novo !== ativo) for (let d = novo.closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true;
+      novo.focus({ preventScroll: true });
+      if (inicio != null && fim != null) novo.setSelectionRange?.(inicio, fim);
+      if (novo !== ativo) novo.scrollTop = rolagem || 0;
     };
   }
 
