@@ -249,6 +249,18 @@ test("Pacote local: Cancelar fecha a prévia sem enviar restauração", async ({
   await page.locator("#cfg-local-pacote-cancelar").click();
   await expect(page.locator("#cfg-local-pacote-previa")).toHaveCount(0);
   expect(posts(s, "/restaurar")).toHaveLength(0);
+  await expect(page.locator(`button[data-pacote-restaurar="${ARQ_EXP}"]`)).toBeFocused();
+});
+
+test("Pacote local: 403 fora do computador mostra a mensagem e não quebra", async ({ page }) => {
+  await simular(page);
+  await page.route("**/api/pacote-local", r => r.request().method() === "GET"
+    ? r.fulfill({ status: 403, json: { detail: "Disponível só neste computador." } }) : r.fallback());
+  await abrirSecao(page);
+  const msg = page.locator("#cfg-local-pacote-mensagem");
+  await expect(msg).toHaveText("Disponível só neste computador.");
+  await expect(msg).toHaveAttribute("role", "alert");
+  await expect(page.locator("#cfg-local-pacote-exportar")).toBeVisible();
 });
 
 test("Pacote local: temas claro e escuro sem erro de console nem rolagem horizontal", async ({ page }) => {

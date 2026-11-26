@@ -2,17 +2,11 @@
 // Estado local da seção (não do store do modal): só ela usa.
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../../api";
+import type { PacoteLocalLista, PacoteLocalPrevia, PacoteLocalPreviaItem, PacoteLocalRestauracao } from "../../api-tipos.gerado";
 
-// Tipos mínimos pelo contrato; trocar por api-tipos.gerado.d.ts depois de `python scripts/gerar_tipos_api.py`.
-type Acao = "substituir" | "criar" | "igual" | "manter" | "apagar";
-interface Pacote { arquivo: string; tipo: "exportacao" | "desfazer"; criado_em: string; tamanho_bytes: number }
-interface Lista { pasta: string; pasta_padrao: boolean; pacotes: Pacote[]; erro_pasta?: string | null }
-interface Previa {
-  arquivo: string; tipo: string; versao_app: string; criado_em: string;
-  itens: { caminho: string; acao: Acao }[];
-  totais: Record<Acao, number>; muda_links: boolean; preview_token: string;
-}
-interface Resultado { pacote_desfazer: string }
+type Lista = PacoteLocalLista;
+type Previa = PacoteLocalPrevia;
+type Acao = PacoteLocalPreviaItem["acao"];
 
 const BASE = "/api/pacote-local";
 const JSON_H = { "Content-Type": "application/json" };
@@ -54,7 +48,7 @@ export function SecaoPacoteLocal({ visivel, revisao, Cabecalho }: Props) {
   // Recarrega a lista a cada abertura do modal.
   useEffect(() => {
     if (!visivel) return;
-    setPrevia(null); setErro(""); setOk(""); setConcluido(false);
+    // Só recarrega a lista: uma prévia aberta não fecha quando outra seção salva.
     apiFetch<Lista>(BASE, { errorMessage: "Não foi possível ler os pacotes." }).then(aplicar).catch(e => setErro(mensagem(e, "Não foi possível ler os pacotes.")));
   }, [visivel, revisao]);
 
@@ -94,15 +88,23 @@ export function SecaoPacoteLocal({ visivel, revisao, Cabecalho }: Props) {
     if (!previa) return;
     setOcupado("restaurar"); setRecusa(""); setErro("");
     try {
-      const r = await apiFetch<Resultado>(`${BASE}/${encodeURIComponent(previa.arquivo)}/restaurar`, {
+      const r = await apiFetch<PacoteLocalRestauracao>(`${BASE}/${encodeURIComponent(previa.arquivo)}/restaurar`, {
         method: "POST", headers: JSON_H, body: JSON.stringify({ preview_token: previa.preview_token, confirmado: true }), errorMessage: FALHA_RESTAURAR,
       });
       setPrevia(null); setConcluido(true); setOk(`Restauração concluída. Pacote de desfazer: ${r.pacote_desfazer}`);
+      apiFetch<Lista>(BASE).then(aplicar).catch(() => undefined);
     } catch (err) {
       const m = mensagem(err, FALHA_RESTAURAR);
       if (m.includes(JA_IGUAL)) setJaIgual(true);
       setRecusa(m);
     } finally { setOcupado(""); }
+  }
+
+  function cancelar() {
+    const arquivo = previa?.arquivo;
+    setPrevia(null); setRecusa("");
+    // O botão Restaurar… está desabilitado só durante a espera; o foco volta quando o React já o redesenhou.
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-pacote-restaurar="${CSS.escape(arquivo || "")}"]`)?.focus());
   }
 
   const itens = previa ? previa.itens.filter(i => mostrarTodos || i.acao === "substituir" || i.acao === "criar" || i.acao === "apagar") : [];
@@ -136,7 +138,7 @@ export function SecaoPacoteLocal({ visivel, revisao, Cabecalho }: Props) {
         </div>
 
         <p id="cfg-local-pacote-mensagem" ref={mensagemRef} tabIndex={-1} className="ckp-secao__status" role={erro || recusa ? "alert" : "status"}
-          aria-live="polite" aria-atomic="true" data-status={erro || recusa ? "erro" : ok ? "ok" : undefined} hidden={!mensagemAtiva}>{mensagemAtiva}</p>
+          data-status={erro || recusa ? "erro" : ok ? "ok" : undefined} hidden={!mensagemAtiva}>{mensagemAtiva}</p>
         {concluido ? (
           <div className="ckp-linha"><button type="button" id="cfg-local-pacote-recarregar" className="ck-btn ck-btn--secundario ck-btn--sm ckp-pacote__btn" onClick={() => window.location.reload()}>Recarregar página</button></div>
         ) : null}
@@ -185,7 +187,7 @@ export function SecaoPacoteLocal({ visivel, revisao, Cabecalho }: Props) {
                   {ocupado === "restaurar" ? "Restaurando…" : "Confirmar restauração"}
                 </button>
               ) : null}
-              <button type="button" id="cfg-local-pacote-cancelar" className="ck-btn ck-btn--secundario ck-btn--sm ckp-pacote__btn" onClick={() => { setPrevia(null); setRecusa(""); }} disabled={ocupado === "restaurar"}>Cancelar</button>
+              <button type="button" id="cfg-local-pacote-cancelar" className="ck-btn ck-btn--secundario ck-btn--sm ckp-pacote__btn" onClick={cancelar} disabled={ocupado === "restaurar"}>Cancelar</button>
             </div>
           </div>
         ) : null}
