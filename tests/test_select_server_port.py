@@ -109,6 +109,35 @@ class ProbeAgainstRealServerTests(unittest.TestCase):
             self._serve_on(main.app, port)
             self.assertIsNone(selector._probe_simpress(port))
 
+    def test_slow_or_failing_version_check_after_identity_is_still_running(self):
+        from fastapi import FastAPI
+        from fastapi.responses import JSONResponse, RedirectResponse
+        import time
+
+        for mode in ("slow", "error"):
+            fake = FastAPI()
+            secret = "segredo-sintetico"
+            port = self._free_port()
+            cookie_name = f"simpress_sessao_{port}"
+
+            @fake.get("/bootstrap")
+            def bootstrap(t: str = ""):
+                resposta = RedirectResponse("/", status_code=303)
+                resposta.set_cookie(cookie_name, t)
+                return resposta
+
+            @fake.get("/api/automacao/estado")
+            def estado(mode=mode):
+                if mode == "slow":
+                    time.sleep(selector.HTTP_PROBE_TIMEOUT + 0.5)
+                    return {}
+                return JSONResponse({}, status_code=500)
+
+            self._serve_on(fake, port)
+            self._write_secret(port, secret)
+            with self.subTest(mode=mode):
+                self.assertEqual(selector._probe_simpress(port), {"outdated": False})
+
     def test_impostor_with_same_title_openapi_is_not_accepted(self):
         from fastapi import FastAPI
 

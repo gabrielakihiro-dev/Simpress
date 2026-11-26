@@ -36,11 +36,14 @@ class _NoRedirect(HTTPRedirectHandler):
 
 
 def _probe_simpress(port: int) -> dict | None:
-    """Return {"outdated": bool} when a real Simpress answers on the port, else None.
+    """Return {"outdated": bool} when a Simpress answers on the port, else None.
 
-    /openapi.json is off by default, so identity is proven by the session secret: only the server
-    that wrote sessao_<port>.txt accepts /bootstrap?t=<secret> (303 + cookie carrying that secret).
-    The secret is never printed or logged.
+    /openapi.json is off by default, so identity is checked with the session secret: the server that
+    wrote sessao_<port>.txt answers /bootstrap?t=<secret> with 303 and a cookie carrying that secret.
+    This is not a strong proof (the secret is sent before any proof, so a process that echoes `t` in
+    Set-Cookie would pass); it fits the accepted single-user local risk (security/sessao_local.py).
+    The secret is never printed or logged. After the 303, any failure of the version check counts
+    as a running server (never None), so the .bat does not start a second copy.
     """
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
@@ -57,29 +60,26 @@ def _probe_simpress(port: int) -> dict | None:
     cookie = {"Cookie": f"{cookie_name}={secret}"}
     opener = build_opener(ProxyHandler({}), _NoRedirect)
     try:
-        try:
-            with opener.open(
-                f"http://{HOST}:{port}/bootstrap?t={quote(secret, safe='')}", timeout=HTTP_PROBE_TIMEOUT
-            ):
-                return None  # a Simpress answers 303, never a plain 200
-        except HTTPError as error:
-            if error.code != 303 or f"{cookie_name}={secret}" not in (error.headers.get("Set-Cookie") or ""):
-                return None
         with opener.open(
-            Request(f"http://{HOST}:{port}/api/prontidao", headers=cookie), timeout=HTTP_PROBE_TIMEOUT
+            f"http://{HOST}:{port}/bootstrap?t={quote(secret, safe='')}", timeout=HTTP_PROBE_TIMEOUT
         ):
-            pass
-        try:
-            with opener.open(
-                Request(f"http://{HOST}:{port}{CURRENT_PATH}", headers=cookie), timeout=HTTP_PROBE_TIMEOUT
-            ):
-                return {"outdated": False}
-        except HTTPError as error:
-            if error.code == 404:
-                return {"outdated": True}
-            raise
+            return None  # a Simpress answers 303, never a plain 200
+    except HTTPError as error:
+        if error.code != 303 or f"{cookie_name}={secret}" not in (error.headers.get("Set-Cookie") or ""):
+            return None
     except Exception:
         return None
+
+    # Identity checked: from here on, never None.
+    try:
+        with opener.open(
+            Request(f"http://{HOST}:{port}{CURRENT_PATH}", headers=cookie), timeout=HTTP_PROBE_TIMEOUT
+        ):
+            return {"outdated": False}
+    except HTTPError as error:
+        return {"outdated": error.code == 404}
+    except Exception:
+        return {"outdated": False}
 
 
 def _is_simpress_running(port: int) -> bool:
