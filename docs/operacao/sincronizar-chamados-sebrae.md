@@ -559,3 +559,5 @@ O campo "Observação do andamento" na Zona 2 (`Classificação operacional`) da
 ## Textos curtos do cartão `Chamados novos do SoftExpert` (14/11/2026)
 
 Plano `docs/planos/limpeza-textos-explicativos.md`, Bloco 4; só texto de tela (`frontend/src/paineis/sebrae-dashboard/`), sem rota, dado gravado nem escrita externa nova. `#sebrae-novos-resumo` sem Dashboard importado diz `Importe o Dashboard primeiro.`; com Dashboard e sem busca, `Nenhuma busca feita ainda.`; `#sebrae-antigos-resumo` sem chamado diz `Nenhum chamado antigo em aberto ou sem status.` A explicação do cartão fica no ⓘ do título (`Sobre Chamados novos do SoftExpert`, só a partir de 768px). Ver também `docs/cockpit-prompts/06-automacao-console.md`.
+
+Aviso da importação (26/11/2026, aprovado pelo usuário): quando `POST /api/sebrae/dashboard` devolve `aviso` (Dashboard editado no SharePoint, chaves de linha ou a trava de senhas guardadas), a tela o mostra como texto no status (`sebrae-dashboard-status`, depois da confirmação) e no toast `Dashboard importado. <aviso>` em tom `warning`; sem `aviso`, nada muda.
