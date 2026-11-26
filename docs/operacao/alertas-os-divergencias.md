@@ -1,6 +1,6 @@
-# Central de notificações: "OS paradas", "Divergências novas", "Sem acesso há 60 dias", "Chamados finalizados por outro técnico", "Backups regionais" e "Falha ao finalizar no SoftExpert"
+# Central de notificações: "OS paradas", "Divergências novas", "Sem acesso há 60 dias", "Chamados finalizados por outro técnico", "Backups regionais", "Falha ao finalizar no SoftExpert" e "Lembretes agendados"
 
-Exibe seis alertas no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos seis grava nada: os históricos de OS e de planilhas, as marcas de OS finalizada, as confirmações de backup e o resultado da última finalização no SoftExpert são apenas lidos (confirmar e desfazer backup acontecem na sub-aba Backups do Resumo, não no sino).
+Exibe sete alertas no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos sete grava nada: os históricos de OS e de planilhas, as marcas de OS finalizada, as confirmações de backup, o resultado da última finalização no SoftExpert e o arquivo de lembretes são apenas lidos (confirmar e desfazer backup acontecem na sub-aba Backups do Resumo, não no sino).
 
 ## 1. OS paradas
 
@@ -268,10 +268,67 @@ O cartão é `#alerta-finalizacao-softexpert` (`data-state` `falhou`, `vazio` ou
 
 Sem resultado de finalização: `{"total": 0, "itens": []}`. Com falha ao ler: `{"total": 0, "itens": [], "indisponivel": true}`. O Assistente lê o campo em `obter_painel` e só orienta a conferir na aba Chamados (F5).
 
+## 7. Lembretes agendados
+
+### Objetivo
+
+Mostrar quantos lembretes da ferramenta Lembretes estão atrasados ou são de hoje, para que nenhum compromisso passe sem ser visto. Pedido do usuário, 25/11/2026. A tela de lembretes continua a única fonte de detalhe ([18-lembretes.md](../cockpit-prompts/18-lembretes.md), seção "Sino: lembretes agendados").
+
+### Dados
+
+- Fonte: `data/state/lembretes.json`, lido por `ler_resumo_agendados` (`domains/lembretes.py`) e exposto em `lembretes_agendados` de `GET /api/painel`, pelo callback `get_lembretes_agendados` de `DashboardServices` (`routers/dashboard.py`).
+- Conta só lembretes pendentes (`concluido: false`) com `data_agendada` válida (`AAAA-MM-DD`). Sem data, concluídos e futuros não contam.
+- **Atrasado**: data anterior a hoje. **Hoje**: data igual a hoje, no fuso `America/Sao_Paulo`. A `hora_agendada` não muda a classificação: hora já passada hoje continua em "hoje" (mesma regra de `Reagendar para hoje`).
+- **Gravidade**: `urgente` (selo `Urgente`, `data-gravidade="urgente"`) se houver ao menos 1 atrasado; `atencao` (selo `Atenção`) se houver só lembretes de hoje.
+- Só leitura: o painel nunca grava, cria nem repara `lembretes.json`.
+
+### Quando aparece e quando some
+
+- Aparece quando `atrasados + hoje` é maior que zero. Some quando essa soma é 0, com `indisponivel: true` ou quando o campo falta; o resto do painel continua carregando. O `total` que vem do servidor não decide nada: a interface o ignora e o servidor o recalcula como `atrasados + hoje`. Na resposta, só `total`, `atrasados`, `hoje` e `indisponivel` passam (`_lembretes_agendados_allowlist`); contagem inválida vira `indisponivel: true`.
+- Arquivo ausente: zeros com `indisponivel: false`. JSON inválido, formato ilegível ou arquivo ocupado (`PermissionError`): zeros com `indisponivel: true`, sem derrubar o painel. O log leva só a classe do erro e o código fixo (`erro.codigo`, ex.: `lembretes_ilegiveis`, `lembretes_ocupados`), nunca a mensagem nem o conteúdo do arquivo.
+- Atualiza na hora depois de criar, concluir ou reabrir, editar, excluir ou reagendar um lembrete: o front dispara `simpress:atualizar-notificacoes`.
+
+### O que conta no sino
+
+- Um aviso no contador do sino, não a quantidade de lembretes.
+- O cartão `#alerta-lembretes-agendados` fica escondido quando `atrasados + hoje` é 0 ou `indisponivel` é true.
+
+### Texto
+
+| Gravidade | Título | Texto | Botão |
+| --- | --- | --- | --- |
+| `urgente` (só atrasados) | Lembretes agendados | 2 lembretes atrasados. | Ver Lembretes |
+| `urgente` (só atrasados) | Lembretes agendados | 1 lembrete atrasado. | Ver Lembretes |
+| `urgente` (atrasados e hoje) | Lembretes agendados | 2 atrasados e 1 para hoje. | Ver Lembretes |
+| `urgente` (atrasados e hoje) | Lembretes agendados | 1 atrasado e 3 para hoje. | Ver Lembretes |
+| `atencao` (só hoje) | Lembretes agendados | 3 lembretes para hoje. | Ver Lembretes |
+| `atencao` (só hoje) | Lembretes agendados | 1 lembrete para hoje. | Ver Lembretes |
+
+O texto traz só números e as palavras acima; nunca descrição, termo, id ou nome. O botão `#btn-alerta-lembretes-agendados` abre Ferramentas > Lembretes (`abrirPainelCockpit("lembretes")`).
+
+### Contrato da API
+
+`GET /api/painel` ganha `lembretes_agendados`, sempre presente:
+
+```json
+{
+  "total": 3,
+  "atrasados": 2,
+  "hoje": 1,
+  "indisponivel": false
+}
+```
+
+### Privacidade (LGPD)
+
+- O campo tem só inteiros e um booleano. Descrição, termo, id e nomes não saem da leitura nem vão a log, histórico, Assistente ou modelo.
+- O Assistente não lê lembretes: `obter_painel` remove `lembretes_agendados` antes de responder.
+- Não há escrita em sistema externo e não há aviso nativo do Windows (`scripts/avisos_windows.py` fica fora desta seção). O sino mostra a contagem; não dispara alarme.
+
 ## Interface
 
-- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 6 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
-- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas`, `#alerta-divergencias-novas`, `#alerta-chamados-outro-tecnico`, `#alerta-finalizacao-softexpert` e `#alerta-backups-regionais` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
+- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 7 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
+- Os cartões `#alerta-sem-acesso-60`, `#alerta-os-paradas`, `#alerta-divergencias-novas`, `#alerta-chamados-outro-tecnico`, `#alerta-finalizacao-softexpert`, `#alerta-backups-regionais` e `#alerta-lembretes-agendados` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
 - Os toasts de operações continuam independentes e temporários.
 
 ## Critérios de aceite
@@ -289,3 +346,4 @@ Sem resultado de finalização: `{"total": 0, "itens": []}`. Com falha ao ler: `
 11. Com pelo menos uma marca `Finalizado por outro técnico` ativa e sem `Conferido`, o sino mostra "Chamados finalizados por outro técnico" com `Atenção` e o botão "Ver na aba OS" abre a aba OS; depois de `Conferido` ou `Desfazer` na aba OS, ou com a lista vazia ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso. Marcas de chamados finalizados pelo site nunca entram.
 12. Com pelo menos uma regional prioritária em `pendencias.sem_backup`, o sino mostra "Sem backup disponível" com `Urgente`; só com `pendencias.conferir`, mostra "Conferir possível backup" com `Atenção`; o botão "Ver backups no Resumo" abre a sub-aba Backups; com as listas vazias, `null` ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso.
 13. Quando a última finalização no SoftExpert termina com chamado em `erro`, para no meio sem a rotina estar rodando ou falha no envio ao SharePoint, o sino mostra "Falha ao finalizar no SoftExpert" com `Urgente`, só números UTIC e códigos (nunca a mensagem da rotina), e o botão "Ver na aba Chamados" abre a aba Chamados (F5); depois que o chamado é finalizado, com resultado de outra ação, lista vazia ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso.
+14. Com lembrete pendente atrasado, o sino mostra "Lembretes agendados" com `Urgente`; só com lembretes de hoje, mostra com `Atenção`; concluídos, futuros e sem data não contam; com `atrasados + hoje` 0 ou `indisponivel`, o cartão fica oculto; criar, concluir, editar, excluir ou reagendar um lembrete atualiza o sino na hora; o arquivo de lembretes não é regravado.

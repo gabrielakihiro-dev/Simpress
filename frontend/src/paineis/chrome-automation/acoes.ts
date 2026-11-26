@@ -129,10 +129,21 @@ export async function iniciarRotinaAutomacao(rotina: string): Promise<void> {
   const externo = botaoExterno(rotina);
   externo?.setAttribute("aria-busy", "true");
   try {
+    // Escrita no SharePoint (sistema externo): só depois do diálogo; Cancelar (false) e Esc (null) não enviam nada.
+    if (rotina === "enviar") {
+      const resposta = await appAntigo().confirmarAcao?.({
+        titulo: "Enviar ao SharePoint?",
+        mensagem: "Substitui o Dashboard no SharePoint (sistema externo) pela cópia atualizada.",
+        confirmar: "Enviar ao SharePoint",
+        cancelar: "Cancelar",
+        destrutiva: false,
+      });
+      if (resposta !== true) return;
+    }
     const dados = await consultarAutomacao<DadosEstado>("/api/automacao/executar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rotina }),
+      body: JSON.stringify(rotina === "enviar" ? { rotina, confirmado: true } : { rotina }),
       errorMessage: "Não foi possível iniciar a rotina.",
     });
     interno.acompanharFim = true;
