@@ -169,6 +169,8 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
   const recentStore = recentEquipment?.createStore(() => window.localStorage) || null;
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  // Só a digitação zera este: Enter ou escolher uma sugestão não pode cancelar a recarga da lista.
+  let homeListTimer: ReturnType<typeof setTimeout> | undefined;
   const autocompleteRequestGate = transferUtils.createRequestGate();
   const equipmentLookupRequestGate = transferUtils.createRequestGate();
   const homeListRequestGate = transferUtils.createRequestGate();
@@ -712,6 +714,7 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     }
 
     clearTimeout(debounceTimer);
+    clearTimeout(homeListTimer);
     const term = val.trim();
     if (term.length < 2) {
       app.fecharAutocomplete();
@@ -719,7 +722,8 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
       return;
     }
 
-    void carregarListaHome({ query: term, reset: true });
+    // A lista espera a mesma pausa de 200 ms do autocompletar: um pedido por pausa na digitação, não por tecla.
+    homeListTimer = setTimeout(() => void carregarListaHome({ query: term, reset: true }), 200);
     elemento("autocomplete-box").setAttribute("aria-busy", "true");
     debounceTimer = setTimeout(async () => {
       const request = autocompleteRequestGate.begin();
@@ -939,6 +943,7 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     elemento("btn-clear-serial").classList.add("hidden");
     app.fecharAutocomplete();
     input.focus();
+    clearTimeout(homeListTimer);
     void carregarListaHome({ query: "", reset: true });
   }
 
@@ -1517,9 +1522,16 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
       if ((error instanceof Error && error.name === "AbortError") || !homeListRequestGate.isCurrent(request.id)) return;
       finishHomeListLoading();
       list.setAttribute("aria-busy", "false");
-      limparListaHome(ehErroApi(error) && error.status === 409
+      const message = ehErroApi(error) && error.status === 409
         ? "A base está sendo atualizada. Tente novamente em instantes."
-        : mensagemErro(error, "Não foi possível carregar os equipamentos."));
+        : mensagemErro(error, "Não foi possível carregar os equipamentos.");
+      if (!reset) {
+        // "Carregar mais" falhou: mantém o que já está na tela e o botão para tentar de novo.
+        const count = elemento("home-list-count");
+        if (count) count.textContent = message;
+        return;
+      }
+      limparListaHome(message);
       list.dataset.estado = "erro";
     }
   }
