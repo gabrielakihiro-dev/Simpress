@@ -307,6 +307,32 @@ class LoginAbasTests(unittest.TestCase):
         page.wait_for_timeout.side_effect = lambda ms: relogio.__setitem__("agora", relogio["agora"] + ms / 1000)
         return page, clicados, relogio
 
+    def test_descrever_erro_so_tipo_nao_traz_texto_da_pagina(self):
+        self.assertEqual(automacao.descrever_erro(ValueError("Dado Sigiloso"), so_tipo=True), "ValueError")
+        self.assertEqual(automacao.descrever_erro(automacao.RotinaErro("mensagem própria"), so_tipo=True), "mensagem própria")
+
+    def test_descrever_erro_so_tipo_cobre_erro_de_terceiro_embrulhado(self):
+        try:
+            try:
+                raise ValueError("Locator.click: Timeout\nDado Sigiloso")
+            except ValueError as causa:
+                raise automacao.EtapaInstavel(str(causa)) from causa
+        except automacao.EtapaInstavel as erro:
+            texto = automacao.descrever_erro(erro, so_tipo=True)
+        self.assertEqual(texto, "ValueError em Locator.click")
+
+    def test_microsoft_login_nao_loga_o_email(self):
+        page, _clicados, relogio = self._conta_microsoft(["pessoa.simpress@exemplo.invalid"])
+        logs = []
+        with (
+            patch.object(automacao.time, "time", lambda: relogio["agora"]),
+            patch.object(automacao, "visivel", return_value=False),
+            patch.object(automacao, "log", side_effect=lambda _o, texto: logs.append(texto)),
+        ):
+            automacao.entrar_microsoft(page, "Oracle", "pessoa.simpress@exemplo.invalid", espera_s=5)
+        self.assertTrue(logs)
+        self.assertNotIn("exemplo.invalid", " ".join(logs))
+
     def test_microsoft_clicks_only_the_requested_account(self):
         page, clicados, relogio = self._conta_microsoft(
             ["Pessoa Exemplo", "pessoa.simpress@exemplo.invalid", "pessoa.sebrae@exemplo.invalid", "Use outra conta"]
