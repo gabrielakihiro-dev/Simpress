@@ -870,16 +870,44 @@ class ReaplicarTest(unittest.TestCase):
         base = _antes_da_coluna_p(tres(), 2, texto("E2", "7365311") + texto("F2", "feito"))
         gerado = G.atualizar(base, limpar_e={"UTIC-2026-0001": "7365311"}).conteudo
         sp = _antes_da_coluna_p(base, 3, texto("I3", "Ana"))  # terceiro mexeu em outra linha
-        saida = self.ok(base, gerado, sp)
+        removidas = {"UTIC-2026-0001": [" 7365311 "]}  # sebrae_os_recusadas.removidas: o clique em Remover
+        saida = self.ok(base, gerado, sp, removidas=removidas)
         esperado = por_chamado(sp)
         del esperado["UTIC-2026-0001"]["E"]
         self.assertEqual(por_chamado(saida), esperado)  # só a E se apaga; a F e a edição do terceiro ficam
         self.assertRegex(linha_xml(saida, 2), r'<c r="E2" s="\d+"\s*/>')
         # SharePoint já mudou a E: conflito (o site queria apagar), nunca apaga por cima
         sp_e = _trocar_na_folha(base, "<t>7365311</t>", "<t>999</t>")
-        resultado = G.reaplicar(base, gerado, sp_e)
+        resultado = G.reaplicar(base, gerado, sp_e, removidas=removidas)
         self.assertIsNone(resultado.conteudo)
         self.assertEqual([(c["coluna"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("E", "999", "")])
+
+    def test_e_vazia_sem_remover_explicito_nunca_apaga(self):
+        # 26/11/2026: a referência pode ser a cópia enviada (E automática) e o gerado, refeito da importação, vir com a E vazia.
+        base = _antes_da_coluna_p(tres(), 2, texto("E2", "7365311"))
+        gerado = _trocar_na_folha(do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}), "<t>7365311</t>", "<t></t>")
+        self.assertNotIn("E", por_chamado(gerado)["UTIC-2026-0001"])
+        for removidas in (None, {}, {"UTIC-2026-0001": ["999"]}, {"UTIC-2026-0002": ["7365311"]}):
+            with self.subTest(removidas=removidas):
+                saida = self.ok(base, gerado, base, removidas=removidas)
+                self.assertEqual(por_chamado(saida)["UTIC-2026-0001"]["E"], "7365311")
+                self.assertEqual(por_chamado(saida)["UTIC-2026-0002"]["J"], "INCIDENTE")
+
+    def test_r_corrigido_a_mao_no_sharepoint_nunca_e_sobrescrito_pelo_r_registrado(self):
+        # 26/11/2026: o R registrado ao finalizar não passa por cima do R que o usuário corrigiu no SharePoint.
+        base = tres()
+        registrado = G.registrar_encerramentos(base, {"UTIC-2026-0001": "20/11/2026 10:00"})[0].conteudo  # o que o Atualizar reaplica
+        corrigido = G.registrar_encerramentos(registrado, {"UTIC-2026-0001": "19/11/2026 08:30"})[0].conteudo  # R corrigido à mão
+        self.assertEqual(por_chamado(corrigido)["UTIC-2026-0001"]["R"], "19/11/2026 08:30")
+        # já enviado (n_e): o valor do SharePoint vale
+        saida = self.ok(base, registrado, corrigido, enviado=registrado)
+        self.assertEqual(por_chamado(saida)["UTIC-2026-0001"]["R"], "19/11/2026 08:30")
+        # reimportado com o R corrigido: a base já tem o R do SharePoint e o gerado, que o mantém, não tem o que aplicar
+        self.assertEqual(por_chamado(self.ok(corrigido, corrigido, corrigido))["UTIC-2026-0001"]["R"], "19/11/2026 08:30")
+        # sem a cópia enviada: conflito, nunca sobrescrita
+        resultado = G.reaplicar(base, registrado, corrigido)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["coluna"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("R", "19/11/2026 08:30", "20/11/2026 10:00")])
 
     def test_ac2_mesma_celula_com_valores_diferentes_e_conflito_sem_conteudo(self):
         base = tres()

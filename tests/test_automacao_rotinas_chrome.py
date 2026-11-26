@@ -1673,7 +1673,9 @@ class EnviarDashboardTests(unittest.TestCase):
         resultado, enviados, _ = self._rodar_com_merge(raiz, saida, base)
         self.assertEqual(resultado, 0)
         from domains import sebrae_finalizacao as fin
+        from domains import sebrae_os_recusadas
 
+        sebrae_os_recusadas.remover(raiz, "UTIC-2026-0001", "7365311")  # o clique em Remover que gera o limpar_e
         saida.write_bytes(atualizar(base, edicoes={"UTIC-2026-0002": {"J": "REQUISIÇÃO"}}, limpar_e={"UTIC-2026-0001": "7365311"}).conteudo)
         fin.gravar_origem_saida(saida, fin.base_importada(raiz))
         sharepoint = T._trocar_parte(enviados[0], "xl/worksheets/sheet9.xml", "<t>laudo</t>", "<t>laudo editado à mão</t>")
@@ -1683,6 +1685,80 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(segundo["UTIC-2026-0002"]["J"], "REQUISIÇÃO")
         self.assertNotIn("E", segundo["UTIC-2026-0001"])
         self.assertEqual(self._laudos(enviados2[0]), self._laudos(sharepoint))
+
+    def test_second_send_without_reimport_keeps_the_e_that_only_went_missing_from_the_new_file(self):
+        # 26/11/2026: a 1ª cópia levou a E automática; a 2ª, montada de novo da importação, veio com a E vazia (OS saiu do relatório).
+        # Sem Remover explícito, a E vazia nunca apaga a E que o SharePoint já tem.
+        from domains import sebrae_finalizacao as fin
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        from domains.sebrae_dashboard_gravacao import atualizar
+
+        base = self._com_laudos(self._dashboard(abertos=True), "laudo")
+        raiz, saida = self._montar_envio(base, atualizar(base, automaticos={"UTIC-2026-0001": {"E": "7365311"}}).conteudo)
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, base)
+        self.assertEqual(resultado, 0)
+        self.assertEqual(T.por_chamado(enviados[0])["UTIC-2026-0001"]["E"], "7365311")
+        saida.write_bytes(T.do_site(base, {"UTIC-2026-0002": {"J": "REQUISIÇÃO"}}))  # E automática não recalculada
+        fin.gravar_origem_saida(saida, fin.base_importada(raiz))
+        sharepoint = T._trocar_parte(enviados[0], "xl/worksheets/sheet9.xml", "<t>laudo</t>", "<t>laudo editado à mão</t>")
+        resultado, enviados2, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertEqual(resultado, 0)
+        segundo = T.por_chamado(enviados2[0])
+        self.assertEqual(segundo["UTIC-2026-0001"]["E"], "7365311")
+        self.assertEqual(segundo["UTIC-2026-0002"]["J"], "REQUISIÇÃO")
+
+    def _montar_com(self, sharepoint: bytes, gerado: bytes, montado: bytes, removidas=None) -> bytes:
+        """``montar_sobre_o_sharepoint`` com ``reaplicar`` simulado devolvendo ``montado``; ``removidas`` é o registro do Remover."""
+        from domains import sebrae_os_recusadas
+        from domains.sebrae_dashboard_gravacao import ResultadoMerge
+
+        raiz = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        for utic, ordem in (removidas or {}).items():
+            sebrae_os_recusadas.remover(raiz, utic, ordem)
+        baixado = raiz / "baixado.xlsx"
+        baixado.write_bytes(sharepoint)
+        with patch.object(automacao, "DASHBOARD_SAIDA_DIR", raiz / "sebrae_dashboard_saida"), \
+                patch("domains.sebrae_dashboard_gravacao.reaplicar", return_value=ResultadoMerge(montado)):
+            return automacao.montar_sobre_o_sharepoint(baixado, gerado, sharepoint)
+
+    def test_mounted_file_must_hold_the_generated_cells_and_the_sharepoint_ones_where_the_generated_is_blank(self):
+        # 26/11/2026: célula vazia do gerado vale o SharePoint, nunca outro valor; só a E de um Remover pode sair vazia
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        sharepoint = T._antes_da_coluna_p(base, 2, T.texto("E2", "7365311") + T.texto("I2", "Ana") + T.texto("K2", "SER1"))
+        gerado = T.do_site(base, {"UTIC-2026-0001": {"J": "INCIDENTE"}})  # E, I e K vazias no gerado
+        certo = T.do_site(sharepoint, {"UTIC-2026-0001": {"J": "INCIDENTE"}})
+        self.assertEqual(self._montar_com(sharepoint, gerado, certo), certo)
+        sem_e = T._trocar_na_folha(certo, "<t>7365311</t>", "<t></t>")
+        self.assertEqual(self._montar_com(sharepoint, gerado, sem_e, removidas={"UTIC-2026-0001": "7365311"}), sem_e)  # Remover
+        recusados = {
+            "valor que não está no SharePoint nem no gerado": T._antes_da_coluna_p(gerado, 2, T.texto("E2", "7365311")),
+            "E apagada fora do Remover": sem_e,
+            "I apagada": T._trocar_na_folha(certo, "<t>Ana</t>", "<t></t>"),
+            "K apagada": T._trocar_na_folha(certo, "<t>SER1</t>", "<t></t>"),
+            "sem a J do site": sharepoint,
+            "J trocada": T.do_site(sharepoint, {"UTIC-2026-0001": {"J": "REQUISIÇÃO"}}),
+            "linha a menos": T.tres(T.CHAMADOS[:2]),
+        }
+        for nome, montado in recusados.items():
+            with self.subTest(caso=nome), self.assertRaisesRegex(automacao.RotinaErro, "preservando as outras abas"):
+                self._montar_com(sharepoint, gerado, montado)
+        with self.assertRaisesRegex(automacao.RotinaErro, "preservando as outras abas"):  # Remover de outra OS não apaga esta
+            self._montar_com(sharepoint, gerado, sem_e, removidas={"UTIC-2026-0001": "999"})
+
+    def test_mounted_file_with_repeated_c_must_equal_the_generated_one(self):
+        # C repetida ("Sem chamado") não pareia a linha do SharePoint: só vale igual ao gerado; L trocada entre as linhas é recusada
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = T.tres(("Sem chamado", "Sem chamado", "UTIC-2026-0003"))
+        base = T._antes_da_coluna_p(T._antes_da_coluna_p(base, 2, T.texto("I2", "Ana")), 3, T.texto("I3", "Bia"))
+        gerado = T._antes_da_coluna_p(T._antes_da_coluna_p(base, 2, T.texto("L2", "M1")), 3, T.texto("L3", "M2"))
+        self.assertEqual(self._montar_com(base, gerado, gerado), gerado)
+        trocada = T._antes_da_coluna_p(T._antes_da_coluna_p(base, 2, T.texto("L2", "M2")), 3, T.texto("L3", "M1"))
+        with self.assertRaisesRegex(automacao.RotinaErro, "preservando as outras abas"):
+            self._montar_com(base, gerado, trocada)
 
     def test_precheck_aborts_when_the_stored_copy_is_missing(self):
         with tempfile.TemporaryDirectory() as pasta:
@@ -2353,6 +2429,7 @@ AVISOS_ENVIO_SUCESSO = [
     "2 itens carregados",
     "Upload complete",
     "Upload concluído",
+    "Dashboard Operacional_SEBRAE (pendente 2026-11-26 101500-n1).xlsx carregado para DASHBOARD SEBRAE",
 ]
 AVISOS_ENVIO_NAO_SUCESSO = [
     "Dashboard Operacional_SEBRAE.xlsx wasn't uploaded to DASHBOARD SEBRAE",
@@ -2375,6 +2452,13 @@ AVISOS_ENVIO_NAO_SUCESSO = [
     "Dashboard Operacional_SEBRAE.xlsx",
     "Uploaded",
     "Uploaded by Juliana",
+    # 26/11/2026: nomes de arquivo da pasta (get_by_text também os lê) nunca confirmam o envio
+    "Relatório carregado para revisão.xlsx",
+    "Relatório carregado para revisão",
+    "Envio concluído março.xlsx",
+    "Upload concluído - fotos.xlsx",
+    "Uploaded notes to RH.xlsx",
+    "Planilha de abril 2 itens carregados.xlsx",
 ]
 
 

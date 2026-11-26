@@ -29,6 +29,7 @@ from xml.etree import ElementTree
 from domains.sebrae_chamados import extrair_numeros
 from domains.sebrae_dashboard import ABA, DashboardInvalido, EDITAVEIS_PELO_SITE, MANUAIS, _validar_pacote, ler_coluna_c
 from domains.sebrae_novos import STATUS_FINALIZADO
+from domains.sebrae_vinculos import _os_chave
 
 logger = logging.getLogger(__name__)
 
@@ -906,16 +907,24 @@ def _montar(
 ENCERRAMENTO_GRAVADO = "gravado"
 ENCERRAMENTO_NAO_ENCONTRADO = "nao_encontrado"
 ENCERRAMENTO_AMBIGUO = "ambiguo"
+ENCERRAMENTO_MANTIDO = "mantido"
 
 
-def registrar_encerramentos(conteudo: bytes, encerramentos: Mapping[str, str]) -> Tuple[Resultado, Dict[str, str]]:
+def registrar_encerramentos(
+    conteudo: bytes, encerramentos: Mapping[str, str], *, manter_finalizados: bool = False,
+) -> Tuple[Resultado, Dict[str, str]]:
     """Writes DT ENCERRAMENTO (column R) and status D = FINALIZADO of tickets closed in SoftExpert; the row is found by the UTIC in column C.
 
     ``encerramentos``: ``{UTIC: "dd/MM/aaaa HH:mm"}``, the date the user typed (rule of 24/11/2026; it replaced the SoftExpert
     time chosen on 31/10/2026). Unlike ``atualizar`` this reaches rows of any status (the
     ticket has just been finalized) but only columns D and R, and only when exactly one row holds the UTIC. Gives the new workbook (the same
-    bytes when nothing changed) and, per UTIC, ``gravado`` / ``nao_encontrado`` / ``ambiguo``.
+    bytes when nothing changed) and, per UTIC, ``gravado`` / ``nao_encontrado`` / ``ambiguo`` / ``mantido``.
+
+    ``manter_finalizados`` (re-application on every "Atualizar", decision of the user on 26/11/2026): a row that already holds
+    D = FINALIZADO and a valid R (``dd/MM/aaaa HH:mm``) is left untouched (``mantido``), even when its R differs from the recorded one.
     """
+    from domains.sebrae_finalizacao import encerramento_valido  # tardio: a finalização importa sebrae_novos, como este módulo
+
     anteriores = ler_coluna_c(conteudo)  # also checks the headers of the sheet
     pacote = _ler_pacote(conteudo)
     texto = pacote.texto(pacote.aba)
@@ -937,6 +946,11 @@ def registrar_encerramentos(conteudo: bytes, encerramentos: Mapping[str, str]) -
             estados[utic] = ENCERRAMENTO_NAO_ENCONTRADO
         elif len(donas) > 1:
             estados[utic] = ENCERRAMENTO_AMBIGUO
+        elif manter_finalizados and (
+            _valor_legivel("D", donas[0].celulas.get("D", ""), pacote.compartilhadas).upper() == STATUS_FINALIZADO
+            and encerramento_valido(_valor_legivel("R", donas[0].celulas.get("R", ""), pacote.compartilhadas))
+        ):
+            estados[utic] = ENCERRAMENTO_MANTIDO  # o R digitado à mão no Dashboard vale
         else:
             # R vazia ou antiga: vale o R informado ao finalizar. D junto com R: a linha finalizada no SoftExpert não pode continuar "EM ABERTO".
             substituicoes[donas[0].numero] = _reescrever_linha(donas[0], {"D": STATUS_FINALIZADO, "R": quando}, estilos, "", True)
@@ -1048,11 +1062,15 @@ def _bruto_do_site(folha: _Folha, numero: int, letra: str) -> str:
 
 def reaplicar(
     base: bytes, gerado: bytes, sharepoint: bytes, *, enviado: Optional[bytes] = None, escolhas: Optional[Mapping[str, str]] = None,
+    removidas: Optional[Mapping[str, Sequence[str]]] = None,
 ) -> ResultadoMerge:
     """Re-applies what the site changed (``gerado`` against ``base``) onto the newer ``sharepoint`` file, cell by cell.
 
     The site's operations are the cells of ``gerado`` whose readable value differs from ``base`` in ``COLUNAS_DE_DADO`` (never C
     of an existing row, never Q, T, U, V, W; a blank value never erases, except E emptied by ``limpar_e``, the Remover of 25/11/2026). Rows are matched by the UTIC of column C, never by position.
+    ``removidas``: ``{UTIC: [OS]}`` of ``sebrae_os_recusadas.removidas``; an empty E of the site erases only when the ``base`` E is one
+    of the OS the user removed for that UTIC (26/11/2026: an E that just went missing from ``gerado``, as when ``base`` is the last sent
+    copy and the OS left the report, never erases). Without it nothing is erased.
     Per cell: SharePoint still holds the ``base`` value -> the site's value is written (the raw ``<c>`` of ``gerado``, re-addressed
     and with the style of the SharePoint cell); it already holds the site's value -> nothing; anything else -> conflict. E, K, L, N
     empty in ``base`` and filled in SharePoint keep SharePoint. ``enviado``: copy of the last send of the same import; a cell whose
@@ -1068,6 +1086,7 @@ def reaplicar(
     Raises ``DashboardInvalido`` (message without cell values) when a copy is not the expected Dashboard.
     """
     escolhas = escolhas or {}
+    removidas_por_utic = {utic: {_os_chave(o) for o in ordens} for utic, ordens in (removidas or {}).items()}
     anteriores = ler_coluna_c(sharepoint)  # also checks the headers of the sheet
     b, g, s = _abrir(base), _abrir(gerado), _abrir(sharepoint)
     e = _abrir(enviado) if enviado is not None else None
@@ -1106,8 +1125,8 @@ def reaplicar(
         for letra in COLUNAS_DE_DADO:
             site = g.valor(n_g, letra)
             no_base = b.valor(n_b, letra) if n_b is not None else ""
-            # única operação de apagar: a E vazia no site sobre uma E preenchida na base só vem de limpar_e (Remover, 18/11/2026)
-            apagar_e = letra == "E" and site == "" and no_base != ""
+            # única operação de apagar: a E que o usuário mandou Remover (limpar_e, 18/11/2026); E só vazia no gerado nunca apaga (26/11/2026)
+            apagar_e = letra == "E" and site == "" and no_base != "" and _os_chave(no_base) in removidas_por_utic.get(utic, set())
             if letra == "C" or (site == "" and not apagar_e) or site == no_base:
                 continue
             if n_e is not None and e.valor(n_e, letra) == site:  # type: ignore[union-attr]
@@ -1171,7 +1190,7 @@ def reaplicar(
 
 
 __all__ = [
-    "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "ENCERRAMENTO_AMBIGUO", "ENCERRAMENTO_GRAVADO",
+    "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "ENCERRAMENTO_AMBIGUO", "ENCERRAMENTO_GRAVADO", "ENCERRAMENTO_MANTIDO",
     "ENCERRAMENTO_NAO_ENCONTRADO", "GravacaoInvalida", "LinhaGravada", "Resultado", "ResultadoMerge",
     "atualizar", "chamados_para_editar", "chave_coluna_c", "ler_listas", "mesmos_valores", "reaplicar", "registrar_encerramentos",
 ]
