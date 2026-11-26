@@ -1174,8 +1174,9 @@ def reaplicar(
 
     ``escolhas``: ``{id: "sharepoint" | "site"}``; an id that matches no conflict is ignored. The id is the first 12 hex of
     the sha256 of ``chamado|coluna|sharepoint|site``, so a choice never settles a conflict with other values.
-    ``removidas``: ``{UTIC: [OS]}`` of ``sebrae_os_recusadas.removidas``; given (even empty), an empty E erases only when the ``base``
-    E is one of the ticket's removed OS (``base`` may be the copy already sent, whose E the site did not fill); ``None``: any empty E.
+    ``removidas``: ``{UTIC: [OS]}`` of ``sebrae_os_recusadas.removidas``; given (even empty), an empty E of a row with a UTIC erases
+    only when the ``base`` E is one of the ticket's removed OS (``base`` may be the copy already sent, whose E the site did not fill);
+    ``None``, or a row without a UTIC (``linha:N`` cannot be matched in a re-sorted copy): any empty E erases, as before.
     Raises ``DashboardInvalido`` (message without cell values) when a copy is not the expected Dashboard.
     """
     escolhas = escolhas or {}
@@ -1224,7 +1225,7 @@ def reaplicar(
             no_base = b.valor(n_b, letra) if n_b is not None else ""
             # única operação de apagar: a E vazia no site sobre uma E preenchida na base só vem de limpar_e (Remover, 18/11/2026)
             apagar_e = letra == "E" and site == "" and no_base != "" and (
-                removidas is None or (bool(utic) and _os_chave(no_base) in {_os_chave(os_) for os_ in removidas.get(utic, ())}))
+                removidas is None or not utic or _os_chave(no_base) in {_os_chave(os_) for os_ in removidas.get(utic, ())})
             if letra == "C" or (site == "" and not apagar_e) or site == no_base:
                 continue
             if n_e is not None and e.valor(n_e, letra) == site:  # type: ignore[union-attr]

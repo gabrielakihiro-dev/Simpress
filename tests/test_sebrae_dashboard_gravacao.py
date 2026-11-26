@@ -882,6 +882,14 @@ class ReaplicarTest(unittest.TestCase):
         self.assertIsNone(resultado.conteudo)
         self.assertEqual([(c["coluna"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("E", "999", "")])
 
+    def test_com_removidas_linha_sem_utic_segue_a_deducao_antiga_e_apaga_a_e(self):
+        # Remover on a row without UTIC (key linha:N) cannot be matched by UTIC: the empty E of the site still erases.
+        base = _antes_da_coluna_p(montar(("Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO")), 2, texto("E2", "7365311"))
+        gerado = G.atualizar(base, limpar_e={"linha:2": "7365311"}).conteudo
+        for removidas in ({"linha:2": ["7365311"]}, {}):
+            with self.subTest(removidas=removidas):
+                self.assertNotIn("E", por_chamado(self.ok(base, gerado, base, removidas=removidas))["Sem chamado"])
+
     def test_com_removidas_a_e_vazia_so_apaga_a_os_que_o_usuario_removeu(self):
         # Ancestor = copy already sent: an E filled by that send and empty now is not a Remover unless the registry says so.
         base = _antes_da_coluna_p(tres(), 2, texto("E2", "7365311"))

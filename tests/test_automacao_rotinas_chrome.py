@@ -144,6 +144,13 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         self.assertNotIn("VALOR-SINTETICO-SECRETO", str(resultado))
         self.assertNotIn("VALOR-SINTETICO-SECRETO", saida)
 
+    def test_importar_dashboard_422_of_the_real_server_shows_campo_and_msg(self):
+        # main.py validation_error_handler: {"detail": [{"campo", "msg"}]}, never loc/input.
+        corpo = json.dumps({"detail": [{"campo": "file", "msg": "Field required"}]}).encode()
+        resultado, _, _, _ = self._importar(self._http_erro(422, corpo))
+        self.assertIsInstance(resultado, automacao.RotinaErro)
+        self.assertIn("(HTTP 422): file: Field required", str(resultado))
+
     def test_cdp_ativo_treats_a_broken_http_answer_as_inactive(self):
         import http.client
 
@@ -609,6 +616,27 @@ class LoginAbasTests(unittest.TestCase):
         for aba in abas.values():
             aba.is_closed.return_value = False
         return abas
+
+    def test_a_site_answering_5xx_does_not_stop_the_other_tabs(self):
+        abas = self._abas()
+        tentados = []
+
+        def abrir(_c, _u, origem):
+            if origem == "Endpoint Central":
+                raise automacao.RotinaErro("https://exemplo.invalid respondeu HTTP 503; tente de novo em alguns minutos.")
+            return abas[origem]
+
+        def aguardar(page, nome, logado, **_kw):
+            tentados.append(nome)
+            return True
+
+        with patch.object(automacao, "log"), patch.object(automacao, "nova_aba", side_effect=abrir), \
+                patch.object(automacao, "aguardar_login", side_effect=aguardar), redirect_stdout(io.StringIO()):
+            self.assertEqual(automacao.abrir_para_login(MagicMock()), 0)
+        self.assertEqual(tentados, ["UX Simpress", "Oracle"])
+        for erro in (automacao.RotinaCancelada("x"), automacao.RotinaEncerrada("x")):
+            with self.subTest(type(erro).__name__), patch.object(automacao, "nova_aba", side_effect=erro), self.assertRaises(type(erro)):
+                automacao.abrir_para_login(MagicMock())
 
     def test_oracle_tab_reopens_when_ux_already_logged_in_during_automatic_attempts(self):
         abas = self._abas()
@@ -1853,6 +1881,54 @@ class EnviarDashboardTests(unittest.TestCase):
         enviado = T.por_chamado(enviados2[0])
         self.assertNotIn("E", enviado["UTIC-2026-0001"])
         self.assertEqual(enviado["UTIC-2026-0002"]["E"], "7365322")  # Remover of another OS does not erase this one
+
+    def test_preservou_accepts_the_happy_path_and_refuses_each_loss(self):
+        from domains.sebrae_dashboard_gravacao import atualizar, reaplicar
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        nova = {**T.NOVA, "C": "UTIC-2026-0011"}
+        baixado = atualizar(T.do_site(T.tres(), novas=[nova]), automaticos={"UTIC-2026-0001": {"E": "7365311"}}).conteudo
+        gerado = T.do_site(T.tres(), {"UTIC-2026-0002": {"J": "INCIDENTE"}})  # from the import: no 0011, E of 0001 empty
+        certo = reaplicar(baixado, gerado, baixado, removidas={}).conteudo
+        self.assertTrue(automacao._preservou(gerado, certo, baixado, {}))
+        casos = {
+            "perdeu a linha que só existe no baixado": T.tres(),
+            "célula preenchida no gerado diferente": T._trocar_na_folha(certo, ">INCIDENTE<", ">REQUISIÇÃO<"),
+            "E vazia sem a OS em removidas": T._trocar_na_folha(certo, ">7365311<", "><"),
+        }
+        for nome, resultado in casos.items():
+            with self.subTest(nome):
+                self.assertNotEqual(T.por_chamado(resultado), T.por_chamado(certo))
+                self.assertFalse(automacao._preservou(gerado, resultado, baixado, {}))
+        sem_e = casos["E vazia sem a OS em removidas"]
+        self.assertTrue(automacao._preservou(gerado, sem_e, baixado, {"UTIC-2026-0001": ["7365311"]}))
+
+    def test_remover_on_a_row_without_utic_still_sends_with_the_e_erased(self):
+        from domains.sebrae_dashboard_gravacao import atualizar, reaplicar
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = T._antes_da_coluna_p(T.montar(("Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO")), 2, T.texto("E2", "7365311"))
+        gerado = atualizar(base, limpar_e={"linha:2": "7365311"}).conteudo
+        removidas = {"linha:2": ["7365311"]}
+        resultado = reaplicar(base, gerado, base, removidas=removidas).conteudo
+        self.assertNotIn("E", T.por_chamado(resultado)["Sem chamado"])
+        self.assertTrue(automacao._preservou(gerado, resultado, base, removidas))
+
+    def test_busy_removed_registry_is_logged_with_the_error_type_only(self):
+        from domains import sebrae_os_recusadas
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        raiz = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        base = T.tres()
+        baixado = raiz / "baixado.xlsx"
+        baixado.write_bytes(base)
+        ocupado = sebrae_os_recusadas.DomainBusyError("UTIC-2026-0001 7365311")  # the text never reaches the log
+        with patch.object(automacao, "DASHBOARD_SAIDA_DIR", raiz / "sebrae_dashboard_saida"), patch.object(automacao, "log") as log, \
+                patch.object(sebrae_os_recusadas, "removidas", side_effect=ocupado):
+            automacao.montar_sobre_o_sharepoint(baixado, T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}), base)
+        mensagens = " ".join(str(c.args[1]) for c in log.call_args_list)
+        self.assertIn("DomainBusyError", mensagens)
+        self.assertNotIn("7365311", mensagens)
 
     def test_second_send_erases_no_e_when_the_removed_registry_is_unreadable(self):
         from domains import sebrae_os_recusadas

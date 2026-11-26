@@ -2331,14 +2331,15 @@ def cabecalho_sessao_simpress() -> dict[str, str]:
 
 
 def _detalhe_do_erro_http(erro: urllib.error.HTTPError) -> str:
-    """``detail`` da resposta de erro; o 422 do Pydantic leva só ``loc`` e ``msg``, nunca ``input`` (o valor enviado; LGPD)."""
+    """``detail`` da resposta de erro; o 422 leva só ``campo`` (``main.py``) ou ``loc`` (Pydantic cru) e ``msg``, nunca ``input`` (LGPD)."""
     try:
         detalhe = json.load(erro).get("detail")
     except Exception:
         return ""
     if isinstance(detalhe, list):
         return "; ".join(
-            f"{'.'.join(str(parte) for parte in item.get('loc') or ())}: {item.get('msg') or ''}" for item in detalhe if isinstance(item, dict)
+            f"{item.get('campo') or '.'.join(str(parte) for parte in item.get('loc') or ())}: {item.get('msg') or ''}"
+            for item in detalhe if isinstance(item, dict)
         )
     return str(detalhe or "")
 
@@ -2594,8 +2595,9 @@ def montar_sobre_o_sharepoint(baixado: Path, gerado: bytes, referencia: bytes) -
     state_dir = DASHBOARD_SAIDA_DIR.parent
     try:
         removidas = sebrae_os_recusadas.removidas(state_dir)
-    except sebrae_os_recusadas.DomainBusyError:
-        removidas = {}  # registro ilegível: nenhuma E é apagada
+    except sebrae_os_recusadas.DomainBusyError as erro:
+        removidas = {}  # registro ilegível ou ocupado: nenhuma E de chamado com UTIC é apagada (o Remover não chega ao SharePoint)
+        log("Dashboard", f"Registro de OS removidas indisponível ({type(erro).__name__}); nenhuma OS removida será apagada da coluna E neste envio.")
     sharepoint = baixado.read_bytes()
     try:
         resultado = reaplicar(referencia, gerado, sharepoint, escolhas=sebrae_finalizacao.escolhas_dos_conflitos(state_dir), removidas=removidas)
@@ -2977,7 +2979,14 @@ def abrir_para_login(context: "BrowserContext") -> int:
         ("UX Simpress", UX_LOGIN_URL, ux_logado, ux_entrar, EMAIL_DASHBOARD, 45, True),
         ("Oracle", ORACLE_URL, oracle_logado, None, EMAIL_DASHBOARD, 45, True),
     )
-    abas = [(site, nova_aba(context, site[1], site[0])) for site in sites]
+    abas = []
+    for site in sites:
+        try:
+            abas.append((site, nova_aba(context, site[1], site[0])))
+        except RotinaEncerrada:
+            raise
+        except RotinaErro as erro:  # ex.: site com HTTP 5xx; as outras abas seguem (RotinaCancelada é BaseException e passa)
+            log(site[0], f"Não foi possível abrir a página ({descrever_erro(erro)}).")
 
     def tentar(site, page, recarregar: bool = False) -> bool:
         nome, url, logado, entrar, email, apos, _compartilha = site
