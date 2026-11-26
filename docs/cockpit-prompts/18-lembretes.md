@@ -137,7 +137,7 @@ Pedido do usuário (12/11/2026): o lembrete criado a partir de um termo continua
 
 Pedido do usuário (25/11/2026). Integração só de leitura com a Central de Notificações (sino): o cartão `#alerta-lembretes-agendados` mostra a contagem de lembretes atrasados e de hoje. Regra do cartão, gravidade, quando some e a fonte estão em `docs/operacao/alertas-os-divergencias.md`, seção 7.
 
-- Aparece quando há ao menos 1 lembrete pendente atrasado (selo `Urgente`) ou só de hoje (selo `Atenção`). Textos: `2 lembretes atrasados.`, `1 lembrete para hoje.`, `2 atrasados e 1 para hoje.`. Só números, nunca a descrição.
+- Aparece quando há ao menos 1 lembrete pendente atrasado (selo `Urgente`) ou só de hoje (selo `Atenção`). Textos aprovados: `2 lembretes atrasados.`, `1 lembrete atrasado.`, `3 lembretes para hoje.`, `1 lembrete para hoje.`, `2 atrasados e 1 para hoje.`, `1 atrasado e 3 para hoje.`. Só números, nunca a descrição. A regra de aparecer usa `atrasados + hoje` (o `total` do servidor é ignorado pela interface).
 - Botão `Ver Lembretes`: abre esta ferramenta (`abrirPainelCockpit("lembretes")`).
 - Datas: conta só pendentes com `data_agendada` válida. Atrasado é data anterior a hoje; hoje é a data de America/Sao_Paulo. A `hora_agendada` não muda a classificação (hora já passada hoje continua em "hoje"), a mesma regra de `Reagendar para hoje`. Concluídos, futuros e sem data não contam.
 - Atualização: criar, concluir ou reabrir, editar, excluir e reagendar disparam `simpress:atualizar-notificacoes`, e o sino mostra a contagem na hora. O pedido só sai depois que a mudança é gravada; uma falha não pede o painel, exceto 404 na exclusão (o item já não existe, então recontar é correto). Esse pedido não reaproveita uma leitura do painel iniciada antes da mudança: espera ela terminar e pede de novo, para o badge não ficar com contagem velha.
@@ -149,7 +149,7 @@ Pedido do usuário (25/11/2026). Integração só de leitura com a Central de No
 
 - Grava só `data/state/lembretes.json` (`{"version": 1, "lembretes": [...]}`), com `lock_paths` e `atomic_write_json`.
 - Desde 12/11/2026, o lembrete criado a partir de um termo grava também `termo` (`{"campos": {...}, "itens": [11 respostas], "obs": "..."}`): nome do colaborador, unidade, data, modelos, séries, itens e observações, como digitados. Não há CPF no termo. Nada disso vai para log, Assistente ou sistema externo; o arquivo continua só local.
-- O arquivo contém dado pessoal (nome do colaborador). A descrição nunca vai para log, histórico, Assistente ou conteúdo enviado ao modelo. Log só com a classe do erro.
+- O arquivo contém dado pessoal (nome do colaborador). A descrição nunca vai para log, histórico, Assistente ou conteúdo enviado ao modelo. Log só com a classe do erro e o código fixo (`erro.codigo`, ex.: `lembretes_ilegiveis`), nunca a mensagem nem o conteúdo do arquivo.
 - Não há escrita em sistema externo.
 - Bloco 6 (12/11/2026): o `Gerar PDF` dos termos mostra a assinatura do técnico (`GET /api/assinatura-tecnico`, lê `data/state/assinatura_tecnico.svg`, só leitura; nada do termo é enviado). Detalhe em `17-termos.md`, seção "Assinatura do técnico".
 - API `/api/lembretes` (exige o cookie de sessão local; sem ele, 401): `GET /`, `POST /`, `PATCH /{id}`, `DELETE /{id}` e `POST /reagendar-atrasados` (13/11/2026). Contrato em `docs/arquitetura/CONTRATOS_API_BACKEND.md`.

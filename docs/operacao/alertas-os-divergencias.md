@@ -279,26 +279,29 @@ Mostrar quantos lembretes da ferramenta Lembretes estão atrasados ou são de ho
 - Fonte: `data/state/lembretes.json`, lido por `ler_resumo_agendados` (`domains/lembretes.py`) e exposto em `lembretes_agendados` de `GET /api/painel`, pelo callback `get_lembretes_agendados` de `DashboardServices` (`routers/dashboard.py`).
 - Conta só lembretes pendentes (`concluido: false`) com `data_agendada` válida (`AAAA-MM-DD`). Sem data, concluídos e futuros não contam.
 - **Atrasado**: data anterior a hoje. **Hoje**: data igual a hoje, no fuso `America/Sao_Paulo`. A `hora_agendada` não muda a classificação: hora já passada hoje continua em "hoje" (mesma regra de `Reagendar para hoje`).
-- **Gravidade**: `urgente` (selo `Urgente`, `data-gravidade="urgente"`) se houver ao menos 1 atrasado; `atencao` (selo de atenção) se houver só lembretes de hoje.
+- **Gravidade**: `urgente` (selo `Urgente`, `data-gravidade="urgente"`) se houver ao menos 1 atrasado; `atencao` (selo `Atenção`) se houver só lembretes de hoje.
 - Só leitura: o painel nunca grava, cria nem repara `lembretes.json`.
 
 ### Quando aparece e quando some
 
-- Aparece com `total` maior que zero (atrasados mais de hoje). Some com `total` 0, com `indisponivel: true` ou quando o campo falta; o resto do painel continua carregando.
-- Arquivo ausente: zeros com `indisponivel: false`. JSON inválido, formato ilegível ou arquivo ocupado (`PermissionError`): zeros com `indisponivel: true`, sem derrubar o painel. O log leva só a classe do erro.
+- Aparece quando `atrasados + hoje` é maior que zero. Some quando essa soma é 0, com `indisponivel: true` ou quando o campo falta; o resto do painel continua carregando. O `total` que vem do servidor não decide nada: a interface o ignora e o servidor o recalcula como `atrasados + hoje`. Na resposta, só `total`, `atrasados`, `hoje` e `indisponivel` passam (`_lembretes_agendados_allowlist`); contagem inválida vira `indisponivel: true`.
+- Arquivo ausente: zeros com `indisponivel: false`. JSON inválido, formato ilegível ou arquivo ocupado (`PermissionError`): zeros com `indisponivel: true`, sem derrubar o painel. O log leva só a classe do erro e o código fixo (`erro.codigo`, ex.: `lembretes_ilegiveis`, `lembretes_ocupados`), nunca a mensagem nem o conteúdo do arquivo.
 - Atualiza na hora depois de criar, concluir ou reabrir, editar, excluir ou reagendar um lembrete: o front dispara `simpress:atualizar-notificacoes`.
 
 ### O que conta no sino
 
 - Um aviso no contador do sino, não a quantidade de lembretes.
-- O cartão `#alerta-lembretes-agendados` fica escondido quando `total` é 0 ou `indisponivel` é true.
+- O cartão `#alerta-lembretes-agendados` fica escondido quando `atrasados + hoje` é 0 ou `indisponivel` é true.
 
 ### Texto
 
 | Gravidade | Título | Texto | Botão |
 | --- | --- | --- | --- |
-| `urgente` (há atrasado) | Lembretes agendados | 2 lembretes atrasados. | Ver Lembretes |
+| `urgente` (só atrasados) | Lembretes agendados | 2 lembretes atrasados. | Ver Lembretes |
+| `urgente` (só atrasados) | Lembretes agendados | 1 lembrete atrasado. | Ver Lembretes |
 | `urgente` (atrasados e hoje) | Lembretes agendados | 2 atrasados e 1 para hoje. | Ver Lembretes |
+| `urgente` (atrasados e hoje) | Lembretes agendados | 1 atrasado e 3 para hoje. | Ver Lembretes |
+| `atencao` (só hoje) | Lembretes agendados | 3 lembretes para hoje. | Ver Lembretes |
 | `atencao` (só hoje) | Lembretes agendados | 1 lembrete para hoje. | Ver Lembretes |
 
 O texto traz só números e as palavras acima; nunca descrição, termo, id ou nome. O botão `#btn-alerta-lembretes-agendados` abre Ferramentas > Lembretes (`abrirPainelCockpit("lembretes")`).
@@ -343,4 +346,4 @@ O texto traz só números e as palavras acima; nunca descrição, termo, id ou n
 11. Com pelo menos uma marca `Finalizado por outro técnico` ativa e sem `Conferido`, o sino mostra "Chamados finalizados por outro técnico" com `Atenção` e o botão "Ver na aba OS" abre a aba OS; depois de `Conferido` ou `Desfazer` na aba OS, ou com a lista vazia ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso. Marcas de chamados finalizados pelo site nunca entram.
 12. Com pelo menos uma regional prioritária em `pendencias.sem_backup`, o sino mostra "Sem backup disponível" com `Urgente`; só com `pendencias.conferir`, mostra "Conferir possível backup" com `Atenção`; o botão "Ver backups no Resumo" abre a sub-aba Backups; com as listas vazias, `null` ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso.
 13. Quando a última finalização no SoftExpert termina com chamado em `erro`, para no meio sem a rotina estar rodando ou falha no envio ao SharePoint, o sino mostra "Falha ao finalizar no SoftExpert" com `Urgente`, só números UTIC e códigos (nunca a mensagem da rotina), e o botão "Ver na aba Chamados" abre a aba Chamados (F5); depois que o chamado é finalizado, com resultado de outra ação, lista vazia ou `indisponivel`, o cartão fica oculto e o contador não conta o aviso.
-14. Com lembrete pendente atrasado, o sino mostra "Lembretes agendados" com `Urgente`; só com lembretes de hoje, mostra com `Atenção`; concluídos, futuros e sem data não contam; com `total` 0 ou `indisponivel`, o cartão fica oculto; criar, concluir, editar, excluir ou reagendar um lembrete atualiza o sino na hora; o arquivo de lembretes não é regravado.
+14. Com lembrete pendente atrasado, o sino mostra "Lembretes agendados" com `Urgente`; só com lembretes de hoje, mostra com `Atenção`; concluídos, futuros e sem data não contam; com `atrasados + hoje` 0 ou `indisponivel`, o cartão fica oculto; criar, concluir, editar, excluir ou reagendar um lembrete atualiza o sino na hora; o arquivo de lembretes não é regravado.
