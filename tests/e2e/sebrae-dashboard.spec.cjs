@@ -608,7 +608,7 @@ test("falha no SharePoint mostra o aviso com motivo, cópia local e sugestões, 
   await expect(aviso).toContainText("Cópia local pendente:");
   await expect(aviso.locator("code")).toContainText("Dashboard Operacional_SEBRAE (pendente 2026-10-28 1030).xlsx");
   await expect(aviso).toContainText("só neste computador");
-  await expect(aviso.locator("ol li")).toHaveCount(3);
+  await expect(aviso.locator("ol li")).toHaveCount(2);
   await expect(aviso).toContainText("porta 9333");
   for (const tema of ["light", "dark"]) {
     await page.evaluate(valor => document.documentElement.setAttribute("data-theme", valor), tema);

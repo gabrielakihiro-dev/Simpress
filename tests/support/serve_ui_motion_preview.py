@@ -513,7 +513,6 @@ FINALIZAR_SHAREPOINT = {
     "falhou": True, "motivo": "o SharePoint pediu login de novo", "copia_local": "data/state/sebrae_dashboard_pendente/Dashboard Operacional_SEBRAE (pendente 2026-10-28 1030).xlsx",
     "copia_sharepoint": False,
     "sugestoes": ["Confira o login do SharePoint no Chrome de automação (porta 9333) e use Tentar substituir de novo.",
-                  "Se persistir, abra a pasta e arraste a cópia pendente, renomeando para Dashboard Operacional_SEBRAE.xlsx.",
                   "Antes de substituir, confira se ninguém alterou o original no SharePoint."],
 }
 finalizar_state = {}
