@@ -20,7 +20,7 @@ from core.config import REQUEST_BODY_IDLE_TIMEOUT_SECONDS, MAX_UX_ALIAS_BYTES
 from core.integrity import FileBusyError
 from core.inventory_requests import IDEMPOTENCY_KEY_ERROR, IDEMPOTENCY_KEY_PATTERN
 from security import sessao_local
-from security.network import is_direct_loopback_request
+from security.network import acesso_rede_ativo, ip_da_rede, is_direct_loopback_request
 
 logger = logging.getLogger(__name__)
 
@@ -72,11 +72,15 @@ class LocalRequestSafetyServices:
 
 
 def allowed_local_authorities(port: int) -> FrozenSet[Tuple[str, int]]:
-    return frozenset({
+    autoridades = {
         ("127.0.0.1", port),
         ("localhost", port),
         ("::1", port),
-    })
+    }
+    ip_lan = ip_da_rede() if acesso_rede_ativo() else None
+    if ip_lan:
+        autoridades.add((ip_lan, port))
+    return frozenset(autoridades)
 
 
 def parse_request_authority(

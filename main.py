@@ -1233,6 +1233,8 @@ async def validation_error_handler(_request: Request, error: RequestValidationEr
 app.add_middleware(InventoryUpdateMiddleware)
 
 
+from security.network import acesso_rede_ativo, ip_da_rede
+
 SERVER_PORT = int(os.environ.get("SIMPRESS_PORT", "8000"))
 IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS = 120
 
@@ -2558,4 +2560,9 @@ if __name__ == "__main__":
     # Reads the automation logs once in the background, so the first Automação (F4) open is served from cache.
     threading.Thread(target=_warm_automation_history, daemon=True).start()
     # Access lines would carry ?q= searches (serials, hostnames) and the bootstrap token to the console.
-    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False, access_log=False)
+    host = "0.0.0.0" if acesso_rede_ativo() else "127.0.0.1"
+    if host == "0.0.0.0":
+        logger.warning("Acesso pela rede ATIVO: so IPs privados da LAN; /api/* exige o link com token.")
+        # Console only: the token must not reach the log file.
+        print(f"\n  CELULAR (mesmo Wi-Fi): http://{ip_da_rede()}:{SERVER_PORT}/bootstrap?t={sessao_local.SEGREDO}\n", flush=True)
+    uvicorn.run(app, host=host, port=SERVER_PORT, proxy_headers=False, access_log=False)
