@@ -392,7 +392,7 @@ test.describe("Histórico de planilhas", () => {
     await page.goto("/");
     await abrirHistoricoSemNavegar(page);
     await page.getByRole("button", { name: "Excluir atualização de 20/10/2026, 09:00:00" }).click();
-    await page.getByRole("dialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
+    await page.getByRole("alertdialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
     await expect(page.locator(TOTAL)).toHaveText("3 registros");
 
     const respostaAtrasada = page.waitForResponse(response => new URL(response.url()).pathname === "/api/historico-comparacoes");
@@ -417,7 +417,7 @@ test.describe("Histórico de planilhas", () => {
 
     painel.length = 0;
     await page.getByRole("button", { name: "Excluir atualização de 20/10/2026, 09:00:00" }).click();
-    await page.getByRole("dialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
+    await page.getByRole("alertdialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
     await expect(page.locator(TOTAL)).toHaveText("3 registros");
     await page.waitForLoadState("networkidle");
     expect(painel.length).toBe(PAINEL_POR_EXCLUSAO);
@@ -429,7 +429,7 @@ test.describe("Histórico de planilhas", () => {
     await abrirHistorico(page);
 
     await page.getByRole("button", { name: "Excluir atualização de 20/10/2026, 09:00:00" }).click();
-    const confirmacao = page.getByRole("dialog", { name: "Excluir atualização?" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Excluir atualização?" });
     await expect(confirmacao).toContainText("Tem certeza de que deseja excluir esta atualização de 20/10/2026, 09:00:00? Essa ação não poderá ser desfeita.");
     await confirmacao.getByRole("button", { name: "Excluir" }).click();
 
