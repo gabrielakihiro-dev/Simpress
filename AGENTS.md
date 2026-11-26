@@ -8,7 +8,7 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 
 - FastAPI local: `main.py`, `routers/` (HTTP), `domains/` (regras), `core/`, `security/`, `scripts/` (rotinas e automação); front em `static/` (JS antigo) e React em migração (`frontend/src/`, gerado em `static/dist/`; plano `docs/planos/migracao-react-vite.md`).
 - Só local, dados em `data/`, sem backend remoto nem Supabase; migrar para serviço externo começa por análise que não altera código nem dados; preserve auditoria, sincronização, restauração e reversibilidade.
-- `/api/*` só responde com o cookie `simpress_sessao_<porta>`, criado por `GET /bootstrap?t=<segredo>` (`security/sessao_local.py`); sem ele, 401. Todo cliente interno novo o envia.
+- `/api/*` só responde com o cookie `simpress_sessao_<porta>`, criado por `GET /bootstrap?t=<segredo>` (`security/sessao_local.py`); sem ele, 401. Todo cliente interno novo precisa enviá-lo.
 
 ## Regras gerais
 
@@ -50,7 +50,7 @@ Mudou tela, rotina, endpoint, texto aprovado, dado gravado ou regra de seguranç
 
 ## Tamanho das regras
 
-Ao editar `AGENTS.md`, `CLAUDE.md` ou `.cursor/rules/`, siga "Tamanho das regras" em `docs/desenvolvimento/regras-agentes.md`: acima da meta, avise; acima do teto (`tests/test_rules_size.py` falha), mova o detalhe e deixe gatilho e caminho.
+Ao editar `AGENTS.md`, `CLAUDE.md` ou `.cursor/rules/`, siga "Tamanho das regras" em `docs/desenvolvimento/regras-agentes.md`: acima da meta, avise o usuário; acima do teto (`tests/test_rules_size.py` falha), mova o detalhe para a pasta ou o doc e deixe gatilho e caminho.
 
 ## Explicações para leigo
 
