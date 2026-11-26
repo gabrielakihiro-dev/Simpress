@@ -1118,6 +1118,8 @@ async function abrirSinoLembretes(page, estado) {
 
 test("sino: lembretes atrasados mostram o cartão urgente, contam 1 aviso e abrem os Lembretes", async ({ page }) => {
   try {
+    // Reinicia os avisos de backup para o padrão: o total esperado não depende de outros specs.
+    expect((await page.request.get("/__fixture_backups?estado=padrao")).ok()).toBeTruthy();
     await abrirSinoLembretes(page, "atrasados");
     const cartao = page.locator("#alerta-lembretes-agendados");
     await expect(cartao).toBeVisible();
@@ -1249,6 +1251,84 @@ test("excluir com 404 (o item já não existe) reconta o painel exatamente 1 vez
     await page.waitForTimeout(700);
     await page.waitForLoadState("networkidle");
     expect(painel.respostas).toBe(1);
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+// Cada mutação com sucesso recontar o sino (GET /api/painel) exatamente 1 vez: zera o contador, age, espera o sinal
+// visível do sucesso e exige 1 GET (nem 0, nem 2).
+async function exigirUmPainel(page, painel) {
+  await expect.poll(() => painel.respostas).toBe(1);
+  await page.waitForTimeout(700); // um segundo pedido, se existisse, chegaria aqui
+  await page.waitForLoadState("networkidle");
+  expect(painel.respostas).toBe(1);
+}
+
+test("mutação com sucesso: concluir e reabrir pedem o painel exatamente 1 vez cada", async ({ page }) => {
+  try {
+    const painel = await abrirContandoPainel(page, { itens: 1 });
+    painel.zerar();
+    await page.getByRole("button", { name: "Concluir: Lembrete sintético 1" }).click();
+    await expect(pendentes(page)).toHaveCount(0);
+    await exigirUmPainel(page, painel);
+
+    await page.getByRole("button", { name: "Concluídos (1)" }).click();
+    painel.zerar();
+    await page.getByRole("button", { name: "Desmarcar: Lembrete sintético 1" }).click();
+    await expect(pendentes(page)).toHaveCount(1);
+    await exigirUmPainel(page, painel);
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+test("mutação com sucesso: editar a data agendada pede o painel exatamente 1 vez", async ({ page }) => {
+  try {
+    const amanha = diaSaoPaulo(1);
+    const painel = await abrirContandoPainel(page, { itens: 1 });
+    await pendentes(page).first().getByRole("button", { name: "Editar lembrete" }).click();
+    await page.locator("#lembretes-edicao-data").fill(amanha);
+    painel.zerar();
+    await page.getByRole("button", { name: "Salvar", exact: true }).click();
+    await expect(pendentes(page).filter({ hasText: "Lembrete sintético 1" })).toHaveCount(0); // saiu da vista Hoje
+    await exigirUmPainel(page, painel);
+    expect(await apiLembretes(page)).toMatchObject([{ data_agendada: amanha }]);
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+test("mutação com sucesso: criar lembrete a partir do termo pede o painel exatamente 1 vez", async ({ page }) => {
+  try {
+    const painel = await abrirContandoPainel(page);
+    await page.locator("#termos-aba-entrega").click();
+    await expect(page.locator("#termos-painel-entrega")).toBeVisible();
+    await preencherEntrega(page);
+    await botaoCriarLembrete(page, "entrega").click();
+    await expect(dialogoCriar(page)).toBeVisible();
+    painel.zerar();
+    await confirmarCriar(page).click();
+    await expect(page.locator("#termos-status-entrega")).toHaveText("Lembrete criado.Ver em Lembretes");
+    await exigirUmPainel(page, painel);
+    expect(await apiLembretes(page)).toHaveLength(1);
+  } finally {
+    await page.request.get("/__fixture_lembretes?itens=0");
+  }
+});
+
+test("mutação com sucesso: Reagendar para hoje pede o painel exatamente 1 vez", async ({ page }) => {
+  try {
+    expect((await page.request.get("/__fixture_lembretes?itens=0")).ok()).toBeTruthy();
+    const dados = { descricao: "Atrasado sintético", data_agendada: diaSaoPaulo(-1) };
+    expect((await page.request.post("/api/lembretes", { data: dados })).ok()).toBeTruthy();
+    const painel = await abrirContandoPainel(page, { reiniciar: false });
+    await expect(grupoDoDia(page, "atrasada")).toBeVisible();
+    painel.zerar();
+    await page.getByRole("button", { name: "Reagendar para hoje", exact: true }).click();
+    await expect(page.locator("#toast-container")).toContainText("1 lembrete reagendado para hoje.");
+    await expect(grupoDoDia(page, "atrasada")).toHaveCount(0);
+    await exigirUmPainel(page, painel);
   } finally {
     await page.request.get("/__fixture_lembretes?itens=0");
   }
