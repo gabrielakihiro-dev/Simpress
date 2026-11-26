@@ -30,9 +30,16 @@ PHONE_PATTERN = re.compile(
     r")(?![\w-])"
 )
 TOKEN_PATTERN = re.compile(r"\[PESSOA_\d+\]")
-# A formatted CPF is always masked; 11 loose digits only when the check digits match.
-CPF_FORMATADO_PATTERN = re.compile(r"(?<!\d)\d{3}\.\d{3}\.\d{3}-\d{2}(?!\d)")
-CPF_SOLTO_PATTERN = re.compile(r"(?<![\w-])\d{11}(?![\w-])")
+# Single CPF rule for the whole project (assistant and Sebrae ticket text), hybrid:
+# - a label ("CPF", "CPF:", "CPF #") before a formatted or 11-digit number masks it always, keeping the label;
+# - a formatted CPF (ddd.ddd.ddd-dd) is always masked;
+# - 11 loose digits are masked only with valid check digits (not all equal) and rigid borders (no \w or "-" around).
+CPF_PATTERN = re.compile(
+    r"(?<!\w)(?P<rotulo>CPF\b\s*[:#-]?\s*)(?P<rotulado>\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})(?!\d)"
+    r"|(?<!\d)(?P<formatado>\d{3}\.\d{3}\.\d{3}-\d{2})(?!\d)"
+    r"|(?<![\w-])(?P<solto>\d{11})(?![\w-])",
+    re.IGNORECASE,
+)
 SENHA_PATTERN = re.compile(
     r"\b(senha|password|passwd|pwd)\b"
     r"(?:[ \t]+(?:atual|nova|antiga|tempor[aá]ria|padr[aã]o|fict[ií]cia|de[ \t]+(?:acesso|teste))\b)?"
@@ -104,6 +111,18 @@ def _cpf_valido(digitos: str) -> bool:
     return True
 
 
+def mascarar_cpfs(texto: Any) -> str:
+    """Mask CPFs with ``***.***.***-**``; the only CPF rule (see ``CPF_PATTERN``)."""
+    def substituir(m: "re.Match[str]") -> str:
+        if m.group("rotulado"):
+            return m.group("rotulo") + CPF_MASCARA
+        if m.group("formatado"):
+            return CPF_MASCARA
+        return CPF_MASCARA if _cpf_valido(m.group("solto")) else m.group(0)
+
+    return CPF_PATTERN.sub(substituir, str(texto or ""))
+
+
 def _parece_credencial(valor: str, *, campo: bool) -> bool:
     """Conservative first-token check; a lone word after a label can be a password."""
     token = valor.split(maxsplit=1)[0] if valor.strip() else ""
@@ -172,8 +191,7 @@ def limpar_texto_sensivel(texto: Any) -> str:
     if not texto:
         return ""
     limpo = omitir_senhas(texto)
-    limpo = CPF_FORMATADO_PATTERN.sub(CPF_MASCARA, limpo)
-    limpo = CPF_SOLTO_PATTERN.sub(lambda m: CPF_MASCARA if _cpf_valido(m.group(0)) else m.group(0), limpo)
+    limpo = mascarar_cpfs(limpo)
     limpo = EMAIL_PATTERN.sub("[E-MAIL OCULTADO]", limpo)
     return PHONE_PATTERN.sub("[TELEFONE OCULTADO]", limpo).strip()
 
