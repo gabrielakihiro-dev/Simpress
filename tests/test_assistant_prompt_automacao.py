@@ -85,6 +85,7 @@ class ResultadoFinalizacaoTests(unittest.TestCase):
             {"numero": "UTIC-2026-1255", "status": "erro", "mensagem": f"O Dashboard no SharePoint mudou depois da importação. {sujo}",
              "motivo": sujo},
             {"numero": "UTIC-2026-1256", "status": "erro", "mensagem": sujo, "motivo": sujo},
+            {"numero": "UTIC-2026-1257", "status": "incerto", "mensagem": sujo, "motivo": sujo},
             {"numero": sujo[:40], "status": sujo, "mensagem": sujo, "motivo": sujo, "encerrado_em": sujo},
         ]}}
 
@@ -96,6 +97,7 @@ class ResultadoFinalizacaoTests(unittest.TestCase):
             {"numero": "UTIC-2026-1254", "status": "erro", "motivo_codigo": "sessao_expirada", "encerrado_em": None},
             {"numero": "UTIC-2026-1255", "status": "erro", "motivo_codigo": "dashboard_sharepoint_mudou", "encerrado_em": None},
             {"numero": "UTIC-2026-1256", "status": "erro", "motivo_codigo": "desconhecido", "encerrado_em": None},
+            {"numero": "UTIC-2026-1257", "status": "incerto", "motivo_codigo": None, "encerrado_em": None},
             {"numero": None, "status": "desconhecido", "motivo_codigo": None, "encerrado_em": None},
         ])
         saida = json.dumps(r, ensure_ascii=False)

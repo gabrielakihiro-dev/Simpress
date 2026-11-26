@@ -737,7 +737,7 @@ QUERY_TOOLS: List[Tool] = [
         "Por categoria (notebook, macbook, monitor, fone) use `cidades_por_categoria`: é o filtro do cartão Ativos por regional no Resumo (F3). "
         "Os avisos do sino (`os_paradas`, `divergencias_novas`, `sem_acesso_60_dias`, `chamados_outro_tecnico`, `falhas_finalizacao_softexpert`) vêm aqui;`sem_acesso_60_dias` conta notebooks/MacBooks com mais de 55 dias sem acesso (limite) e com 60 dias ou mais (passaram, inclusive os que saíram da lista para Ausentes no Endpoint); `equipamentos` traz série, hostname e dias de cada um. "
         "`chamados_outro_tecnico` (`total`, `itens` com chamado, série, OS e motivo; `indisponivel` se a leitura falhou) lista chamados que parecem finalizados por outro técnico e ainda não foram conferidos: avise o usuário para finalizar ou conferir no SoftExpert e marcar `Conferido` na aba OS (F6); o Assistente não marca, desfaz nem confere. "
-        "`falhas_finalizacao_softexpert` (`total`, `itens` com número UTIC e `motivo`: `erro`, `tempo_esgotado`, `sessao_expirada`, `interrompida`, "
+        "`falhas_finalizacao_softexpert` (`total`, `itens` com número UTIC e `motivo`: `erro`, `tempo_esgotado`, `sessao_expirada`, `incerto` (Finalizar clicado sem confirmação), `registro_local` (finalizado, mas o registro local falhou), `interrompida`, "
         "`planilha` (finalizado, mas a DT ENCERRAMENTO não foi gravada no Dashboard) ou `sharepoint`; "
         "`indisponivel` se a leitura falhou) lista o que a última finalização no SoftExpert não concluiu: oriente o usuário a ver a aba Chamados (F5) e diga: "
         "\"Confira no SoftExpert se o chamado já foi finalizado antes de tentar de novo.\"; o Assistente não finaliza por conta própria.",
@@ -1262,7 +1262,9 @@ CHANGE_TOOLS: List[Tool] = [
         "Atendimento Realizado\") vem das palavras do usuário ou da já salva no chamado; sem descrição, peça ao usuário, não invente. "
         "Nome, e-mail e telefone ocultados no chat não podem ir na descrição. A finalização em massa continua só na tela "
         "(\"Atualizar Dashboard\"). " + _INSTRUCAO_ENCERRAMENTO + " O usuário confirma antes. "
-        "Você nunca confirma \"finalizado por outro técnico\": se a rotina não achar o chamado, o resultado é `nao_encontrado`.",
+        "Você nunca confirma \"finalizado por outro técnico\": se a rotina não achar o chamado, o resultado é `nao_encontrado`. "
+        "`incerto` = Finalizar foi clicado e o resultado não foi confirmado: peça para conferir no SoftExpert; um novo pedido só "
+        "confere a central de tarefas e nunca clica de novo.",
         lambda c, a: c.finalizar_chamado_softexpert(a.get("numero"), a.get("descricao"), a.get("_versao_importacao"), a.get("encerramento")),
         {
             "numero": {"type": "string", "pattern": "^UTIC-[0-9]{4}-[0-9]{1,24}$", "description": "Chamado, ex.: UTIC-2026-1253."},

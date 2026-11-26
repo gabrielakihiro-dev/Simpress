@@ -41,7 +41,7 @@ Os 5 KPIs:
 
 1. **Total de ativos** — valor de `#stat-equipamentos`. Variação: "+N no mês". Cor neutra.
 2. **Sincronizados** — percentual de sincronização. Badge "93,2%". Cor ok (verde).
-3. **Sem acesso há 7+ dias** — contagem. Badge "+N na semana". Cor warn (âmbar).
+3. **Sem acesso há 7+ dias** — contagem (desde 26/11/2026, pedido do usuário: a sub-aba mostra `Sem acesso de 7 a 59 dias` + `Passou de 60 dias sem acesso` e o cartão conta cada máquina uma vez; a Situação da lista de 60+ passou a `Ainda no Endpoint, sem acesso`; detalhe em `08-comparacao-operacional.md`). Badge "+N na semana". Cor warn (âmbar).
 4. **Divergência de localidade** — contagem. Badge "±N na semana". Cor err (vermelho).
 5. **Sem correspondência (Simpress × Endpoint)** — contagem. Cor err (vermelho).
 

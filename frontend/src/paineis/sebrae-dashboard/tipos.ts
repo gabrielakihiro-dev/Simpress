@@ -176,6 +176,9 @@ export interface EstadoSebrae {
   observacoes: Record<string, Registro>;
   temporizadoresObs: Record<string, number>;
   salvandoObs: Record<string, Promise<boolean>>;
+  /** Trava por chamado enquanto Finalizar ou o envio/remoção do PDF está em andamento (os recálculos de botão a respeitam). */
+  finalizando: Set<string>;
+  pdfOcupado: Map<string, number>;
   destaques: Record<string, Registro>;
   destaqueEditados: Set<string>;
   destaqueOcupado: Set<string>;

@@ -40,7 +40,9 @@ from domains.sebrae_chamados import (
 )
 # STATUS_PRONTO: confirmar_final=False, tudo preenchido e conferido, Finalizar NÃO clicado.
 from domains.sebrae_finalizacao import (  # noqa: F401 - reexportados para quem lê o resultado de finalizar_chamado
+    MENSAGEM_INCERTO,
     STATUS_ERRO,
+    STATUS_INCERTO,
     STATUS_NAO_ENCONTRADO,
     STATUS_OK,
     STATUS_PRONTO,
@@ -421,16 +423,20 @@ def _rotulo_liberado(partes: List[str]) -> bool:
     return bool(_ESCRITA_LIBERADA) and bool(normalizadas) and all(n == _ESCRITA_LIBERADA for n in normalizadas)
 
 
-def clicar(locator: "Locator", descricao: str) -> None:
+def clicar(locator: "Locator", descricao: str, antes_do_clique: Optional[Callable[[], None]] = None) -> None:
     """Clica em um botão/item de menu, recusando rótulos de ação de escrita (finalizar, enviar, reatribuir…).
 
     A única brecha é ``_liberar_escrita`` (usada só por ``finalizar_chamado``): vale para um rótulo exato.
+    ``antes_do_clique`` roda depois de toda validação e logo antes do ``click``: anota um clique irreversível de modo que uma
+    exceção do próprio clique nunca leve a outro, e que uma recusa antes dele não marque nada.
     """
     primeiro = locator.first
     partes = [primeiro.inner_text(timeout=5000), primeiro.get_attribute("aria-label") or ""]
     rotulo = " ".join(parte for parte in partes if parte).strip()
     if ROTULOS_PROIBIDOS.search(rotulo) and not _rotulo_liberado(partes):
         raise SoftExpertErro(f"{descricao}: recusado o clique em {rotulo!r}; a rotina só lê o SoftExpert.")
+    if antes_do_clique is not None:
+        antes_do_clique()
     primeiro.click(timeout=15_000)
 
 
@@ -954,8 +960,8 @@ def _responder_confirmacao(alvos: List["Page"], respondidas: List[float]) -> boo
                         "A confirmação de associar o chamado voltou depois do Sim; nada foi clicado de novo.",
                         MOTIVO_CONFIRMACAO_INESPERADA,
                     )
-                clicar(sim, "Confirmação de associar o chamado")
-                respondidas.append(time.time())
+                # anotado logo antes do click: uma falha depois dele nunca leva a um segundo Sim
+                clicar(sim, "Confirmação de associar o chamado", lambda: respondidas.append(time.time()))
                 _log("Confirmação de associar o chamado ao usuário: Sim.")
                 return True
     return False
@@ -1609,9 +1615,8 @@ def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
         _rotinas().aguardar_estabilidade_pre_clique(lambda: enviar.count() == 1, "Enviar anexo")
     except _rotinas().RotinaErro as erro:
         raise SoftExpertErro(str(erro)) from erro
-    with _liberar_escrita("enviar"):
-        clicar(enviar, "Enviar anexo")
-    escritas.append("anexo")
+    with _liberar_escrita("enviar"):  # "anexo" anotado logo antes do click: se ele falhar depois de enviar, o PDF não sobe de novo
+        clicar(enviar, "Enviar anexo", lambda: escritas.append("anexo"))
     _log(f"Anexo {pdf.name}: Enviar clicado; aguardando concluir.")
 
     def concluido() -> bool:
@@ -1638,8 +1643,10 @@ def _tratar_dialogo_finalizar(inesperados: List[str]) -> Callable[[Any], None]:
     return tratar
 
 
-def _confirmar_modal_finalizar(janela: "Page") -> bool:
-    """Modal HTML de confirmação do Finalizar: clica Sim/Confirmar só se o texto falar de finalizar."""
+def _confirmar_modal_finalizar(janela: "Page", confirmado: Optional[List[bool]] = None) -> bool:
+    """Modal HTML de confirmação do Finalizar: clica Sim/Confirmar só se o texto falar de finalizar.
+
+    ``confirmado[0]`` vira True logo ANTES do clique: uma exceção depois dele nunca leva a um segundo Sim."""
     for frame in _frames(janela):
         for dialogo in frame.locator(SEL_DIALOGO).filter(visible=True).all():
             sim = dialogo.get_by_role("button", name=NOME_SIM).filter(visible=True)
@@ -1657,7 +1664,11 @@ def _confirmar_modal_finalizar(janela: "Page") -> bool:
                 # Sem isto, _esperar (chamado por _clicar_finalizar) trata RotinaErro genérica como "ainda não"
                 # e engole o aborto do guard, repetindo a checagem até estourar o prazo sem nunca confirmar.
                 raise SoftExpertErro(str(erro)) from erro
-            clicar(sim, "Confirmação de finalizar")
+            def marcar() -> None:
+                if confirmado is not None:
+                    confirmado[0] = True
+
+            clicar(sim, "Confirmação de finalizar", marcar)
             _log("Confirmação do Finalizar: Sim.")
             return True
     return False
@@ -1679,9 +1690,9 @@ def _clicar_finalizar(page: "Page", janela: "Page", numero: str, escritas: List[
             _rotinas().aguardar_estabilidade_pre_clique(pronto, f"Finalizar ({numero} no cabeçalho da janela)")
         except _rotinas().RotinaErro as erro:
             raise SoftExpertErro(str(erro)) from erro
+        # "finalizar" anotado logo antes do click: o clique que fecha a janela pode levantar erro depois de finalizar
         with _liberar_escrita("finalizar"):
-            clicar(botao, "Finalizar")
-        escritas.append("finalizar")
+            clicar(botao, "Finalizar", lambda: escritas.append("finalizar"))
         _log("Finalizar clicado.")
         confirmado = [False]
 
@@ -1694,7 +1705,7 @@ def _clicar_finalizar(page: "Page", janela: "Page", numero: str, escritas: List[
             if janela.is_closed():
                 return True
             if not confirmado[0]:
-                confirmado[0] = _confirmar_modal_finalizar(janela)
+                _confirmar_modal_finalizar(janela, confirmado)
             return False
 
         _esperar(page, andou, ESPERA_FINALIZAR_MS)
@@ -1737,7 +1748,8 @@ def finalizar_chamado(
     nada é gravado: o PDF só é validado localmente, não é enviado ao chamado (``anexo_pendente`` nos
     detalhes; ele sobe só na finalização, logo antes do Finalizar). Entrada inválida levanta ``SoftExpertErro`` antes de qualquer
     navegação. Devolve ``{numero, status, detalhes}`` com ``status`` em ``ok``, ``pronto`` (sem
-    Finalizar), ``nao_encontrado`` (fora da central de tarefas) ou ``erro``; ``SessaoExpirada`` sobe.
+    Finalizar), ``nao_encontrado`` (fora da central de tarefas), ``incerto`` (Finalizar clicado sem confirmação) ou
+    ``erro``; ``SessaoExpirada`` e ``RotinaCancelada`` sobem com o atributo ``escritas`` (o que já foi gravado).
     """
     try:
         numero = chave_do_numero(numero)
@@ -1754,14 +1766,43 @@ def finalizar_chamado(
     escritas: List[str] = []  # o que já foi gravado no SoftExpert: distingue "nada aconteceu" de "confira lá"
     try:
         return _finalizar(page, numero, texto, caminho_pdf, enviar_email, confirmar_final, escritas)
-    except SessaoExpirada:
+    except SessaoExpirada as erro:
+        _anexar_escritas(erro, escritas)
         raise
-    except Exception as erro:  # inclui TimeoutError do Playwright; RotinaCancelada (BaseException) sobe
+    except Exception as erro:  # inclui TimeoutError do Playwright
         # Só mensagem própria vai a log e resultado; a de Playwright traz trechos da página (LGPD).
         mensagem = str(erro) if isinstance(erro, SoftExpertErro) else _so_tipo(erro)
         _log(f"{numero}: falha ao finalizar: {mensagem}")
         motivo = erro.motivo if isinstance(erro, SoftExpertErro) else MOTIVO_ERRO_INESPERADO
+        if "finalizar" in escritas:  # depois do clique irreversível: nunca "erro" repetível
+            return _resultado(numero, STATUS_INCERTO, mensagem=MENSAGEM_INCERTO, motivo=motivo, escritas=list(escritas))
         return _resultado(numero, STATUS_ERRO, mensagem=mensagem, motivo=motivo, escritas=list(escritas))
+    except BaseException as erro:  # RotinaCancelada: quem chama anota as escritas antes de parar
+        _anexar_escritas(erro, escritas)
+        raise
+
+
+def _anexar_escritas(erro: BaseException, escritas: List[str]) -> None:
+    try:
+        setattr(erro, "escritas", list(escritas))
+    except Exception:  # noqa: BLE001 - exceção sem atributos livres: quem chama trata como sem escrita
+        pass
+
+
+def cartao_na_central(page: "Page", numero: str) -> bool:
+    """Só leitura: o cartão de ``numero`` ainda está na central de tarefas? Nunca abre o formulário nem clica.
+
+    Usado no novo pedido de um chamado ``incerto`` (Finalizar já clicado antes): False (fora) vira ``ok``, então só depois de
+    2 leituras seguidas sem o cartão, com recarga e espera entre elas. Lista que não carrega ou sessão caída levantam erro."""
+    numero = chave_do_numero(numero)
+    for tentativa in range(2):
+        page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
+        _aguardar_lista(page)
+        if _localizar_chamado(page, numero) is not None:
+            return True
+        if tentativa == 0:
+            page.wait_for_timeout(ESPERA_RELEITURA_MS)
+    return False
 
 
 def _cartao_na_lista(page: "Page", numero: str) -> bool:
