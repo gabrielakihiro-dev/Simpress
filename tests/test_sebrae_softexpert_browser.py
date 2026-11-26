@@ -1532,6 +1532,30 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(self.abas_do_registro(), [])
         self.assertIsNone(se._ESCRITA_LIBERADA)
 
+    def test_erro_do_playwright_e_solicitante_nao_vao_a_log_nem_ao_resultado(self):
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+        self.bancada.chamados = [chamado(1, finalizacao=True, solicitante="Fulana de Tal Sigilosa")]
+        page = self.abrir_lista()
+        logs: list = []
+        erro = PlaywrightTimeout("Locator.click: <td>Dado Sigiloso 123</td>")
+        with patch.object(se, "_log", side_effect=logs.append), patch.object(se, "_preencher_atendimento", side_effect=erro):
+            resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        saida = " ".join(logs) + repr(resultado)
+        self.assertIn("TimeoutError", resultado["detalhes"]["mensagem"])
+        for segredo in ("Sigilos", "Fulana"):
+            self.assertNotIn(segredo, saida)
+        self.assertIn("Solicitante API SEBRAE: não", saida)
+
+    def test_valor_lido_da_pagina_nao_entra_na_mensagem_de_erro(self):
+        with (
+            patch.object(se, "_achar_controle", return_value=(None, object(), "campo")),
+            patch.object(se, "_ler_controle", return_value="Descricao Com Dado Pessoal"),
+        ):
+            with self.assertRaises(se.SoftExpertErro) as ctx:
+                se._ler_atendimento(MagicMock(), "outra descricao", True)
+        self.assertNotIn("Dado Pessoal", str(ctx.exception))
+
     def test_escritas_registram_anexo_e_finalizar_realmente_feitos(self):
         self.bancada.chamados = [chamado(1, finalizacao=True), chamado(2, finalizacao=True)]
         page = self.abrir_lista()

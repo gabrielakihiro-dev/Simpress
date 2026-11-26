@@ -818,13 +818,13 @@ def entrar_microsoft(
             # "Use another account", "Another account", "Acessar Outra Conta", "Outra Conta".
             outra = page.get_by_text(re.compile(r"(another|outra)\s+(account|conta)", re.IGNORECASE)).filter(visible=True)
             if conta.count() and not campo.count():
-                log(origem, f"Escolhendo a conta {email}...")
+                log(origem, "Escolhendo a conta configurada...")
                 conta.first.click()
                 escolheu = True
                 escolhas += 1
                 ultima_escolha = time.time()
             elif campo.count():
-                log(origem, f"Digitando o e-mail {email} e avançando (a senha fica com você)...")
+                log(origem, "Digitando o e-mail da conta configurada e avançando (a senha fica com você)...")
                 campo.first.fill(email)
                 avancar = page.locator("#idSIButton9, input[type='submit']").filter(visible=True)
                 if avancar.count():
@@ -3021,9 +3021,12 @@ def executar(rotina: str, sem_finalizar: bool = False, planilha_ux: Path | None 
                 browser.close()
 
 
-def descrever_erro(erro: Exception) -> str:
+def descrever_erro(erro: Exception, *, so_tipo: bool = False) -> str:
+    """``so_tipo``: erro de terceiros (Playwright) vira só o tipo, pois a mensagem traz texto da página (LGPD)."""
     if isinstance(erro, RotinaErro):
         return str(erro)
+    if so_tipo:
+        return type(erro).__name__
     # Erros do Playwright trazem o log de chamadas inteiro; a primeira linha basta no terminal.
     primeira = (str(erro).strip().splitlines() or [""])[0]
     return f"{type(erro).__name__}: {primeira}"

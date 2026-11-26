@@ -72,7 +72,7 @@ class Rotinas:
     def log(self, origem, texto):
         self.logs.append(texto)
 
-    def descrever_erro(self, erro):
+    def descrever_erro(self, erro, so_tipo=False):
         return str(erro) or type(erro).__name__
 
     def registrar_erro(self, pagina, origem):

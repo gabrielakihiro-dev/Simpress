@@ -279,6 +279,17 @@ class MaskTests(unittest.TestCase):
             f"{marcador} ligou; [PESSOA] voltou",
         )
 
+    def test_ocultar_conhecidos_ignores_accents_both_ways(self) -> None:
+        mask = Mascara()
+        mask.mascarar({"usuario_logado": "JOAO SILVA SANTOS"})
+        saida = mask.ocultar_conhecidos("Chamado de João Silva Santos hoje", completo=True)
+        self.assertNotIn("João", saida)
+        self.assertNotIn("Silva", saida)
+        self.assertTrue(saida.endswith(" hoje") and saida.startswith("Chamado de "))
+        outra = Mascara()
+        outra.mascarar({"usuario_logado": "João Silva Santos"})
+        self.assertNotIn("Silva", outra.ocultar_conhecidos("JOAO SILVA SANTOS ligou", completo=True))
+
     def test_ocultar_conhecidos_completo_drops_a_visible_first_name_of_any_length(self) -> None:
         # Disk history and web search: "Ana [PESSOA_n]" (3 letters) must lose "Ana" too, not only 4+ letter names.
         mask = Mascara()

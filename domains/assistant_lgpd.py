@@ -89,6 +89,15 @@ MIN_NOME_BASE = 3
 MIN_PARTE_NOME = 4  # a loose "Ana" or "Li" would replace pieces of other words
 
 
+def _dobrar(texto: str) -> str:
+    """Sem acentos, mantendo o tamanho (um caractere vira um): os índices valem para o texto original."""
+    saida = []
+    for c in texto:
+        sem = "".join(x for x in unicodedata.normalize("NFKD", c) if not unicodedata.combining(x))
+        saida.append(sem if len(sem) == 1 else c)
+    return "".join(saida)
+
+
 def e_solicitante_sistema(valor: Any) -> bool:
     sem_acento = unicodedata.normalize("NFKD", str(valor or "")).encode("ascii", "ignore").decode()
     return " ".join(sem_acento.casefold().split()) in SOLICITANTES_SISTEMA
@@ -309,20 +318,26 @@ class Mascara:
             valores = set(self._por_valor)
             if completo:
                 valores.update(self._primeiro.values())
-            padrao = r"(?<!\w)(?:" + "|".join(re.escape(v) for v in sorted(valores, key=len, reverse=True)) + r")(?!\w)"
-            busca = self._busca[completo] = (
-                re.compile(padrao, re.IGNORECASE), {v.casefold(): m for v, m in self._por_valor.items()},
-            )
+            padrao = r"(?<!\w)(?:" + "|".join(re.escape(_dobrar(v)) for v in sorted(valores, key=len, reverse=True)) + r")(?!\w)"
+            chaves: Dict[str, str] = {}
+            for v, m in self._por_valor.items():
+                chaves.setdefault(_dobrar(v).casefold(), m)
+            busca = self._busca[completo] = (re.compile(padrao, re.IGNORECASE), chaves)
         padrao_busca, por_valor = busca
 
-        def trocar(achado: "re.Match[str]") -> str:
-            trecho = achado.group(0)
-            marcador = por_valor.get(trecho.casefold())
+        def trocar(trecho: str) -> str:
+            marcador = por_valor.get(_dobrar(trecho).casefold())
             if marcador is None:
                 return PRIMEIRO_NOME_OMITIDO if completo else trecho
             return marcador if completo else self._exibir(marcador, trecho.split(maxsplit=1)[0])
 
-        return padrao_busca.sub(trocar, texto)
+        # Procura no texto sem acentos, mas troca o trecho original (mesmos índices).
+        partes: List[str] = []
+        fim = 0
+        for achado in padrao_busca.finditer(_dobrar(texto)):
+            partes += [texto[fim:achado.start()], trocar(texto[achado.start():achado.end()])]
+            fim = achado.end()
+        return "".join(partes) + texto[fim:]
 
     def restaurar(self, obj: Any) -> Any:
         """Swap known markers for the real value, in text, dict or list.
