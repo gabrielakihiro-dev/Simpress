@@ -79,7 +79,7 @@ class ProjectLayoutTests(unittest.TestCase):
         self.assertGreater(checked, 20)
 
     def test_layers_do_not_import_routers_or_private_domain_names(self):
-        """domains/ and core/ never import routers/; routers/ only import public names from domains/."""
+        """domains/ and core/ never import routers/; routers/ never import a name starting with _ from domains/ (module._x access is not checked)."""
         checked = 0
         for folder in ("domains", "core", "routers"):
             for path in (BASE_DIR / folder).rglob("*.py"):
