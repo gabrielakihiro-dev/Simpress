@@ -8,7 +8,7 @@ from __future__ import annotations
 import calendar
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 import re
@@ -397,12 +397,9 @@ def _month_situation(month: ReportMonth, opened: Optional[date], closed: Optiona
     return situation
 
 
-def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, Any]:
-    """Count each Oracle OS and Simpress pedido once; newer imports replace older order state."""
+def _oracle_records(snapshots: Iterable[Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Oracle OS deduplicated across imports; the newest snapshot wins."""
     oracle: Dict[str, Dict[str, Any]] = {}
-    simpress: Dict[str, Dict[str, Any]] = {}
-    insufficient: List[Dict[str, Any]] = []
-    snapshots = ticket_report_snapshots(dict(report))
     for snapshot in snapshots:
         for ticket in snapshot.get("chamados") or []:
             if not isinstance(ticket, dict):
@@ -424,7 +421,16 @@ def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, 
                     "conclusao": _parse_date(item.get("data_conclusao")),
                     "encerrada": _is_closed(item),
                 }
+    return oracle
 
+
+def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, Any]:
+    """Count each Oracle OS and Simpress pedido once; newer imports replace older order state."""
+    simpress: Dict[str, Dict[str, Any]] = {}
+    insufficient: List[Dict[str, Any]] = []
+    snapshots = ticket_report_snapshots(dict(report))
+    oracle = _oracle_records(snapshots)
+    for snapshot in snapshots:
         snapshot_orders, snapshot_insufficient = _simpress_orders_in_snapshot(snapshot)
         insufficient.extend(snapshot_insufficient)
         # An explicitly incomplete newer observation must supersede older counts too.
@@ -483,6 +489,62 @@ def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, 
         "dados_insuficientes": insufficient,
         "importacoes": len(snapshots),
         "ultima_importacao": str(report.get("atualizado_em") or ""),
+    }
+
+
+# Trends ------------------------------------------------------------------
+
+def _window_average(
+    oracle: Mapping[str, Mapping[str, Any]], start: date, end: date,
+) -> Tuple[Optional[float], int, int]:
+    days = [
+        (record["conclusao"] - record["criacao"]).days
+        for record in oracle.values()
+        if record["conclusao"] and record["criacao"] and start <= record["conclusao"] <= end
+        and record["conclusao"] >= record["criacao"]
+    ]
+    undated = sum(
+        1 for record in oracle.values()
+        if record["encerrada"] and record["conclusao"] is None
+        and record["criacao"] is not None and start <= record["criacao"] <= end
+    )
+    return (round(sum(days) / len(days), 1) if days else None), len(days), undated
+
+
+def build_trends(
+    *, dias: int, today: date, comparison_history: Sequence[Any], ticket_report: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Aggregates only: mean OS duration (current vs previous window) and the no-access series."""
+    start = today - timedelta(days=dias - 1)
+    previous_start = start - timedelta(days=dias)
+    oracle = _oracle_records(ticket_report_snapshots(dict(ticket_report)))
+    mean, closed, undated = _window_average(oracle, start, today)
+    previous_mean, previous_closed, _undated = _window_average(oracle, previous_start, start - timedelta(days=1))
+    points: List[Tuple[datetime, Dict[str, Any]]] = []
+    for event in comparison_history:
+        if not isinstance(event, dict) or is_restoration(event) or event.get("id") == PINNED_BASELINE_ID:
+            continue
+        moment = _event_local_date(event)
+        summary, comparison = event.get("resumo"), event.get("comparacao")
+        total = summary.get("sem_acesso_7_dias") if isinstance(summary, dict) else None
+        if not isinstance(total, int) or isinstance(total, bool):
+            listed = comparison.get("sem_acesso_7_dias") if isinstance(comparison, dict) else None
+            total = len(listed) if isinstance(listed, list) else None
+        if moment is not None and total is not None:
+            points.append((moment, {"horario": str(event.get("horario")), "data": moment.date().isoformat(), "total": total}))
+    points.sort(key=lambda entry: entry[0])
+    return {
+        "dias": dias,
+        "inicio": start.isoformat(),
+        "data_corte": today.isoformat(),
+        "tempo_medio_os": {
+            "media_dias": mean, "encerradas": closed, "encerradas_sem_data": undated,
+            "media_dias_anterior": previous_mean, "encerradas_anterior": previous_closed,
+        },
+        "sem_acesso_7_dias": {
+            "pontos": [point for moment, point in points if start <= moment.date() <= today],
+            "historico_desde": points[0][1]["data"] if points else None,
+        },
     }
 
 
