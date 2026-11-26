@@ -2143,11 +2143,13 @@ _BOTAO_MANTER_AMBOS = re.compile(r"^\s*(Keep both|Manter ambos)\s*$", re.IGNOREC
 # Avisos de sucesso do OneDrive (módulo 5729 de ondemand.resx.js, en-us e pt-br): "Uploaded {0} item(s)[ to {1}]",
 # "Uploaded {0} to {1}", "{0} carregado para {1}", "{0} item(ns) carregado(s)". As falhas ("wasn't uploaded to",
 # "não foi carregado para") e o andamento ("Uploading", "Carregando") ficam de fora. Sintaxe válida também em JS.
+# Ancorado no início e, no {0}, só a contagem ou o nome do Dashboard (inclusive a cópia "(pendente …)"): get_by_text também lê
+# os nomes dos arquivos da pasta, e um arquivo chamado "Relatório carregado para RH.xlsx" não pode confirmar o envio (26/11/2026).
+_NOME_ENVIADO = re.escape(Path(DASHBOARD_FINAL).stem) + r"(?: \(pendente [^)]*\))?(?:\.xlsx)?"
 _AVISO_ENVIO_CONCLUIDO = re.compile(
-    r"^\s*uploaded (?:\d+ items?\b|.+? to \S)"
-    r"|(?<!foi )(?<!foram )carregad[oa]s? para \S"
-    r"|^\s*\d+ ite(?:m|ns) carregad[oa]s?\b"
-    r"|upload(?:s)? (?:complete|finished)|(?:upload|envio|carregamento) conclu[ií]do",
+    rf"^\s*uploaded (?:\d+ items?\b|{_NOME_ENVIADO} to \S)"
+    rf"|^\s*(?:\d+ ite(?:m|ns)|{_NOME_ENVIADO}) carregad[oa]s?\b"
+    r"|^\s*(?:uploads? (?:complete|finished)|(?:upload|envio|carregamento) conclu[ií]do)[.!]?\s*$",
     re.IGNORECASE,
 )
 _AVISO_ARQUIVO_EM_USO = re.compile(r"locked|in use|being used|checked out|bloquead|em uso|sendo usado|sendo editado", re.IGNORECASE)
@@ -2505,22 +2507,51 @@ MSG_SEM_PRESERVAR = (
 )
 
 
+def _os_removidas(state_dir: Path) -> dict:
+    """OS que o usuário mandou Remover da E (``{UTIC: [OS]}``): só elas autorizam o merge a apagar a E; registro ilegível não apaga nada."""
+    from core.errors import DomainBusyError
+    from domains import sebrae_os_recusadas
+
+    try:
+        return sebrae_os_recusadas.removidas(state_dir)
+    except DomainBusyError as erro:
+        log("Dashboard", f"Registro de OS removidas ilegível ({type(erro.__cause__ or erro).__name__}): nenhuma OS é apagada da coluna E neste envio.")
+        return {}
+
+
 def montar_sobre_o_sharepoint(baixado: Path, gerado: bytes, referencia: bytes) -> bytes:
     """O arquivo a enviar parte do Dashboard baixado agora: só as células da CHAMADOS que o site mudou em relação a ``referencia``.
 
     A CHAMADOS do SharePoint tem os valores de ``referencia`` (``conferir_dashboard_do_sharepoint``), mas as outras abas (ex.: Laudos
     editada à mão) podem ter mudado: ``reaplicar`` regrava só a aba CHAMADOS e copia as demais partes do zip byte a byte. O resultado
-    tem de ter na CHAMADOS as mesmas linhas do ``gerado`` (a ordem pode ser a do SharePoint); senão para sem enviar.
+    tem de ter na CHAMADOS as mesmas linhas do ``gerado`` (a ordem pode ser a do SharePoint), com cada célula preenchida do ``gerado``;
+    célula vazia do ``gerado`` fica com o valor do SharePoint (em branco nunca apaga, 26/11/2026). Senão para sem enviar.
     """
     from domains import sebrae_finalizacao
     from domains.sebrae_dashboard import DashboardInvalido
-    from domains.sebrae_dashboard_gravacao import reaplicar, valores_dos_chamados
+    from domains.sebrae_dashboard_gravacao import COLUNAS_DE_DADO, reaplicar, valores_dos_chamados
+
+    def por_c(conteudo: bytes) -> dict:
+        grupos: dict = {}
+        for tupla in valores_dos_chamados(conteudo).values():
+            grupos.setdefault(tupla[COLUNAS_DE_DADO.index("C")], []).append(tupla)
+        return {c: sorted(tuplas) for c, tuplas in grupos.items()}
+
+    def cobre_o_gerado(conteudo: bytes) -> bool:
+        # C repetida com vazios diferentes pode parear errado: aí recusa (para sem enviar), nunca aceita a mais
+        feito, esperado = por_c(conteudo), por_c(gerado)
+        return feito.keys() == esperado.keys() and all(
+            len(feito[c]) == len(esperado[c])
+            and all(not g or g == f for linha_f, linha_g in zip(feito[c], esperado[c]) for f, g in zip(linha_f, linha_g))
+            for c in esperado
+        )
 
     try:
-        resultado = reaplicar(referencia, gerado, baixado.read_bytes(), escolhas=sebrae_finalizacao.escolhas_dos_conflitos(DASHBOARD_SAIDA_DIR.parent))
-        certo = resultado.conteudo is not None and not resultado.conflitos and (
-            sorted(valores_dos_chamados(resultado.conteudo).values()) == sorted(valores_dos_chamados(gerado).values())
+        resultado = reaplicar(
+            referencia, gerado, baixado.read_bytes(), escolhas=sebrae_finalizacao.escolhas_dos_conflitos(DASHBOARD_SAIDA_DIR.parent),
+            removidas=_os_removidas(DASHBOARD_SAIDA_DIR.parent),
         )
+        certo = resultado.conteudo is not None and not resultado.conflitos and cobre_o_gerado(resultado.conteudo)
     except DashboardInvalido as erro:
         raise RotinaErro(f"{MSG_SEM_PRESERVAR} ({erro})") from erro
     if not certo or resultado.conteudo is None:
@@ -2553,7 +2584,7 @@ def mesclar_dashboard_com_sharepoint(baixado: Path, gerado: bytes, base_origem: 
     try:
         resultado = reaplicar(
             base, gerado, sharepoint, enviado=sebrae_finalizacao.enviado_da_importacao(state_dir),
-            escolhas=sebrae_finalizacao.escolhas_dos_conflitos(state_dir),
+            escolhas=sebrae_finalizacao.escolhas_dos_conflitos(state_dir), removidas=_os_removidas(state_dir),
         )
     except DashboardInvalido as erro:
         raise RotinaErro(f"{divergencia} Não consegui mesclar as alterações do site: {erro}") from erro

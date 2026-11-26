@@ -374,6 +374,7 @@ class FinalizarUmTest(FinalizarBase):
         resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True, "edicoes": [manuais]})
         self.assertEqual(resposta.status_code, 202, resposta.text)
         self.assertEqual(self.runner.iniciadas, ["fechar"])
+        self.job()  # a rotina consome o pedido; com ele esperando, o Atualizar responde 409 (26/11/2026)
         atualizar = self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "D": "FINALIZADO"}]})
         self.assertEqual(atualizar.status_code, 422, atualizar.text)  # o mesmo chamado, pelo Atualizar, exige o R
 
@@ -630,6 +631,106 @@ class RGravadoNoDashboardTest(FinalizarBase):
         saida = sebrae_novos.caminho_saida(self.caminhos, resposta.json()["arquivo"]).read_bytes()
         lida = {c.numero: c.valores for c in sebrae_dashboard_gravacao.chamados_para_editar(saida)}
         self.assertEqual(lida[A]["R"], "05/11/2026 09:30")
+
+
+class ReaplicarEncerramentosTest(FinalizarBase):
+    """Decisão do usuário (26/11/2026): o Atualizar não mexe em chamado que o Dashboard importado já traz FINALIZADO com R válido."""
+
+    def saida(self, resposta):
+        from tests.test_sebrae_dashboard_gravacao import por_chamado
+
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        return por_chamado(base64.b64decode(resposta.json()["conteudo_base64"]))
+
+    def importar_c_com_r(self, valor):
+        self.importar(com_r_texto(montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO")), 4, valor))
+        fin.registrar_finalizacao(self.dir, C, fin.STATUS_OK, "20/11/2026 10:00")
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_OK, "21/11/2026 11:00")
+
+    def test_finalizado_com_r_valido_na_base_fica_e_o_em_aberto_registrado_recebe_d_e_r(self):
+        self.importar_c_com_r("19/11/2026 08:30")  # R digitado à mão, diferente do registrado
+        linhas = self.saida(self.post(ATUALIZAR, json={"edicoes": [{"numero": B, "J": "INCIDENTE"}]}))
+        self.assertEqual((linhas[C]["D"], linhas[C]["R"]), ("FINALIZADO", "19/11/2026 08:30"))
+        self.assertEqual((linhas[A]["D"], linhas[A]["R"]), ("FINALIZADO", "21/11/2026 11:00"))
+
+    def test_finalizado_com_r_so_com_a_data_recebe_o_r_registrado(self):
+        self.importar_c_com_r("19/11/2026")  # só a data conta como falta de R (regra de 25/11/2026)
+        linhas = self.saida(self.post(ATUALIZAR, json={"edicoes": [{"numero": B, "J": "INCIDENTE"}]}))
+        self.assertEqual((linhas[C]["D"], linhas[C]["R"]), ("FINALIZADO", "20/11/2026 10:00"))
+
+    def test_fechar_continua_gravando_o_r_do_usuario_mesmo_em_linha_ja_finalizada(self):
+        # a gravação logo depois da finalização (rotina fechar) não usa manter_finalizados
+        base = com_r_texto(montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO")), 4, "19/11/2026 08:30")
+        resultado, estados = sebrae_dashboard_gravacao.registrar_encerramentos(base, {C: "20/11/2026 10:00"})
+        self.assertEqual(estados, {C: sebrae_dashboard_gravacao.ENCERRAMENTO_GRAVADO})
+        from tests.test_sebrae_dashboard_gravacao import por_chamado
+
+        self.assertEqual(por_chamado(resultado.conteudo)[C]["R"], "20/11/2026 10:00")
+        _, mantidos = sebrae_dashboard_gravacao.registrar_encerramentos(base, {C: "20/11/2026 10:00"}, manter_finalizados=True)
+        self.assertEqual(mantidos, {C: sebrae_dashboard_gravacao.ENCERRAMENTO_MANTIDO})
+
+
+class EdicaoComRSoComADataTest(FinalizarBase):
+    """Regra de 25/11/2026: R guardado só com a data conta como falta de R; editar A, B, J ou S não pode travar o Atualizar (26/11/2026)."""
+
+    def setUp(self):
+        super().setUp()
+        self.importar(com_r_texto(montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO")), 2, "05/11/2026"))
+
+    def test_editar_so_b_de_antigo_com_r_so_com_a_data_grava_sem_mexer_no_r(self):
+        resposta = self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "B": "REDE", "J": "INCIDENTE", "S": "DISPONIBILIDADE"}]})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        saida = sebrae_novos.caminho_saida(self.caminhos, resposta.json()["arquivo"]).read_bytes()
+        lida = {c.numero: c.valores for c in sebrae_dashboard_gravacao.chamados_para_editar(saida)}
+        self.assertEqual((lida[A]["B"], lida[A]["J"], lida[A]["R"]), ("REDE", "INCIDENTE", "05/11/2026"))  # o R guardado fica
+
+    def test_d_finalizado_sem_r_continua_pedindo_o_r(self):
+        resposta = self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "B": "REDE", "D": "FINALIZADO"}]})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+        self.assertEqual(resposta.json()["detail"], f"Informe a DT ENCERRAMENTO (coluna R) do chamado {A} antes de finalizar.")
+
+    def test_r_digitado_fora_do_formato_continua_recusado(self):
+        resposta = self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "R": "05/11/2026"}]})
+        self.assertEqual(resposta.status_code, 422, resposta.text)
+
+
+class AtualizarComFinalizacaoEmCursoTest(FinalizarBase):
+    """26/11/2026: com ``fechar``/``enviar`` rodando ou pedido esperando, o Atualizar responde 409 sem regravar a saída."""
+
+    def setUp(self):
+        super().setUp()
+        self.importar()
+        self.saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx")
+
+    def atualizar(self):
+        return self.post(ATUALIZAR, json={"edicoes": [{"numero": A, "J": "INCIDENTE"}]})
+
+    def test_fechar_ou_enviar_rodando_responde_409_sem_gravar(self):
+        for rotina in ("fechar", "enviar"):
+            with self.subTest(rotina=rotina):
+                self.runner.estado = {"estado": "em_andamento", "rotina": rotina}
+                resposta = self.atualizar()
+                self.assertEqual(resposta.status_code, 409, resposta.text)
+                self.assertIn("Nada foi gravado", resposta.json()["detail"])
+                self.assertFalse(self.saida.exists())
+
+    def test_pedido_de_finalizacao_esperando_responde_409(self):
+        fin.gravar_job(self.dir, [B])
+        self.assertTrue(fin.job_pendente(self.dir))
+        resposta = self.atualizar()
+        self.assertEqual(resposta.status_code, 409, resposta.text)
+        self.assertFalse(self.saida.exists())
+
+    def test_estado_do_executor_ilegivel_responde_503_sem_gravar(self):
+        with patch.object(self.runner, "state", side_effect=OSError("ilegível")):
+            resposta = self.atualizar()
+        self.assertEqual(resposta.status_code, 503, resposta.text)
+        self.assertFalse(self.saida.exists())
+
+    def test_outra_rotina_rodando_nao_bloqueia(self):
+        self.runner.estado = {"estado": "em_andamento", "rotina": "antigos"}
+        self.assertEqual(self.atualizar().status_code, 200)
+        self.assertTrue(self.saida.exists())
 
 
 class AtualizarBase(FinalizarBase):
@@ -1463,6 +1564,23 @@ class ConflitosRotasTest(FinalizarBase):
         if escolhas:
             dados = fin.ler_conflitos(self.dir)
             fin.caminho_conflitos(self.dir).write_text(json.dumps({**dados, "escolhas": escolhas}), encoding="utf-8")
+
+    def test_post_confere_a_versao_dentro_da_trava_da_importacao(self):
+        # 26/11/2026: uma reimportação não pode entrar entre conferir a versão e gravar as escolhas
+        from core import integrity
+
+        self.gravar()
+        chave = integrity._canonical(self.caminhos.existentes.parent / "sebrae_dashboard_base.guard")
+        original, vistos = sebrae_novos.ler_existentes, []
+
+        def espiao(caminho):
+            trava = integrity._PROCESS_LOCKS.get(chave)
+            vistos.append(trava is not None and trava._is_owned())
+            return original(caminho)
+        with patch.object(sebrae_novos, "ler_existentes", side_effect=espiao):
+            resposta = self.cliente.post(self.URL, json={"escolhas": {"aaaaaaaaaaaa": "site"}, "versao_importacao": self.versao})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(vistos, [True])
 
     def test_get_sem_arquivo_responde_vazio_e_sem_cache(self):
         resposta = self.cliente.get(self.URL)
