@@ -92,6 +92,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
   - os módulos `domains/ux_*` repetem o padrão.
 - Impacto: uma falha real na importação do Dashboard ou numa consulta ao Endpoint some sem rastro, e o diagnóstico depende de reproduzir o erro.
 - Solução: `logger.debug` (ou `warning`, quando muda o resultado) com o tipo da exceção, sem mensagem nem dado pessoal, como `core/logging_setup.py` já faz. Nos fallbacks do Playwright, um `debug` basta.
+- Resolvido em parte em 26/11/2026 (PARCIAL): logados, só com o tipo da exceção, os pontos de `domains/endpoint_lookup.py`, `domains/ux_chamados.py` e 3 de `routers/sebrae_dashboard.py`. Continuam silenciosos `routers/sebrae_dashboard.py:384`, `domains/ux_ticket.py:202, 218, 416`, `domains/ux_ticket_browser.py:104, 127` e `domains/ux_chamados_browser.py:306, 434`.
 
 **3. Fábricas de router gigantes.** Média, confirmado.
 - Evidência: `create_sebrae_dashboard_router` com 998 linhas, `create_inventory_history_router` com 798 e `create_operations_router` com 549 (seção 4).
@@ -117,27 +118,33 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Evidência: `.github/workflows/ci.yml` tem `paths-ignore: ["docs/**", "**/*.md"]`, mas `tests/test_project_layout.py:67-78` confere os links relativos do `README.md` e de `docs/**/*.md`.
 - Impacto: um link quebrado num PR só de docs passa sem aviso e quebra a CI do PR seguinte.
 - Solução: tirar o `paths-ignore` ou criar um job leve que rode só `test_project_layout` quando mudarem `.md`.
+- Resolvido em 26/11/2026: `.github/workflows/docs.yml` roda o teste de links (e o de tamanho das regras) quando mudam docs ou `.md`.
 
 **7. `motor_ia/` fora da verificação.** Baixa, confirmado.
 - Evidência: o pipeline tem testes em `motor_ia/tests/`, mas nem `npm run verify` nem a CI os executam, e nenhum módulo do servidor importa `motor_ia`.
 - Impacto: o código pode deixar de funcionar sem que ninguém perceba.
 - Solução: incluir os testes no verify ou criar um `README.md` na pasta dizendo que é experimental e não mantido.
+- Destino decidido em 26/11/2026: `motor_ia/` fica como experimental isolado, fora do `npm run verify` e da CI; remoção só a pedido do usuário.
 
 **8. Documento de locks cita módulo que não existe.** Baixa, confirmado.
 - Evidência: `docs/arquitetura/auditoria_backend/hierarquia_de_locks.md:13` cita `_equipment_search_index_lock` em `persistence/postgres.py`, removido com o piloto de banco.
 - Solução: atualizar a linha para o lock atual ou removê-la.
+- Resolvido em 26/11/2026: referência a `persistence/postgres.py` removida do doc de locks.
 
 **9. Script sem uso.** Baixa, confirmado.
 - Evidência: `scripts/_replace_sidebar.py` vem de um único commit (`baf17f0`) e nada o referencia.
 - Solução: remover, depois de confirmar que não é usado à mão.
+- Resolvido em 26/11/2026: removido.
 
 **10. Dependência sem versão exata.** Baixa, confirmado.
 - Evidência: `package.json` declara `typescript` como `^6.0.3`; as demais dependências têm versão exata.
 - Solução: fixar `6.0.3`.
+- Resolvido em 26/11/2026: `typescript` fixado em `6.0.3` no `package.json` e no lock.
 
 **11. Link de documentação que dá 404.** Baixa, confirmado.
 - Evidência: `iniciar_servidor.bat:95` mostra o endereço `/docs`, que responde 404 sem `SIMPRESS_ENABLE_DOCS=1`.
 - Solução: mostrar o link só quando a variável estiver ligada.
+- Resolvido em 26/11/2026: `iniciar_servidor.bat` só mostra `/docs` com `SIMPRESS_ENABLE_DOCS=1`.
 
 ### 5.2 Melhorias (sem falha)
 
