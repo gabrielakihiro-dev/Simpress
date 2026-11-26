@@ -124,7 +124,6 @@ function CamposCliente() {
         </div>
       </div>
       <p id="cfg-local-cliente-ambiente" className="ckp-meta" hidden={!Object.values(fontes).includes("ambiente")}>Campos bloqueados: definidos por variável de ambiente.</p>
-      <SecaoPacoteLocal visivel={aberto} revisao={revisao.contas} Cabecalho={Cabecalho} />
     </>
   );
 }
