@@ -21,12 +21,17 @@ from fastapi.testclient import TestClient
 from domains import equipment_edit, inventory_state
 from domains.dashboard_agendamento import AgendadorDashboard
 from domains.sebrae_agendamento import FUSO, AgendadorSebrae, caminhos_padrao
-from routers import automation, dashboard, equipment
+from routers import automation
 from routers.automation import AutomationRouteServices, create_automation_router
 from routers.dashboard import DashboardServices, create_dashboard_router, build_dashboard
 from routers.equipment import EquipmentRouteServices, create_equipment_router
 from test_chrome_automation import RunnerHarness
 from test_dashboard import AGORA, CATEGORIES, categorize
+
+
+def mesmo_json(teste, obtido, esperado):
+    """Igualdade que distingue 1 de 1.0 e de True (assertEqual do Python não distingue)."""
+    teste.assertEqual(json.dumps(obtido, sort_keys=True), json.dumps(jsonable_encoder(esperado), sort_keys=True))
 
 
 def client_para(router):
@@ -64,7 +69,7 @@ class PainelTests(unittest.TestCase):
         router, _ = create_dashboard_router(servicos)
         resposta = client_para(router).get("/api/painel")
         self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.json(), esperado)
+        mesmo_json(self, resposta.json(), esperado)
         self.assertIsNotNone(esperado["ultima_comparacao"])
         self.assertIn("lembretes_agendados", esperado)
 
@@ -75,7 +80,7 @@ class PainelTests(unittest.TestCase):
         )
         esperado = jsonable_encoder(build_dashboard(servicos))
         router, _ = create_dashboard_router(servicos)
-        self.assertEqual(client_para(router).get("/api/painel").json(), esperado)
+        mesmo_json(self, client_para(router).get("/api/painel").json(), esperado)
 
 
 EQUIPAMENTO = {
@@ -101,7 +106,7 @@ class EquipamentoTests(unittest.TestCase):
         with patch.dict(inventory_state.equipamentos_cache, {"SINT-001": {"serial": "SINT-001"}}, clear=False):
             resposta = self.client.get("/api/equipamento/sint-001")
         self.assertEqual(resposta.status_code, 200)
-        self.assertEqual(resposta.json(), jsonable_encoder(EQUIPAMENTO))
+        mesmo_json(self, resposta.json(), EQUIPAMENTO)
 
     def test_get_sem_campos_opcionais_nao_cria_null(self):
         minimo = {"serial": "SINT-002", "modelo": "M"}
@@ -111,28 +116,28 @@ class EquipamentoTests(unittest.TestCase):
         )
         router, _ = create_equipment_router(servicos)
         with patch.dict(inventory_state.equipamentos_cache, {"SINT-002": {"serial": "SINT-002"}}, clear=False):
-            self.assertEqual(client_para(router).get("/api/equipamento/SINT-002").json(), minimo)
+            mesmo_json(self, client_para(router).get("/api/equipamento/SINT-002").json(), minimo)
 
     def test_salvar_devolve_o_corpo_completo(self):
         with patch.object(equipment_edit, "save_equipment_to_excel", return_value=({"serial": "SINT-009"}, 2)):
             resposta = self.client.post("/api/equipamento/salvar", json={"serial": "SINT-009", "novo": True})
         self.assertEqual(resposta.status_code, 200, resposta.text)
-        self.assertEqual(resposta.json(), jsonable_encoder({
+        mesmo_json(self, resposta.json(), {
             "sucesso": True,
             "mensagem": "Equipamento SINT-009 atualizado com sucesso no site e na planilha Excel!",
             "equipamento": EQUIPAMENTO,
             "total_modificados": 2,
-        }))
+        })
 
 
 class AutomacaoFiltroTests(unittest.TestCase):
     ESTADO = {
         "estado": "em_andamento", "rotina": "os", "inicio": "2026-10-20T08:00:00", "origem": "externo", "pid": 12.0,
-        "cancelamento_pedido": False, "aguardando_login": True, "login_origem": "UX",
-        "log": {"arquivo": "a.log", "offset": 10, "linhas": ["a", "b"], "reiniciado": False, "_x": 1},
+        "cancelamento_pedido": 0, "aguardando_login": 1, "login_origem": "UX",
+        "log": {"arquivo": "a.log", "offset": 10.0, "linhas": ["a", "b"], "reiniciado": 0, "_x": 1},
         "ultima": {
             "id": "i", "rotina": "os", "origem": "site", "inicio": "", "fim": "", "status": "concluido", "codigo": 0,
-            "mensagem": "", "lotes": [{"id": "1", "status": "ok"}], "capturas": [{"nome": "c.png", "url": "/u"}], "log": "a.log",
+            "mensagem": "", "lotes": [{"id": "1", "status": "ok", "n": 1.0}], "capturas": [{"nome": "c.png", "url": "/u"}], "log": "a.log",
             "extra": [1],
         },
         "novo": {"k": 1.0},
@@ -157,17 +162,35 @@ class AutomacaoFiltroTests(unittest.TestCase):
         self.client = client_para(router)
 
     def test_executar_ux_apelidos_e_cancelar_mantem_o_corpo(self):
-        esperado = jsonable_encoder(self.ESTADO)
+        esperado = self.ESTADO
         resposta = self.client.post("/api/automacao/executar", json={"rotina": "os"})
-        self.assertEqual((resposta.status_code, resposta.json()), (202, esperado))
+        self.assertEqual(resposta.status_code, 202)
+        mesmo_json(self, resposta.json(), esperado)
         resposta = self.client.post("/api/automacao/cancelar")
         self.assertEqual(resposta.status_code, 202)
-        self.assertEqual(resposta.json(), jsonable_encoder({"metodo": "sinal", "mensagem": "m", "estado": self.ESTADO, "extra": 1.0}))
+        mesmo_json(self, resposta.json(), {"metodo": "sinal", "mensagem": "m", "estado": self.ESTADO, "extra": 1.0})
         resposta = self.client.post(
             "/api/automacao/ux-apelidos", data={"confirmado": "true"},
             files={"file": ("a.xlsx", io.BytesIO(b"x"), "application/octet-stream")},
         )
-        self.assertEqual((resposta.status_code, resposta.json()), (202, esperado))
+        self.assertEqual(resposta.status_code, 202)
+        mesmo_json(self, resposta.json(), esperado)
+
+    def test_chave_aninhada_ausente_nao_vira_500_nem_null(self):
+        parcial = deepcopy(self.ESTADO)
+        del parcial["ultima"]["mensagem"]
+        del parcial["log"]["offset"]
+        runner = self.Runner(parcial)
+        router = create_automation_router(AutomationRouteServices(runner=lambda: runner, sebrae=lambda: None))  # type: ignore[arg-type,return-value]
+        cliente = client_para(router)
+        for resposta in (
+            cliente.post("/api/automacao/executar", json={"rotina": "os"}),
+            cliente.post("/api/automacao/cancelar"),
+        ):
+            self.assertEqual(resposta.status_code, 202, resposta.text)
+        resposta = cliente.post("/api/automacao/executar", json={"rotina": "os"})
+        mesmo_json(self, resposta.json(), parcial)
+        self.assertNotIn("mensagem", resposta.json()["ultima"])
 
 
 class AutomacaoSomenteDocumentacaoTests(unittest.TestCase):
@@ -175,7 +198,7 @@ class AutomacaoSomenteDocumentacaoTests(unittest.TestCase):
 
     def ida_e_volta(self, modelo, saida):
         validado = modelo.model_validate(saida).model_dump(mode="json", exclude_unset=True)
-        self.assertEqual(validado, jsonable_encoder(saida))
+        mesmo_json(self, validado, saida)
 
     def test_runner_em_todas_as_ramificacoes(self):
         with tempfile.TemporaryDirectory() as tmp:

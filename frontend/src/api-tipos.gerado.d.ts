@@ -111,9 +111,9 @@ export type BuscaWebPayload = {
 };
 
 export type CancelamentoAutomacao = {
-  "metodo": string;
-  "mensagem": string;
-  "estado": EstadoAutomacao;
+  "metodo"?: string;
+  "mensagem"?: string;
+  "estado"?: EstadoAutomacao | null;
 };
 
 export type CancelarControleRemotoPayload = {
@@ -125,8 +125,8 @@ export type CancelarPayload = {
 };
 
 export type CapturaAutomacao = {
-  "nome": string;
-  "url": string;
+  "nome"?: string;
+  "url"?: string;
 };
 
 export type CasoCobertura = {
@@ -384,8 +384,8 @@ export type EstadoAutomacao = {
   "inicio"?: unknown;
   "origem"?: unknown;
   "pid"?: unknown;
-  "cancelamento_pedido"?: boolean;
-  "aguardando_login"?: boolean;
+  "cancelamento_pedido"?: unknown;
+  "aguardando_login"?: unknown;
   "login_origem"?: string;
   "log"?: LogParcialAutomacao | null;
   "ultima"?: ExecucaoAutomacao | null;
@@ -401,17 +401,17 @@ export type EstadoMovimentacaoPayload = {
 };
 
 export type ExecucaoAutomacao = {
-  "id": string;
-  "rotina": string;
-  "origem": unknown;
-  "inicio": unknown;
-  "fim": unknown;
-  "status": string;
-  "codigo": unknown;
-  "mensagem": string;
-  "lotes": LoteAutomacao[];
-  "capturas": CapturaAutomacao[];
-  "log": string;
+  "id"?: string;
+  "rotina"?: string;
+  "origem"?: unknown;
+  "inicio"?: unknown;
+  "fim"?: unknown;
+  "status"?: string;
+  "codigo"?: unknown;
+  "mensagem"?: string;
+  "lotes"?: LoteAutomacao[];
+  "capturas"?: CapturaAutomacao[];
+  "log"?: string;
 };
 
 export type ExportarPayload = {
@@ -493,15 +493,15 @@ export type LogExecucaoAutomacao = {
 };
 
 export type LogParcialAutomacao = {
-  "arquivo": string;
-  "offset": number;
-  "linhas": string[];
-  "reiniciado": boolean;
+  "arquivo"?: string;
+  "offset"?: unknown;
+  "linhas"?: string[];
+  "reiniciado"?: unknown;
 };
 
 export type LoteAutomacao = {
-  "id": string;
-  "status": string;
+  "id"?: string;
+  "status"?: string;
 };
 
 export type ManualAliasConflictResolutionPayload = {
@@ -582,26 +582,26 @@ export type OsRecusadaPayload = {
 };
 
 export type PainelResposta = {
-  "base_importada": boolean;
-  "total_equipamentos": number;
-  "total_unidades": number;
-  "por_categoria": Record<string, unknown>[];
-  "sem_categoria": number;
-  "cidades_principais": Record<string, unknown>[];
-  "cidades_por_categoria": Record<string, Record<string, unknown>[]>;
-  "total_cidades": number;
-  "sem_cidade": number;
-  "ultima_atualizacao": unknown;
-  "arquivo_origem": unknown;
-  "ultima_comparacao": Record<string, unknown> | null;
-  "base_desatualizada": Record<string, unknown> | null;
-  "os_paradas": Record<string, unknown> | null;
-  "chamados_outro_tecnico": Record<string, unknown>;
-  "falhas_finalizacao_softexpert": Record<string, unknown>;
-  "divergencias_novas": unknown;
-  "sem_acesso_60_dias": unknown;
-  "backups_regionais": Record<string, unknown> | null;
-  "lembretes_agendados": Record<string, unknown>;
+  "base_importada"?: unknown;
+  "total_equipamentos"?: unknown;
+  "total_unidades"?: unknown;
+  "por_categoria"?: Record<string, unknown>[];
+  "sem_categoria"?: unknown;
+  "cidades_principais"?: Record<string, unknown>[];
+  "cidades_por_categoria"?: Record<string, Record<string, unknown>[]>;
+  "total_cidades"?: unknown;
+  "sem_cidade"?: unknown;
+  "ultima_atualizacao"?: unknown;
+  "arquivo_origem"?: unknown;
+  "ultima_comparacao"?: Record<string, unknown> | null;
+  "base_desatualizada"?: Record<string, unknown> | null;
+  "os_paradas"?: Record<string, unknown> | null;
+  "chamados_outro_tecnico"?: Record<string, unknown> | null;
+  "falhas_finalizacao_softexpert"?: Record<string, unknown> | null;
+  "divergencias_novas"?: unknown;
+  "sem_acesso_60_dias"?: unknown;
+  "backups_regionais"?: Record<string, unknown> | null;
+  "lembretes_agendados"?: Record<string, unknown> | null;
 };
 
 export type PendenciaSebrae = {

@@ -42,55 +42,57 @@ class _Saida(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+# Os modelos alcançados pelas rotas POST (que filtram) têm padrão em todo campo: chave ausente continua ausente
+# (exclude_unset) e nunca vira 500 depois de o Chrome já ter sido iniciado. Bool e int do estado são Any para a
+# validação não converter (0 -> False, 10.0 -> 10).
 class LoteAutomacao(_Saida):
-    id: str
-    status: str
+    id: str = ""
+    status: str = ""
 
 
 class CapturaAutomacao(_Saida):
-    nome: str
-    url: str
+    nome: str = ""
+    url: str = ""
 
 
 class ExecucaoAutomacao(_Saida):
-    id: str
-    rotina: str
-    origem: Any
-    inicio: Any
-    fim: Any
-    status: str
-    codigo: Any
-    mensagem: str
-    lotes: List[LoteAutomacao]
-    capturas: List[CapturaAutomacao]
-    log: str
+    id: str = ""
+    rotina: str = ""
+    origem: Any = None
+    inicio: Any = None
+    fim: Any = None
+    status: str = ""
+    codigo: Any = None
+    mensagem: str = ""
+    lotes: List[LoteAutomacao] = []
+    capturas: List[CapturaAutomacao] = []
+    log: str = ""
 
 
 class LogParcialAutomacao(_Saida):
-    arquivo: str
-    offset: int
-    linhas: List[str]
-    reiniciado: bool
+    arquivo: str = ""
+    offset: Any = None
+    linhas: List[str] = []
+    reiniciado: Any = None
 
 
 class EstadoAutomacao(_Saida):
-    # Tudo com padrão: a rota filtra (exclude_unset) e o estado pode vir parcial; ausente continua ausente.
     estado: str = "livre"
     rotina: Any = None
     inicio: Any = None
     origem: Any = None
     pid: Any = None
-    cancelamento_pedido: bool = False
-    aguardando_login: bool = False
+    cancelamento_pedido: Any = None
+    aguardando_login: Any = None
     login_origem: str = ""
     log: Optional[LogParcialAutomacao] = None
     ultima: Optional[ExecucaoAutomacao] = None
 
 
 class CancelamentoAutomacao(_Saida):
-    metodo: str
-    mensagem: str
-    estado: EstadoAutomacao
+    metodo: str = ""
+    mensagem: str = ""
+    estado: Optional[EstadoAutomacao] = None
 
 
 class HistoricoAutomacao(_Saida):
