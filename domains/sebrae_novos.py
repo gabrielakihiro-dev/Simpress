@@ -561,9 +561,20 @@ def exportar(
 
 
 def dashboard_saida_pendente(caminhos: Caminhos) -> bool:
-    """An updated output stays pending until its exact bytes are confirmed sent."""
-    from domains.sebrae_finalizacao import ler_enviado
+    """An updated output stays pending until a confirmed send covers its bytes: sent as is, or merged with SharePoint (``sha256_origem``)."""
+    from core.errors import DomainBusyError
+    from core.integrity import FileBusyError
+    from domains.sebrae_finalizacao import ler_envio, ler_enviado
     saida = caminho_saida(caminhos, "Dashboard Operacional_SEBRAE.xlsx")
     if not saida.is_file():
         return False
-    return hashlib.sha256(saida.read_bytes()).hexdigest() != ler_enviado(caminhos.existentes.parent)
+    digest = hashlib.sha256(saida.read_bytes()).hexdigest()
+    state_dir = caminhos.existentes.parent
+    if digest == ler_enviado(state_dir):
+        return False
+    try:
+        registro = ler_envio(state_dir)
+    except (DomainBusyError, FileBusyError):  # unreadable or busy send record: keep it pending (the safe default)
+        return True
+    return not (registro and registro["status"] in ("confirmado", "concluido")
+                and digest in (registro["sha256"], registro.get("sha256_origem")))
