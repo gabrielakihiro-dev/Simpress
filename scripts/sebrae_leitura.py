@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from core.errors import DomainBusyError  # noqa: E402
 from domains import sebrae_credenciais, sebrae_historico, sebrae_novos  # noqa: E402
 from domains.sebrae_chamados import ChamadoSoftExpert, chave_do_numero  # noqa: E402
 from domains.sebrae_dashboard import triar_novos  # noqa: E402
@@ -138,6 +139,14 @@ def executar(
             f"Lista: {len(itens)} chamado(s); {len(triagem.ignorados)} já no Dashboard, "
             f"{len(triagem.pendentes)} pendente(s), {len(triagem.novos)} novo(s)."
         )
+        anteriores = (sebrae_novos.ler_novos(caminhos.novos, existentes["numeros"]) or {"chamados": []})["chamados"]
+        a_ler = set(triagem.novos)
+
+        def salvar_parcial() -> None:
+            # Durante a execução, quem ainda não foi relido continua da execução anterior; só o fim com sucesso substitui de vez.
+            restantes = [c for c in anteriores if c.numero in a_ler and c.numero not in erros and all(c.numero != l.numero for l in lidos)]
+            sebrae_novos.salvar_novos(caminhos.novos, [*lidos, *restantes], triagem.pendentes, len(triagem.ignorados), erros)
+
         for numero in triagem.novos:
             rotinas.verificar_cancelamento(f"Cancelado antes de ler {numero}.")
             resultado = _ler_chamado(context, pagina, numero, rotinas, modulo)
@@ -148,8 +157,8 @@ def executar(
                 lidos.append(resultado)
                 _guardar_credenciais(state_dir, resultado, log)
                 log(f"{numero}: lido.")
-            # Saved after each ticket: a cancel or a crash keeps what was already read.
-            sebrae_novos.salvar_novos(caminhos.novos, lidos, triagem.pendentes, len(triagem.ignorados), erros)
+            # Saved after each ticket: a cancel or a crash keeps what was already read and what the previous run left.
+            salvar_parcial()
         sebrae_novos.salvar_novos(caminhos.novos, lidos, triagem.pendentes, len(triagem.ignorados), erros)
     finally:
         _fechar_aba(pagina)
@@ -183,7 +192,11 @@ def executar_antigos(
         raise rotinas.RotinaErro("Importe o Dashboard no site antes de ler os chamados antigos.")
     log = lambda texto: rotinas.log("Sebrae", texto)  # noqa: E731
     destino = sebrae_novos.caminho_antigos(caminhos)
-    a_ler, sem_utic, ja_lidos = _antigos_a_ler(existentes, sebrae_novos.ler_antigos(destino))
+    try:  # cache ilegível: para já, sem ler chamado nenhum (cada leitura seria perdida e o arquivo preservado)
+        cache = sebrae_novos.ler_antigos(destino, estrito=True)
+    except DomainBusyError as erro:
+        raise rotinas.RotinaErro(f"O cache dos chamados antigos está ilegível e foi preservado ({type(erro).__name__}); restaure uma cópia válida e execute de novo.") from None
+    a_ler, sem_utic, ja_lidos = _antigos_a_ler(existentes, cache)
     resultado: Dict[str, Any] = {
         "em": rotinas.agora_iso(), "concluido": False, "total": len(a_ler), "lidos": [], "falhas": {},
         "nao_encontrados": [], "sem_utic": sem_utic, "ja_lidos": ja_lidos,

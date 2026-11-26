@@ -19,7 +19,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from core.integrity import lock_paths
+from core.errors import DomainBusyError
+from core.integrity import atomic_write_json, lock_paths
 from domains import sebrae_cruzamento, sebrae_os_nova, sebrae_vinculos
 from domains.equipment_search import normalize_search_term
 from domains.sebrae_chamados import ChamadoSoftExpert, mascarar_cpfs
@@ -88,7 +89,7 @@ def caminho_resultado_antigos(caminhos: Caminhos) -> Path:
 
 
 def _gravar(caminho: Path, dados: Mapping[str, Any]) -> None:
-    _gravar_bytes(caminho, json.dumps(dados, ensure_ascii=False, indent=1).encode("utf-8"))
+    atomic_write_json(caminho, dict(dados))  # fsync, validação e lock do core.integrity; o xlsx continua em ``_gravar_bytes``
 
 
 def _gravar_bytes(caminho: Path, conteudo: bytes) -> None:
@@ -106,12 +107,22 @@ def _gravar_bytes(caminho: Path, conteudo: bytes) -> None:
         raise
 
 
-def _ler(caminho: Path) -> Optional[Dict[str, Any]]:
+def _ler(caminho: Path, estrito: bool = False) -> Optional[Dict[str, Any]]:
+    """``None`` quando ausente. Ilegível ou inválido: ``None`` na leitura de tela; com ``estrito`` (antes de regravar), ``DomainBusyError``,
+    para que o arquivo preservado nunca vire "vazio" e seja sobrescrito."""
     try:
         dados = json.loads(caminho.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except FileNotFoundError:
         return None
-    return dados if isinstance(dados, dict) else None
+    except (OSError, ValueError) as erro:
+        if estrito:
+            raise DomainBusyError(f"O arquivo {caminho.name} está ilegível e foi preservado. Tente de novo em instantes ou restaure uma cópia válida.") from erro
+        return None
+    if not isinstance(dados, dict):
+        if estrito:
+            raise DomainBusyError(f"O arquivo {caminho.name} tem estrutura inválida e foi preservado. Restaure uma cópia válida.")
+        return None
+    return dados
 
 
 def agora_iso() -> str:
@@ -134,7 +145,7 @@ def salvar_existentes(
     ordenados = sorted(set(numeros))
     # names stay (the match by name needs them); CPF and passwords never reach the file
     seguros = [{**a, **{k: _seguro(a[k]) for k in ("titulo", "descricao", "usuario") if k in a}} for a in abertos]
-    anterior = _ler(caminho) or {}
+    anterior = _ler(caminho, estrito=True) or {}
     # same file bytes: keep the version, so a screen left open does not get a false 409 after the 30 min import
     igual = bool(sha256) and anterior.get("sha256") == sha256 and bool(anterior.get("versao"))
     _gravar(caminho, {
@@ -194,8 +205,9 @@ def ordenar_pela_coluna_c(itens: Iterable[Any], valor_c: Callable[[Any], Optiona
     return sorted(itens, key=lambda item: chave_coluna_c(valor_c(item)))
 
 
-def ler_existentes(caminho: Path) -> Optional[Dict[str, Any]]:
-    dados = _ler(caminho)
+def ler_existentes(caminho: Path, estrito: bool = False) -> Optional[Dict[str, Any]]:
+    """``None``: nunca importado (ausente). Com ``estrito``, arquivo ilegível levanta ``DomainBusyError`` em vez de virar ``None``."""
+    dados = _ler(caminho, estrito)
     if dados is None or not isinstance(dados.get("numeros"), list):
         return None
     listas = dados.get("listas")
@@ -281,9 +293,10 @@ def ler_novos(caminho: Path, ja_lancados: Iterable[str] = ()) -> Optional[Dict[s
             "pendentes": pendentes, "erros": dados.get("erros") or {}, "chamados": chamados}
 
 
-def ler_antigos(caminho: Path) -> Dict[str, Dict[str, str]]:
-    """``{numero: registro}`` of the old open tickets already read from SoftExpert; missing or broken file: ``{}``."""
-    dados = _ler(caminho) or {}
+def ler_antigos(caminho: Path, estrito: bool = False) -> Dict[str, Dict[str, str]]:
+    """``{numero: registro}`` of the old open tickets already read from SoftExpert; missing file: ``{}``; broken file: ``{}``
+    (``DomainBusyError`` com ``estrito``, que ``salvar_antigo`` usa para não sobrescrever o cache)."""
+    dados = _ler(caminho, estrito) or {}
     return {
         str(n): {k: str(r.get(k) or "") for k in ("titulo", "descricao", "solicitante", "habilitada_em", "atendimento", "lido_em")}
         for n, r in dados.items() if isinstance(r, dict)
@@ -321,7 +334,7 @@ def ler_resultado_antigos(caminhos: Caminhos) -> Optional[Dict[str, Any]]:
 def salvar_antigo(caminho: Path, chamado: ChamadoSoftExpert, lido_em: str = "") -> None:
     """Adds (or replaces) one old ticket in the cache, masked; atomic and under lock like the other state files."""
     with lock_paths([caminho]):
-        todos = ler_antigos(caminho)
+        todos = ler_antigos(caminho, estrito=True)
         todos[chamado.numero] = {**_campos_seguros(chamado, MAX_CAMPO_ANTIGO), "lido_em": lido_em or agora_iso()}
         _gravar(caminho, todos)
 

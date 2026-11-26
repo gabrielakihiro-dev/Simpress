@@ -487,6 +487,68 @@ class FinalizarUmTest(FinalizarBase):
         self.assertEqual(saida.read_bytes(), antes)
         self.assertEqual(self.job()["numeros"], [B])
 
+    def test_pedido_orfao_com_executor_livre_e_descartado_so_depois_do_prazo(self):
+        self.descrever(A, B)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)  # a rotina saiu sem consumir
+        agora = fin.agora_local()
+        with patch.object(fin, "agora_local", return_value=agora + fin.JOB_ORFAO - timedelta(seconds=10)):
+            self.assertEqual(self.post(FINALIZAR, json={"numero": B, "confirmado": True}).status_code, 409)
+        self.runner.estado = {"estado": "em_andamento", "rotina": "fechar"}  # rotina viva: nunca é órfão
+        with patch.object(fin, "agora_local", return_value=agora + fin.JOB_ORFAO + timedelta(minutes=1)):
+            self.assertEqual(self.post(FINALIZAR, json={"numero": B, "confirmado": True}).status_code, 409)
+        self.assertTrue(fin.job_pendente(self.dir))
+        self.runner.estado = {"estado": "livre"}
+        with patch.object(fin, "agora_local", return_value=agora + fin.JOB_ORFAO + timedelta(minutes=1)), \
+                self.assertLogs("routers.sebrae_dashboard", "WARNING") as logs:
+            self.assertEqual(self.post(FINALIZAR, json={"numero": B, "confirmado": True}).status_code, 202)
+        self.assertIn("órfão", logs.output[0])
+        self.assertEqual(fin.consumir_job(self.dir, agora + fin.JOB_ORFAO + timedelta(minutes=1))["numeros"], [B])
+
+    def test_pedido_orfao_tambem_nao_trava_a_importacao(self):
+        self.descrever(A)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)
+        agora = fin.agora_local() + fin.JOB_ORFAO + timedelta(minutes=1)
+        conteudo = montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO"))
+        self.runner.estado = {"estado": "em_andamento", "rotina": "fechar"}  # rotina viva: continua 409
+        with patch.object(fin, "agora_local", return_value=agora):
+            resposta = self.post("/api/sebrae/dashboard", files={"file": ("D.xlsx", conteudo, "application/octet-stream")})
+        self.assertEqual(resposta.status_code, 409)
+        self.runner.estado = {"estado": "livre"}
+        with patch.object(fin, "agora_local", return_value=agora):
+            resposta = self.post("/api/sebrae/dashboard", files={"file": ("D.xlsx", conteudo, "application/octet-stream")})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertFalse(fin.caminho_job(self.dir).exists())
+
+    def test_falha_ao_apagar_o_orfao_mantem_o_409_e_sem_executor_nao_descarta(self):
+        self.descrever(A, B)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)
+        agora = fin.agora_local() + fin.JOB_ORFAO + timedelta(minutes=1)
+        with patch.object(fin, "agora_local", return_value=agora), patch.object(Path, "unlink", side_effect=PermissionError("OneDrive")):
+            self.assertEqual(self.post(FINALIZAR, json={"numero": B, "confirmado": True}).status_code, 409)
+        self.assertTrue(fin.caminho_job(self.dir).exists())
+        with patch.object(fin, "agora_local", return_value=agora):
+            self.assertIsNone(fin.descartar_job_orfao(self.dir, agora - timedelta(minutes=2)))  # dentro do prazo
+
+    def test_sem_executor_o_orfao_nao_e_descartado(self):
+        self.descrever(A)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)
+        self.runner = None  # simula services.runner ausente numa nova app
+        app = FastAPI()
+
+        @app.exception_handler(DomainError)
+        async def erro(_request, error):
+            return JSONResponse({"detail": error.detail}, status_code=error.status_code)
+
+        app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
+            caminhos=lambda: self.caminhos, max_upload_bytes=lambda: self.limite, registros=lambda: [],
+            relatorio_chamados=lambda: {"chamados": []}, runner=None,
+        )))
+        conteudo = montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO"))
+        with patch.object(fin, "agora_local", return_value=fin.agora_local() + fin.JOB_ORFAO + timedelta(minutes=1)):
+            resposta = TestClient(app).post("/api/sebrae/dashboard", files={"file": ("D.xlsx", conteudo, "application/octet-stream")})
+        self.assertEqual(resposta.status_code, 409)
+        self.assertTrue(fin.caminho_job(self.dir).exists())
+
     def test_pedido_velho_nao_trava_um_novo(self):
         self.descrever(A)
         antigo = (fin.agora_local() - fin.JOB_VALIDADE - timedelta(minutes=5)).isoformat(timespec="seconds")
