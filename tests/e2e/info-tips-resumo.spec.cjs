@@ -54,8 +54,8 @@ test("Comparação (Resumo): descrição da seção fica no ⓘ ao lado do títu
   const trigger = dica.locator(".info-tip-trigger");
   const balao = dica.locator(".info-tip-text");
   await expect(titulo).toBeVisible();
-  await expect(balao).toHaveText("Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.");
-  await expect(trigger).toHaveAttribute("aria-label", "Sobre Sem acesso há 7 dias ou mais");
+  await expect(balao).toHaveText("Notebooks cuja última verificação com êxito ocorreu entre 7 e 59 dias antes desta atualização.");
+  await expect(trigger).toHaveAttribute("aria-label", "Sobre Sem acesso de 7 a 59 dias");
   await expect(trigger).toHaveAttribute("aria-describedby", await balao.getAttribute("id"));
   await expect(page.locator(`${CONTEUDO} .comparison-table-scroll-hint`)).toHaveCount(0);
   // O título continua sendo o alvo do foco (id e tabindex no h4); o ⓘ (24px) não estica a linha até os 40px do botão padrão.

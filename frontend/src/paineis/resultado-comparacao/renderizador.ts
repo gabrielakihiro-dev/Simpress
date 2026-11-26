@@ -135,6 +135,7 @@ export interface ListasComparacao {
   divergenciasLocal: ItemLocalidade[];
   seriesSemMapa: ItemSerieSemMapa[];
   semAcesso7DiasOrdenados: ItemSemAcesso[];
+  semAcesso60: ItemSemAcesso60[] | null;
   ambiguidades: ItemAmbiguidade[];
   registrosAmbiguos: ItemRegistroAmbiguo[];
   apelidosAtualizados: ItemApelidoAtualizado[];
@@ -175,7 +176,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
   const { formatarNomeFonteHistorico, formatarHorarioHistorico } = context.historyFormat;
 
   const CATEGORIAS_ANOTACOES_SINCRONIZADAS: Record<string, string | undefined> = {
-    sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
+    sem_acesso_7_dias: "Sem acesso de 7 a 59 dias",
     sem_acesso_60_dias: "Passou de 60 dias sem acesso",
     ausentes_no_endpoint: "Sem correspondência — Endpoint",
     ausentes_em_detalhes: "Sem correspondência — Simpress",
@@ -275,15 +276,26 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
       const dias = Number(item?.dias_sem_verificacao);
       return Number.isFinite(dias) ? dias : 0;
     };
+    // Decisão do usuário (26/11/2026): a lista de 60+ sai do próprio 7+ (routers/dashboard.py), então o Resumo mostra 7 a 59 dias
+    // tirando dela quem já está na de 60+; o campo sem_acesso_7_dias continua igual para os outros consumidores.
+    // A série identifica a linha (o hostname exibido pode vir do Endpoint anterior); sem série, o hostname.
+    const chaveSemAcesso = (item: ItemBase) => item.serie || `\u0000${item.computador || ""}`;
+    const em60 = new Set((comparison.sem_acesso_60_dias || []).map(chaveSemAcesso));
+    // A anotação da linha de 7+ que saiu da tela continua editável na linha de 60+, como "Anotação anterior".
+    const ocultas = new Map((comparison.sem_acesso_7_dias || []).filter(item => em60.has(chaveSemAcesso(item))).map(item => [chaveSemAcesso(item), item]));
     return {
       ausentesEndpoint: comparison.ausentes_no_endpoint || [],
       ausentesDetalhes: comparison.ausentes_em_detalhes || [],
       divergenciasLocal: comparison.divergencias_local || [],
       seriesSemMapa: comparison.series_sem_mapeamento || [],
-      semAcesso7DiasOrdenados: [...(comparison.sem_acesso_7_dias || [])].sort((a, b) =>
+      semAcesso7DiasOrdenados: (comparison.sem_acesso_7_dias || []).filter(item => !em60.has(chaveSemAcesso(item))).sort((a, b) =>
         diasSemVerificacao(b) - diasSemVerificacao(a)
         || String(a.computador || "").localeCompare(String(b.computador || ""), "pt-BR")
       ),
+      semAcesso60: Array.isArray(comparison.sem_acesso_60_dias) ? comparison.sem_acesso_60_dias.map(item => {
+        const oculta = ocultas.get(chaveSemAcesso(item));
+        return oculta ? { ...item, anotacoes_associadas: [...(item.anotacoes_associadas || []), oculta, ...(oculta.anotacoes_associadas || [])] } : item;
+      }) : null,
       ambiguidades: comparison.correspondencias_ambiguas || [],
       registrosAmbiguos: comparison.registros_ambiguos || [],
       apelidosAtualizados: comparison.apelidos_atualizados || [],
@@ -394,7 +406,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${estimado ? "~" : ""}${Number(item.dias || 0).toLocaleString("pt-BR")}</td>
-          <td class="px-3 py-2">${estimado ? "Saiu para Ausentes no Endpoint" : "Ainda em Sem acesso há 7 dias ou mais"}</td>
+          <td class="px-3 py-2">${estimado ? "Saiu para Ausentes no Endpoint" : "Ainda no Endpoint, sem acesso"}</td>
           ${renderizarCampoAnotacao(item, `o hostname ${item.computador || "sem hostname"}, série ${item.serie || "vazia"}`)}
         </tr>`;
     });
@@ -704,7 +716,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
   ];
   const ROTULOS_CATEGORIA_RESUMO: Record<string, string | undefined> = {
     apelidos_sem_atualizacao: "Linhas mantidas para conferência",
-    sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
+    sem_acesso_7_dias: "Sem acesso de 7 a 59 dias",
     sem_acesso_60_dias: "Passou de 60 dias sem acesso",
     ausentes_no_endpoint: "Sem correspondência — Endpoint",
     ausentes_em_detalhes: "Sem correspondência — Simpress",
@@ -828,7 +840,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
     const aliasReviewRows = linhasApelidosConferencia(apelidosSemAtualizacao, colunas);
     const manualAliasRows = linhasApelidosManuais(divergenciasApelidosManuais, comparison);
     const semAcessoRows = linhasSemAcesso(semAcesso7DiasOrdenados, colunas);
-    const semAcesso60 = Array.isArray(comparison.sem_acesso_60_dias) ? comparison.sem_acesso_60_dias : null;
+    const { semAcesso60 } = listas;
     const locationRows = linhasLocalidadeDivergente(divergenciasLocal, colunas);
     const ambiguityRows = linhasAmbiguidades(ambiguidades, registrosAmbiguos, colunas);
     const unmappedRows = linhasSeriesSemMapa(seriesSemMapa, colunas);
@@ -911,11 +923,11 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
         ])}
         ${painelResumo("sem-acesso", `
         ${cartaoSecaoBento("ambar", 0,
-          cabecalhoSecaoBento("Sem acesso há 7 dias ou mais", "comparacao-secao-sem-acesso-7", "Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.", semAcessoRows.length),
+          cabecalhoSecaoBento("Sem acesso de 7 a 59 dias", "comparacao-secao-sem-acesso-7", "Notebooks cuja última verificação com êxito ocorreu entre 7 e 59 dias antes desta atualização.", semAcessoRows.length),
           `<p class="ck-bento-nota">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="/api/config/local/endpoint/som-computadores" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="ck-bento-nota">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}`)}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está de 7 a 59 dias sem verificação com êxito.", "sem_acesso_7_dias")}`)}
         ${semAcesso60 ? cartaoSecaoBento("fucsia", 1,
-          cabecalhoSecaoBento(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "comparacao-secao-sem-acesso-60", "Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram de “Sem acesso há 7 dias ou mais” e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam."),
+          cabecalhoSecaoBento(`Passou de 60 dias sem acesso (${semAcesso60.length})`, "comparacao-secao-sem-acesso-60", "Notebooks com 60 dias ou mais sem verificação com êxito nesta atualização, incluindo os que saíram do Endpoint e foram para Ausentes no Endpoint. Para esses, os dias são estimados (~) pela última atualização em que ainda apareciam. Quem está aqui não aparece em “Sem acesso de 7 a 59 dias”."),
           `<p class="ck-bento-nota">Os hostnames que somem do Endpoint ficam em <a href="/api/config/local/endpoint/staged-computers" target="_blank" rel="noopener noreferrer" data-endpoint-staged-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Staged computers)</a>.</p>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Dias sem acesso", "Situação", ...annotationHeaders], linhasSemAcesso60(semAcesso60, colunas), "Nenhum notebook passou de 60 dias sem acesso nesta atualização.", "sem_acesso_60_dias")}`,
           " data-sem-acesso-60-secao") : avisoListaAusente}

@@ -61,10 +61,12 @@ const eventoA = () => ({
     }],
     sem_acesso_7_dias: [
       { computador: "PRNOTE110", serie: "BRJ100HHHH", ultima_verificacao: "2026-10-09T10:00:00-03:00", dias_sem_verificacao: 9, linha_endpoint: 2, anotacao_id: "sem-acesso-7-1" },
+      // Como no back-end (routers/dashboard.py), a lista de 60+ sai desta: PRNOTE111 está nas duas.
+      { computador: "PRNOTE111", serie: "BRJ100IIII", ultima_verificacao: "2026-08-06T10:00:00-03:00", dias_sem_verificacao: 72, linha_endpoint: 3, anotacao_id: "sem-acesso-7-2" },
     ],
     sem_acesso_60_dias: [
       { computador: "PRNOTE111", serie: "BRJ100IIII", dias: 72, situacao: "passou", anotacao_id: "sem-acesso-60-1" },
-      { computador: "PRNOTE112", serie: "BRJ100JJJJ", dias: 57, situacao: "limite", anotacao_id: "sem-acesso-60-2" },
+      { computador: "PRNOTE112", serie: "BRJ100JJJJ", dias: 64, situacao: "saiu_endpoint", anotacao_id: "sem-acesso-60-2" },
     ],
     apelidos_sem_atualizacao: [
       { serie: "BRJ100KKKK", computador: "PRNOTE113", motivo: "Série vazia no Endpoint.", anotacao_id: "apelido-1" },
@@ -449,6 +451,13 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator("#nf3-num-apelidos")).toHaveText("1");
     await expect(page.locator("#nf3-num-usuarios")).toHaveText("4");
     await expect(page.locator("#nf3-num-sem-acesso")).toHaveText("3");
+    // 7 a 59 dias (26/11/2026): PRNOTE111 (72 dias) aparece só na lista de 60+; cartão e selo contam cada máquina uma vez (1 + 2).
+    await irParaAba(page, "sem-acesso");
+    const painelSemAcesso = page.locator("#resumo-painel-sem-acesso");
+    await expect(painelSemAcesso.locator('tr[data-comparison-category="sem_acesso_7_dias"] td:nth-child(2)')).toHaveText(["BRJ100HHHH"]);
+    await expect(painelSemAcesso.locator('tr[data-comparison-category="sem_acesso_60_dias"] td:nth-child(2)')).toHaveText(["BRJ100IIII", "BRJ100JJJJ"]);
+    await expect(painelSemAcesso).toContainText("Sem acesso de 7 a 59 dias");
+    await expect(painelSemAcesso.locator('tr[data-comparison-category="sem_acesso_60_dias"] td:nth-child(4)')).toHaveText(["Ainda no Endpoint, sem acesso", "Saiu para Ausentes no Endpoint"]);
     await irParaAba(page, "visao-geral");
     await expect(page.locator("#nf3-num-divergencias")).toHaveText("7");
     await page.locator('[data-nf3-cartao="usuarios"] [data-nf3-ver]').click();
