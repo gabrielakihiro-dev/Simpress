@@ -38,12 +38,23 @@ test("the four Cockpit tools open dedicated panels from the nine-dot menu", () =
   assert.match(abaResumo, /role="tab"/);
   assert.match(abaResumo, /data-cockpit-tool="comparacao" data-on-click="abrirPainelCockpit" data-args='\["comparacao"\]'/);
   assert.match(abaResumo, /aria-label="Resumo" title="Resumo \(F3\)" aria-keyshortcuts="F3"/);
+  // 26/11/2026: toda aba e todo item do menu com <kbd> anunciam o mesmo atalho em aria-keyshortcuts e no title.
+  for (const [id, rotulo] of [["tab-home", "Home"], ["tab-retirada-entrega", "Transporte"], ["btn-resumo-aba", "Resumo"], ["tab-automacao", "Automação"],
+    ["btn-sebrae-chamados-aba", "Chamados"], ["btn-acompanhamento-chamados", "OS"], ["btn-sebrae-chamados-menu", "Chamados"], ["btn-chamados-menu", "OS"],
+    ["btn-historico-apelidos", "Histórico de apelidos"], ["btn-relatorio-mensal", "Relatório mensal"], ["btn-cobertura", "Cobertura"]]) {
+    const botao = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>[\\s\\S]*?</button>`))?.[0] || "";
+    const tecla = botao.match(/<kbd[^>]*>(F\d+)<\/kbd>/)?.[1];
+    assert.ok(tecla, `${id} mostra o atalho em <kbd>`);
+    assert.match(botao, new RegExp(`aria-keyshortcuts="${tecla}"`), `${id}: aria-keyshortcuts igual ao <kbd>`);
+    assert.match(botao, new RegExp(`title="${rotulo} \\(${tecla}\\)"`), `${id}: title com o atalho`);
+  }
   assert.match(abaResumo, /<span>Resumo<\/span><kbd class="ck-aba__kbd" aria-hidden="true">F3<\/kbd><\/button>$/);
   assert.match(html, /<h2 id="cockpit-comparison-heading" class="sr-only">Resumo<\/h2>/);
   // O resultado completo mora no Resumo (painel "comparacao"); lista/detalhe/KPIs/filtros/exportação antigos e o modal saíram.
   const comparacao = html.match(/<section[^>]*data-cockpit-tool-panel="comparacao"[\s\S]*?\n        <\/section>/)?.[0] || "";
   // O cartão "Ativos por regional" (resumo-regionais*) é desenhado pelo React dentro de #resumo-ativos-secao:
   // os IDs dele são conferidos no navegador (tests/e2e/react-piloto.spec.cjs).
+  assert.doesNotMatch(comparacao.match(/<div id="comparacao-planilhas-conteudo"[^>]*>/)?.[0] || "aria-live", /aria-live/, "a tabela inteira do Resumo não é região viva (26/11/2026)");
   for (const id of ["comparacao-planilhas-conteudo", "comparacao-planilhas-fontes", "resumo-ativos-secao"]) {
     assert.equal(comparacao.split(`id="${id}"`).length - 1, 1, `${id} dentro do painel Resumo`);
   }
@@ -945,12 +956,16 @@ test("histórico vazio ainda mostra a seção Sem usuário abaixo da mensagem va
     apiFetch: async () => ({ eventos: [] }),
     appExtra: { carregarSemUsuarioResumo: async () => semUsuario, renderizarSemUsuarioSemComparacao: (...args) => secoes.push(args) },
   });
+  const mensagens = [];
+  el("comparacao-planilhas-conteudo").replaceChildren = (...nos) => mensagens.push(...nos);
   try {
     await api.abrirComparacaoDaSerie("SN-1", "sem_usuario");
     assert.equal(secoes.length, 1);
     assert.equal(secoes[0][0], semUsuario);
     assert.deepEqual(JSON.parse(JSON.stringify(secoes[0][1])), { serial: "SN-1", category: "sem_usuario" });
     assert.equal(el("comparacao-planilhas-conteudo").dataset.estado, "vazio");
+    // 26/11/2026: o contêiner do resultado não é região viva; só a mensagem de vazio/carregando é role="status".
+    assert.equal(mensagens.at(-1)?.getAttribute("role"), "status");
     // Erro e limite do inventário também chegam à seção (o renderer escolhe a mensagem).
     for (const estado of ["erro", "limite"]) {
       const { api: outro } = criarAmbientePaineis({

@@ -371,11 +371,17 @@ test("grava áudio, envia WAV de 16 kHz e coloca a transcrição na caixa sem en
   await page.goto("/");
   await abrirAssistente(page);
   await page.locator("#assistente-texto").fill("Oi,");
+  const avisoAudio = page.locator("#assistente-gravar-aviso");
+  await expect(avisoAudio).toBeHidden();
   await page.getByRole("button", { name: "Gravar áudio" }).click();
+  await expect(avisoAudio).toBeVisible();
+  await expect(avisoAudio).toHaveText("Atenção: a gravação vai ao OpenRouter sem ocultar dados pessoais (CPF, nome, e-mail). Evite dizer o que não pode sair deste computador.");
+  await expect(page.locator("#assistente-gravar")).toHaveAccessibleDescription(/a gravação vai ao OpenRouter sem ocultar dados pessoais/);
   await expect(page.locator("#assistente-enviar")).toBeDisabled();
   const parar = page.getByRole("button", { name: /^Parar \(0:0[1-9]\)$/ });
   await expect(parar).toBeVisible();
   await parar.click();
+  await expect(avisoAudio).toBeHidden();
   await expect(page.locator("#assistente-texto")).toHaveValue("Oi, quantos notebooks temos?");
   await expect(page.locator("#assistente-status")).toHaveText("Áudio transcrito. Revise o texto e envie.");
   await expect(page.locator("#assistente-contador")).toHaveText("28 / 4000");
@@ -389,15 +395,24 @@ test("grava áudio, envia WAV de 16 kHz e coloca a transcrição na caixa sem en
   expect(chamadas.some(c => c.nome === "mensagem")).toBe(false);
 });
 
-test("Esc cancela a gravação: nada é enviado e o botão volta ao normal", async ({ page }) => {
+test("Esc cancela a gravação: nada é enviado e o botão volta ao normal; o aviso cabe em 360 px e passa no axe nos dois temas", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
   await falsearMicrofone(page);
   const chamadas = await mockAssistente(page, { estado: PRONTO });
   await page.goto("/");
   await abrirAssistente(page);
   await page.getByRole("button", { name: "Gravar áudio" }).click();
   await expect(page.getByRole("button", { name: /^Parar/ })).toBeVisible();
+  await expect(page.locator("#assistente-gravar-aviso")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  for (const theme of ["light", "dark"]) {
+    await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
+    expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
+  }
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Gravar áudio" })).toBeEnabled();
+  await expect(page.locator("#assistente-gravar-aviso")).toBeHidden();
   await expect(page.locator("#assistente-texto")).toHaveValue("");
   await expect(page.locator("#assistente-widget")).toBeVisible(); // Esc só cancelou a gravação; o chat continua aberto
   expect(chamadas.some(c => c.nome === "audio")).toBe(false);

@@ -99,6 +99,17 @@ MIN_NOME_BASE = 3
 MIN_PARTE_NOME = 4  # a loose "Ana" or "Li" would replace pieces of other words
 
 
+def _dobrar(texto: str) -> str:
+    """Sem acentos, mantendo o tamanho (um caractere vira um): os índices valem para o texto original."""
+    if texto.isascii():
+        return texto
+    saida = []
+    for c in texto:
+        sem = "".join(x for x in unicodedata.normalize("NFKD", c) if not unicodedata.combining(x))
+        saida.append(sem if len(sem) == 1 else c)
+    return "".join(saida)
+
+
 def e_solicitante_sistema(valor: Any) -> bool:
     sem_acento = unicodedata.normalize("NFKD", str(valor or "")).encode("ascii", "ignore").decode()
     return " ".join(sem_acento.casefold().split()) in SOLICITANTES_SISTEMA
@@ -220,7 +231,7 @@ class Mascara:
             self._por_valor[chave] = marcador
             self._por_marcador[marcador] = chave
             if not re.search(r"\s", chave):
-                self._unicos.add(chave.casefold())
+                self._unicos.add(_dobrar(chave).casefold())
             self._busca = {}
         return self._por_valor[chave]
 
@@ -238,14 +249,14 @@ class Mascara:
     def _exibir(self, marcador: str, primeiro: str = "") -> str:
         """The marker alone, or "first name + marker" when that first name may be shown."""
         visivel = self._primeiro.get(marcador)
-        if visivel is None or visivel.casefold() in self._unicos:
+        if visivel is None or _dobrar(visivel).casefold() in self._unicos:
             return marcador
         return f"{primeiro or visivel} {marcador}"
 
     def _primeiro_do_marcador(self, achado: "re.Match[str]") -> bool:
         """True when the word in front of the marker is the first name of that very marker."""
         antes = achado["antes"]
-        return bool(antes) and antes.casefold() == self._primeiro.get(achado["marcador"], "").casefold()
+        return bool(antes) and _dobrar(antes).casefold() == _dobrar(self._primeiro.get(achado["marcador"], "")).casefold()
 
     def _sem_primeiro_nome(self, achado: "re.Match[str]") -> str:
         """Drop the visible first name in front of its own marker ("Ana [PESSOA_1]" -> "[PESSOA_1]"), any length."""
@@ -255,7 +266,7 @@ class Mascara:
 
     def _par_normal(self, achado: "re.Match[str]") -> str:
         """Como `_sem_primeiro_nome`, mas só quando esse primeiro nome precisa ficar oculto (um valor de uma palavra igual a ele é conhecido)."""
-        if self._primeiro_do_marcador(achado) and self._primeiro[achado["marcador"]].casefold() in self._unicos:
+        if self._primeiro_do_marcador(achado) and _dobrar(self._primeiro[achado["marcador"]]).casefold() in self._unicos:
             return achado["marcador"] + (achado["fecho"] or "")
         return achado.group(0)
 
@@ -323,6 +334,7 @@ class Mascara:
         """
         if not self._por_valor:
             return texto
+        texto = unicodedata.normalize("NFC", texto)  # "o" + acento solto vira "ó": mesmo tamanho nos dois lados
         texto = _NOME_E_MARCADOR.sub(self._sem_primeiro_nome if completo else self._par_normal, texto)
         busca = self._busca.get(completo)
         if busca is None:
@@ -330,20 +342,26 @@ class Mascara:
             valores = set(self._por_valor)
             if completo:
                 valores.update(self._primeiro.values())
-            padrao = r"(?<!\w)(?:" + "|".join(re.escape(v) for v in sorted(valores, key=len, reverse=True)) + r")(?!\w)"
-            busca = self._busca[completo] = (
-                re.compile(padrao, re.IGNORECASE), {v.casefold(): m for v, m in self._por_valor.items()},
-            )
+            padrao = r"(?<!\w)(?:" + "|".join(re.escape(_dobrar(v)) for v in sorted(valores, key=len, reverse=True)) + r")(?!\w)"
+            chaves: Dict[str, str] = {}
+            for v, m in self._por_valor.items():
+                chaves.setdefault(_dobrar(v).casefold(), m)
+            busca = self._busca[completo] = (re.compile(padrao, re.IGNORECASE), chaves)
         padrao_busca, por_valor = busca
 
-        def trocar(achado: "re.Match[str]") -> str:
-            trecho = achado.group(0)
-            marcador = por_valor.get(trecho.casefold())
+        def trocar(trecho: str) -> str:
+            marcador = por_valor.get(_dobrar(trecho).casefold())
             if marcador is None:
                 return PRIMEIRO_NOME_OMITIDO if completo else trecho
             return marcador if completo else self._exibir(marcador, trecho.split(maxsplit=1)[0])
 
-        return padrao_busca.sub(trocar, texto)
+        # Procura no texto sem acentos, mas troca o trecho original (mesmos índices).
+        partes: List[str] = []
+        fim = 0
+        for achado in padrao_busca.finditer(_dobrar(texto)):
+            partes += [texto[fim:achado.start()], trocar(texto[achado.start():achado.end()])]
+            fim = achado.end()
+        return "".join(partes) + texto[fim:]
 
     def restaurar(self, obj: Any) -> Any:
         """Swap known markers for the real value, in text, dict or list.

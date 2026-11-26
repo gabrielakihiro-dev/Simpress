@@ -292,6 +292,10 @@ def _cancelamento(detalhe: str = "") -> None:
     _rotinas().verificar_cancelamento(detalhe)
 
 
+def _so_tipo(erro: BaseException) -> str:
+    return f"Falha inesperada na página ({_rotinas().resumo_erro_de_terceiro(erro)})."
+
+
 class SoftExpertErro(_rotinas().RotinaErro):
     """Falha de leitura do SoftExpert; ``motivo`` é um código estável para o registro de pendências."""
 
@@ -556,7 +560,7 @@ def listar_chamados(page: "Page", parar_em: str | None = None, *, recomecar: boo
         except SoftExpertErro:
             raise
         except Exception as erro:
-            raise EtapaInstavelSX(str(erro)) from erro
+            raise EtapaInstavelSX(_so_tipo(erro)) from erro
 
     try:
         return _rotinas().etapa_resiliente(_varrer, "Ler a lista da central de tarefas", tentativas=3 if recomecar else 1)
@@ -602,7 +606,7 @@ def _varrer_lista(page: "Page", parar_em: str | None) -> List[ItemLista]:
                 except SoftExpertErro:
                     raise
                 except Exception as erro:
-                    raise EtapaInstavelSX(str(erro)) from erro
+                    raise EtapaInstavelSX(_so_tipo(erro)) from erro
 
             _rotinas().etapa_resiliente(_proxima_pagina, "Próxima página na central de tarefas")
             _aguardar_sem_carregamento(page, ESPERA_PAGINA_MS)
@@ -669,7 +673,7 @@ def _localizar_chamado(page: "Page", numero: str) -> Optional[tuple[ItemLista, "
             except SoftExpertErro:
                 raise
             except Exception as erro:
-                raise EtapaInstavelSX(str(erro)) from erro
+                raise EtapaInstavelSX(_so_tipo(erro)) from erro
 
         _rotinas().etapa_resiliente(_pesquisar, f"{numero}: pesquisar pelo filtro da central de tarefas")
         if not _textos_linhas(page) and _lista_declarada_vazia(page):
@@ -823,7 +827,7 @@ def _abrir_aba_registro(formulario: "Page") -> None:
             except SoftExpertErro:
                 raise
             except Exception as erro:
-                raise EtapaInstavelSX(str(erro)) from erro
+                raise EtapaInstavelSX(_so_tipo(erro)) from erro
 
         _rotinas().etapa_resiliente(_abrir_aba, "Abrir aba Registro de Chamados")
         # Chamado da API costuma vir com o Registro em branco: espera curta pelo número, para não custar ESPERA_ABERTURA_MS à toa.
@@ -1062,8 +1066,8 @@ def _abrir_formulario(context: "BrowserContext", page: "Page", linha: "Locator",
                 raise
             except Exception as erro:
                 if respondidas:
-                    raise SoftExpertErro(str(erro)) from erro
-                raise EtapaInstavelSX(str(erro)) from erro
+                    raise SoftExpertErro(_so_tipo(erro)) from erro
+                raise EtapaInstavelSX(_so_tipo(erro)) from erro
 
         return _rotinas().etapa_resiliente(  # type: ignore[no-any-return]
             _etapa, f"{numero}: abrir Registro de Chamados", recuperar=_recuperar_janela
@@ -1411,11 +1415,11 @@ def _definir_selecao(page: "Page", rotulo: str, valor: str, marca: str) -> None:
             else:
                 raise SoftExpertErro(f"{rotulo}: tipo de campo não suportado ({tipo}).")
             if not _esperar(page, lambda: _selecionado(controle, tipo, valor), ESPERA_BOTAO_MS):
-                raise EtapaInstavelSX(f"{rotulo}: o valor escolhido não é {valor!r} (lido: {_ler_controle(controle, tipo)!r}).")
+                raise EtapaInstavelSX(f"{rotulo}: o valor escolhido não é o pretendido.")
         except SoftExpertErro:
             raise
         except Exception as erro:
-            raise EtapaInstavelSX(str(erro)) from erro
+            raise EtapaInstavelSX(_so_tipo(erro)) from erro
 
     _rotinas().etapa_resiliente(_etapa, f"Selecionar {rotulo}: {valor}")
 
@@ -1504,7 +1508,7 @@ def _ler_atendimento(page: "Page", descricao: str, enviar_email: bool) -> Dict[s
         else:
             ok = _sem_acentos(str(esperado)) in _sem_acentos(str(lido))
         if not ok:
-            raise SoftExpertErro(f"{rotulo}: o valor lido ({lido!r}) não é o pretendido; nada foi finalizado.")
+            raise SoftExpertErro(f"{rotulo}: o valor lido não é o pretendido; nada foi finalizado.")
         lidos[chave] = lido
     return lidos
 
@@ -1585,7 +1589,7 @@ def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
             except SoftExpertErro:
                 raise
             except Exception as erro:
-                raise EtapaInstavelSX(str(erro)) from erro
+                raise EtapaInstavelSX(_so_tipo(erro)) from erro
         finally:
             page.remove_listener("filechooser", guardar)
 
@@ -1644,7 +1648,7 @@ def _confirmar_modal_finalizar(janela: "Page") -> bool:
             texto = dialogo.inner_text(timeout=5000)
             if not TEXTO_FINALIZAR.search(texto):
                 raise SoftExpertErro(
-                    f"Apareceu uma confirmação inesperada depois do Finalizar ({texto[:80]!r}); nada foi clicado.",
+                    "Apareceu uma confirmação inesperada depois do Finalizar; nada foi clicado.",
                     MOTIVO_CONFIRMACAO_INESPERADA,
                 )
             try:
@@ -1684,7 +1688,7 @@ def _clicar_finalizar(page: "Page", janela: "Page", numero: str, escritas: List[
         def andou() -> bool:
             if inesperados:
                 raise SoftExpertErro(
-                    f"Confirmação inesperada depois do Finalizar ({inesperados[0][:80]!r}); recusada.",
+                    "Confirmação inesperada depois do Finalizar; recusada.",
                     MOTIVO_CONFIRMACAO_INESPERADA,
                 )
             if janela.is_closed():
@@ -1753,9 +1757,11 @@ def finalizar_chamado(
     except SessaoExpirada:
         raise
     except Exception as erro:  # inclui TimeoutError do Playwright; RotinaCancelada (BaseException) sobe
-        _log(f"{numero}: falha ao finalizar: {erro}")
+        # Só mensagem própria vai a log e resultado; a de Playwright traz trechos da página (LGPD).
+        mensagem = str(erro) if isinstance(erro, SoftExpertErro) else _so_tipo(erro)
+        _log(f"{numero}: falha ao finalizar: {mensagem}")
         motivo = erro.motivo if isinstance(erro, SoftExpertErro) else MOTIVO_ERRO_INESPERADO
-        return _resultado(numero, STATUS_ERRO, mensagem=str(erro), motivo=motivo, escritas=list(escritas))
+        return _resultado(numero, STATUS_ERRO, mensagem=mensagem, motivo=motivo, escritas=list(escritas))
 
 
 def _cartao_na_lista(page: "Page", numero: str) -> bool:
@@ -1798,7 +1804,8 @@ def _finalizar(
             enviar = _sem_acentos(solicitante) != SOLICITANTE_SEM_EMAIL
         else:
             enviar = bool(enviar_email)
-        _log(f"{numero}: Solicitante {solicitante!r}; e-mail ao solicitante {'marcado' if enviar else 'desmarcado'}.")
+        api = _sem_acentos(solicitante) == SOLICITANTE_SEM_EMAIL
+        _log(f"{numero}: Solicitante API SEBRAE: {'sim' if api else 'não'}; e-mail ao solicitante {'marcado' if enviar else 'desmarcado'}.")
         _ir_para_menu(formulario, NOME_ATENDIMENTO_TI, "Atendimento - Chamados TI")
         _preencher_atendimento(formulario, descricao, enviar)
         # O Enviar do anexo é escrita real: só sobe junto com o Finalizar. Na conferência o PDF fica só

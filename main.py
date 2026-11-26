@@ -1234,7 +1234,7 @@ async def validation_error_handler(_request: Request, error: RequestValidationEr
 app.add_middleware(InventoryUpdateMiddleware)
 
 
-from security.network import acesso_rede_ativo, ip_da_rede
+from security.network import acesso_rede_ativo, acesso_tailscale_ativo, ip_da_rede, ip_tailscale
 
 SERVER_PORT = int(os.environ.get("SIMPRESS_PORT", "8000"))
 IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS = 120
@@ -2563,9 +2563,12 @@ if __name__ == "__main__":
     # Reads the automation logs once in the background, so the first Automação (F4) open is served from cache.
     threading.Thread(target=_warm_automation_history, daemon=True).start()
     # Access lines would carry ?q= searches (serials, hostnames) and the bootstrap token to the console.
-    host = "0.0.0.0" if acesso_rede_ativo() else "127.0.0.1"
+    host = "0.0.0.0" if acesso_rede_ativo() or acesso_tailscale_ativo() else "127.0.0.1"
     if host == "0.0.0.0":
-        logger.warning("Acesso pela rede ATIVO: so IPs privados da LAN; /api/* exige o link com token.")
+        logger.warning("Acesso pela rede ATIVO (LAN=%s, Tailscale=%s); /api/* exige o link com token.", acesso_rede_ativo(), acesso_tailscale_ativo())
         # Console only: the token must not reach the log file.
-        print(f"\n  CELULAR (mesmo Wi-Fi): http://{ip_da_rede()}:{SERVER_PORT}/bootstrap?t={sessao_local.SEGREDO}\n", flush=True)
+        if acesso_rede_ativo():
+            print(f"\n  CELULAR (mesmo Wi-Fi): http://{ip_da_rede()}:{SERVER_PORT}/bootstrap?t={sessao_local.SEGREDO}\n", flush=True)
+        if acesso_tailscale_ativo():
+            print(f"\n  CELULAR (Tailscale): http://{ip_tailscale() or 'IP-TAILSCALE-NAO-ENCONTRADO'}:{SERVER_PORT}/bootstrap?t={sessao_local.SEGREDO}\n", flush=True)
     uvicorn.run(app, host=host, port=SERVER_PORT, proxy_headers=False, access_log=False)

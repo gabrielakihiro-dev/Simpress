@@ -37,6 +37,10 @@ O inicializador mostra a seção da versão nova antes de perguntar se você que
 - **Hostname duplicado do Endpoint:** quando a mesma série tem dois hostnames, **Remover mais antigo** descarta o mais antigo depois da confirmação, e **Desfazer** devolve a duplicidade. A planilha do Endpoint não é alterada.
 - **Instalação em máquina nova:** `instalar_primeira_vez.bat` instala o Python 3.12 se faltar, cria o `.venv`, instala as dependências e o Chromium do Playwright e confere o Google Chrome da automação.
 
+### Corrigido
+
+- **LGPD em logs e mensagens (26/11/2026):** o log de finalizar chamado não guarda mais o nome do solicitante nem texto lido da página (erro do Playwright vira só o tipo), o login Microsoft não loga o e-mail, e a máscara de nomes do Assistente ignora acentos (`João` e `JOAO`).
+
 ### Alterado
 
 - **Histórico de apelidos (F7) reorganizado:** o painel ganhou abas por tipo (**Todos**, **Apelido**, **Usuário**, **Endereço**, **Avisos do Endpoint**), cada uma com a contagem, que acompanha a busca, o **Somente com ação disponível** e o período; as setas `←`/`→` (com volta) e `Home`/`End` trocam de aba. Cada tipo tem uma cor própria, sempre com o nome escrito, nos temas claro e escuro. A lista passou a ser agrupada por dia (**Hoje**, **Ontem**, depois o dia da semana; sem data válida, **Data indisponível**), e o detalhe mostra **O que mudou** (**Antes** e **Depois**), **Cadastro atual** com **Copiar apelido atual**, **Detalhes do registro** e **Histórico deste equipamento**. O topo tem só **Alterações neste mês** e **Equipamentos afetados**, com o botão **Exportar CSV**; saíram **Fora do padrão** e **Apelidos duplicados** (sem regra confiável para classificar), as duas pílulas desabilitadas e a nota que as explicava. **Todas** / **Últimos 7 dias** virou controle segmentado e **Limpar filtros** também volta a aba para **Todos**. Só muda a tela: ações e confirmações, o CSV dos registros filtrados, o recarregamento ao abrir a aba, o atalho F7 e a ocultação de séries `VMWARE` e `GOOGLECLOUD` seguem iguais. Aprovado em 11/11/2026.

@@ -139,7 +139,7 @@ def _enviar_ao_sharepoint(
         if estado_envio and estado_envio["status"] == "incerto":
             log("O resultado do envio é incerto. Confira o SharePoint manualmente; não reenvie automaticamente.")
             return fin.aviso_do_pendente(state_dir) or fin.aviso_sharepoint(False)
-        motivo = rotinas.descrever_erro(erro)
+        motivo = rotinas.descrever_erro(erro, so_tipo=True)
         if fin.erro_de_conflito(erro):
             # Conflito de edição: o que o site quer enviar não está perdido (os conflitos ficam no estado); sem cópia pendente, sem subir nada.
             log(f"Envio parado por conflito de edição: {motivo}")
@@ -177,7 +177,7 @@ def _guardar_pendente_e_avisar(
         copia_sharepoint = True
         log("A cópia pendente foi enviada à pasta DASHBOARD SEBRAE com outro nome; o original não foi alterado.")
     except Exception as erro_copia:  # noqa: BLE001
-        log(f"A cópia pendente não subiu ao SharePoint: {rotinas.descrever_erro(erro_copia)}")
+        log(f"A cópia pendente não subiu ao SharePoint: {rotinas.descrever_erro(erro_copia, so_tipo=True)}")
     return fin.aviso_sharepoint(True, motivo, str(pendente), copia_sharepoint)
 
 
@@ -221,7 +221,7 @@ def _reenviar_pendente(context: "BrowserContext", rotinas: Any, state_dir: Path,
                         resultado["sharepoint"] = fin.aviso_do_pendente(state_dir)
                         log("O envio é incerto; confira o SharePoint manualmente antes de repetir.")
                         return 1
-                motivo = rotinas.descrever_erro(erro)
+                motivo = rotinas.descrever_erro(erro, so_tipo=True)
                 log(f"O reenvio falhou: {motivo}")
                 if fin.erro_de_conflito(erro):  # a cópia pendente já guardada continua como está; nada novo é criado nem enviado
                     resultado["sharepoint"] = fin.aviso_sharepoint(True, motivo)
@@ -282,7 +282,7 @@ def _reenviar_snapshot(context: "BrowserContext", rotinas: Any, state_dir: Path,
                 return 0
             fin.cancelar_envio_preparado(state_dir, envio_id)
             if fin.erro_de_conflito(erro):
-                resultado["sharepoint"] = fin.aviso_sharepoint(True, rotinas.descrever_erro(erro))
+                resultado["sharepoint"] = fin.aviso_sharepoint(True, rotinas.descrever_erro(erro, so_tipo=True))
                 return 1
             resultado["sharepoint"] = fin.aviso_do_pendente(state_dir)
             return 1
@@ -423,7 +423,7 @@ def _processar(
             anotar(numero, fin.STATUS_ERRO, mensagem=parada, motivo="sessao_expirada")
             continue
         except Exception as erro:  # noqa: BLE001 - validação antes de navegar, login que não concluiu, aba que caiu
-            mensagem = rotinas.descrever_erro(erro)
+            mensagem = rotinas.descrever_erro(erro, so_tipo=True)
             log(f"{numero}: erro ({mensagem}).")
             rotinas.registrar_erro(pagina, ORIGEM)
             anotar(numero, fin.STATUS_ERRO, mensagem=mensagem, motivo=str(getattr(erro, "motivo", "") or ""))

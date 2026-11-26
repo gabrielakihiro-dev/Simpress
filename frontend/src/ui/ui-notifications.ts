@@ -37,10 +37,25 @@ export function createNotifications(options: Qualquer) {
     motion?.reveal(toast);
     announce(message, type);
 
-    window.setTimeout(() => {
+    // Pausa com o mouse em cima ou o foco dentro; ao sair, conta de novo os 4 s (17-termos.md conta com os 4 s).
+    let sumindo = false;
+    const sumir = () => {
+      sumindo = true;
       if (motion) motion.dismiss(toast, () => toast.remove());
       else toast.remove();
-    }, 4000);
+    };
+    let timer = window.setTimeout(sumir, 4000);
+    let mouse = false;
+    let foco = false;
+    const pausar = () => window.clearTimeout(timer);
+    const retomar = () => { if (!sumindo && !mouse && !foco) { pausar(); timer = window.setTimeout(sumir, 4000); } };
+    // Só com mouse de verdade: no toque, o toque deixa um "mouse em cima" que nunca sai e o toast ficaria preso sobre os botões.
+    if (window.matchMedia?.("(hover: hover)").matches) {
+      toast.addEventListener("mouseenter", () => { mouse = true; pausar(); });
+      toast.addEventListener("mouseleave", () => { mouse = false; retomar(); });
+    }
+    toast.addEventListener("focusin", () => { foco = true; pausar(); });
+    toast.addEventListener("focusout", (evento: Qualquer) => { if (toast.contains(evento.relatedTarget)) return; foco = false; retomar(); });
   }
 
   return Object.freeze({ show });
