@@ -208,7 +208,10 @@ def ler_resumo_agendados(arquivo: Path, hoje: Optional[date] = None) -> dict[str
     try:
         itens = Lembretes(arquivo)._carregar()
     except ErroLembrete as erro:
-        logger.warning("Falha ao ler os lembretes agendados do painel: %s.", type(erro).__name__)
+        # Só a classe e o código fixo (literal); nunca str(erro) nem conteúdo do arquivo.
+        logger.warning(
+            "Falha ao ler os lembretes agendados do painel: %s (%s).", type(erro).__name__, erro.codigo,
+        )
         return {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": True}
     return resumo_agendados(itens, hoje if hoje is not None else _hoje_local())
 

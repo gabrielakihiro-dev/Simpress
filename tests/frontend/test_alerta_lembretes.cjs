@@ -7,6 +7,7 @@ const { criarIndicadoresHome: createDashboard } = require("../../frontend/src/pa
 const { createDomUtils } = require("../../frontend/src/comum/dom-utils.ts");
 const transferUtils = require("../../frontend/src/comum/transfer-utils.ts");
 const panels = require("../../frontend/src/paineis/paineis-dados/paineis.ts");
+const { contagemLembretesAgendados, painelCompartilhado } = require("../../frontend/src/paineis/paineis-dados/utilitarios.ts");
 
 const html = assembledHtml();
 const dados = (atrasados, hoje, extra = {}) => ({ total: atrasados + hoje, atrasados, hoje, indisponivel: false, ...extra });
@@ -68,7 +69,7 @@ test("atenção quando só há lembretes para hoje", () => {
 test("escondido com total 0, indisponível, ausente ou inválido", () => {
   const cena = montarCartao();
   try {
-    for (const entrada of [dados(0, 0), dados(2, 1, { indisponivel: true }), undefined, null, "x", { total: -3, atrasados: 1, hoje: 0 }, { total: "abc" }]) {
+    for (const entrada of [dados(0, 0), dados(2, 1, { indisponivel: true }), undefined, null, "x", { total: "abc" }, { total: 5, atrasados: -1, hoje: "x" }]) {
       cena.dashboard.renderizarAlertaLembretes(dados(1, 0));
       assert.equal(cena.card.hidden, false);
       cena.dashboard.renderizarAlertaLembretes(entrada);
@@ -152,4 +153,113 @@ test("badge do sino: lembretes contam 1 aviso, qualquer que seja a quantidade", 
     assert.equal(seloSino.textContent, "0", JSON.stringify(l));
     assert.equal(seloSino.hidden, true);
   }
+});
+
+test("total 2 sem atrasados nem hoje: cartão escondido e badge sem aviso", async () => {
+  const fixture = { total: 2, atrasados: 0, hoje: 0, indisponivel: false };
+  const cena = montarCartao();
+  try {
+    cena.dashboard.renderizarAlertaLembretes(dados(1, 0));
+    cena.dashboard.renderizarAlertaLembretes(fixture);
+    assert.equal(cena.card.hidden, true);
+    assert.equal(cena.card.dataset.state, "vazio");
+  } finally { cena.restaurar(); }
+  await atualizar({ lembretes_agendados: fixture });
+  assert.equal(seloSino.textContent, "0");
+  assert.equal(seloSino.hidden, true);
+});
+
+test("contagemLembretesAgendados: fracionário, negativo, não numérico e entradas inválidas", () => {
+  assert.deepEqual(contagemLembretesAgendados({ atrasados: 1.9, hoje: 0 }), { atrasados: 1, hoje: 0 });
+  assert.deepEqual(contagemLembretesAgendados({ atrasados: -3, hoje: 2.5 }), { atrasados: 0, hoje: 2 });
+  assert.deepEqual(contagemLembretesAgendados({ atrasados: "x", hoje: "3" }), { atrasados: 0, hoje: 3 });
+  assert.deepEqual(contagemLembretesAgendados({ atrasados: Infinity, hoje: 1 }), { atrasados: 0, hoje: 1 });
+  for (const entrada of [null, undefined, "x", 5, {}, { total: 9 }, { atrasados: -3, hoje: "x" }, { atrasados: 1, hoje: 1, indisponivel: true }]) {
+    assert.equal(contagemLembretesAgendados(entrada), null, JSON.stringify(entrada));
+  }
+});
+
+const adiada = () => { const d = {}; d.promessa = new Promise((resolve, reject) => { d.resolve = resolve; d.reject = reject; }); return d; };
+const assentar = async () => { for (let i = 0; i < 20; i += 1) await new Promise(resolve => setImmediate(resolve)); };
+
+test("painelCompartilhado: dois chamadores padrão dividem um só buscar", async () => {
+  const d = adiada();
+  let chamadas = 0;
+  const buscar = () => { chamadas += 1; return d.promessa; };
+  const a = painelCompartilhado(buscar);
+  const b = painelCompartilhado(buscar);
+  assert.equal(chamadas, 1);
+  d.resolve({ n: 1 });
+  const [ra, rb] = await Promise.all([a, b]);
+  assert.deepEqual(ra, { n: 1 });
+  assert.notEqual(ra, rb, "cada chamador recebe a sua cópia");
+  await assentar();
+});
+
+test("painelCompartilhado: novo espera o pedido em voo e busca uma vez", async () => {
+  const d1 = adiada();
+  const d2 = adiada();
+  let chamadas = 0;
+  const primeiro = painelCompartilhado(() => d1.promessa);
+  const novo = painelCompartilhado(() => { chamadas += 1; return d2.promessa; }, { novo: true });
+  await assentar();
+  assert.equal(chamadas, 0, "não busca antes do primeiro resolver");
+  d1.resolve("velho");
+  await primeiro;
+  await assentar();
+  assert.equal(chamadas, 1);
+  d2.resolve("novo");
+  assert.equal(await novo, "novo");
+  await assentar();
+});
+
+test("painelCompartilhado: chamador padrão depois do novo divide o pedido novo", async () => {
+  const d1 = adiada();
+  const d2 = adiada();
+  let novas = 0;
+  let extras = 0;
+  const primeiro = painelCompartilhado(() => d1.promessa);
+  const novo = painelCompartilhado(() => { novas += 1; return d2.promessa; }, { novo: true });
+  const depois = painelCompartilhado(() => { extras += 1; return Promise.resolve("outro"); });
+  d1.resolve("velho");
+  await primeiro;
+  await assentar();
+  d2.resolve("novo");
+  assert.deepEqual(await Promise.all([novo, depois]), ["novo", "novo"]);
+  assert.equal(novas, 1);
+  assert.equal(extras, 0);
+  await assentar();
+});
+
+test("painelCompartilhado: se o primeiro falhar, o novo ainda busca", async () => {
+  const d1 = adiada();
+  let chamadas = 0;
+  const primeiro = painelCompartilhado(() => d1.promessa);
+  const novo = painelCompartilhado(() => { chamadas += 1; return Promise.resolve("novo"); }, { novo: true });
+  d1.reject(new Error("falhou"));
+  await assert.rejects(primeiro, /falhou/);
+  assert.equal(await novo, "novo");
+  assert.equal(chamadas, 1);
+  await assentar();
+});
+
+test("painelCompartilhado: novo encadeia mesmo se o em voo já era novo", async () => {
+  const d1 = adiada();
+  const d2 = adiada();
+  const d3 = adiada();
+  let chamadas = 0;
+  const a = painelCompartilhado(() => d1.promessa);
+  const b = painelCompartilhado(() => { chamadas += 1; return d2.promessa; }, { novo: true });
+  const c = painelCompartilhado(() => { chamadas += 10; return d3.promessa; }, { novo: true });
+  d1.resolve(1);
+  await a;
+  await assentar();
+  assert.equal(chamadas, 1, "o terceiro espera o segundo");
+  d2.resolve(2);
+  await b;
+  await assentar();
+  assert.equal(chamadas, 11);
+  d3.resolve(3);
+  assert.equal(await c, 3);
+  await assentar();
 });

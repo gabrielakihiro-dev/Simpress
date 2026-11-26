@@ -8,7 +8,7 @@ import json
 import logging
 import tempfile
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -765,13 +765,24 @@ class ResumoAgendadosTests(unittest.TestCase):
         self.assertFalse(self.arquivo.parent.joinpath("lembretes.json.lock").exists())
 
     def test_json_invalido_e_indisponivel_e_arquivo_intacto(self):
-        self.arquivo.write_bytes(b'{"version": 1, "lembretes": [')
+        self.arquivo.write_bytes(b'{"version": 1, "lembretes": [{"descricao": "FICTICIO-XYZ"')
         antes = self.arquivo.read_bytes()
-        with capturar_logs() as linhas:
+        with self.assertLogs("domains.lembretes", "WARNING") as logs:
             resumo = ler_resumo_agendados(self.arquivo, HOJE_FIXO)
         self.assertEqual(resumo, {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": True})
         self.assertEqual(self.arquivo.read_bytes(), antes)
-        self.assertTrue(all("ErroLembrete" in linha or "lembretes" in linha.lower() for linha in linhas))
+        self.assertGreaterEqual(len(logs.records), 1)
+        for registro in logs.records:
+            self.assertNotIn("FICTICIO", registro.getMessage())
+        self.assertNotIn("FICTICIO", "\n".join(logs.output))
+
+    def test_log_da_falha_inclui_o_codigo_fixo(self):
+        self.arquivo.write_bytes(b'{"version": 1, "lembretes": [')
+        with self.assertLogs("domains.lembretes", "WARNING") as logs:
+            ler_resumo_agendados(self.arquivo, HOJE_FIXO)
+        mensagem = logs.records[0].getMessage()
+        self.assertIn("ErroLembrete", mensagem)
+        self.assertRegex(mensagem, r"\([a-z_]+\)\.$")
 
     def test_formato_ilegivel_e_indisponivel(self):
         self.arquivo.write_text(json.dumps({"version": 2, "lembretes": []}), encoding="utf-8")
@@ -804,8 +815,16 @@ class ResumoAgendadosTests(unittest.TestCase):
         self.assertEqual(self.arquivo.stat().st_mtime_ns, antes_mtime)
 
     def test_sem_data_de_hoje_usa_o_fuso_de_sao_paulo(self):
-        self.gravar([_item(1, data_agendada="2000-01-01")])
-        self.assertEqual(ler_resumo_agendados(self.arquivo)["atrasados"], 1)
+        class RelogioFixo(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                # 25/11 01:00 UTC = 24/11 22:00 em São Paulo.
+                return datetime(2026, 11, 25, 1, 0, tzinfo=timezone.utc).astimezone(tz)
+
+        self.gravar([_item(1, data_agendada="2026-11-24"), _item(2, data_agendada="2026-11-25")])
+        with mock.patch("domains.lembretes.datetime", RelogioFixo):
+            resumo = ler_resumo_agendados(self.arquivo)
+        self.assertEqual((resumo["atrasados"], resumo["hoje"]), (0, 1))
 
 
 if __name__ == "__main__":

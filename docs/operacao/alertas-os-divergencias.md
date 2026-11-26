@@ -278,7 +278,7 @@ Mostrar quantos lembretes da ferramenta Lembretes estão atrasados ou são de ho
 
 - Fonte: `data/state/lembretes.json`, lido por `ler_resumo_agendados` (`domains/lembretes.py`) e exposto em `lembretes_agendados` de `GET /api/painel`, pelo callback `get_lembretes_agendados` de `DashboardServices` (`routers/dashboard.py`).
 - Conta só lembretes pendentes (`concluido: false`) com `data_agendada` válida (`AAAA-MM-DD`). Sem data, concluídos e futuros não contam.
-- **Atrasado**: data anterior a hoje. **Hoje**: data igual a hoje, no fuso `America/Sao_Paulo`. A `hora_agendada` não muda a classificação: hora já passada hoje continua em "hoje" (mesma regra de "Reagendar atrasados").
+- **Atrasado**: data anterior a hoje. **Hoje**: data igual a hoje, no fuso `America/Sao_Paulo`. A `hora_agendada` não muda a classificação: hora já passada hoje continua em "hoje" (mesma regra de `Reagendar para hoje`).
 - **Gravidade**: `urgente` (selo `Urgente`, `data-gravidade="urgente"`) se houver ao menos 1 atrasado; `atencao` (selo de atenção) se houver só lembretes de hoje.
 - Só leitura: o painel nunca grava, cria nem repara `lembretes.json`.
 

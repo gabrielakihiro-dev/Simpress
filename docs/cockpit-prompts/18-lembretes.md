@@ -140,7 +140,7 @@ Pedido do usuário (25/11/2026). Integração só de leitura com a Central de No
 - Aparece quando há ao menos 1 lembrete pendente atrasado (selo `Urgente`) ou só de hoje (selo `Atenção`). Textos: `2 lembretes atrasados.`, `1 lembrete para hoje.`, `2 atrasados e 1 para hoje.`. Só números, nunca a descrição.
 - Botão `Ver Lembretes`: abre esta ferramenta (`abrirPainelCockpit("lembretes")`).
 - Datas: conta só pendentes com `data_agendada` válida. Atrasado é data anterior a hoje; hoje é a data de America/Sao_Paulo. A `hora_agendada` não muda a classificação (hora já passada hoje continua em "hoje"), a mesma regra de `Reagendar para hoje`. Concluídos, futuros e sem data não contam.
-- Atualização: criar, concluir ou reabrir, editar, excluir e reagendar disparam `simpress:atualizar-notificacoes`, e o sino mostra a contagem na hora.
+- Atualização: criar, concluir ou reabrir, editar, excluir e reagendar disparam `simpress:atualizar-notificacoes`, e o sino mostra a contagem na hora. O pedido só sai depois que a mudança é gravada; uma falha não pede o painel, exceto 404 na exclusão (o item já não existe, então recontar é correto). Esse pedido não reaproveita uma leitura do painel iniciada antes da mudança: espera ela terminar e pede de novo, para o badge não ficar com contagem velha.
 - O sino não dispara alarme nem aviso nativo do Windows. Mostra só a contagem no painel aberto pelo sino.
 - O Assistente não lê os lembretes do painel: `obter_painel` remove o campo antes de responder (regra 37 do prompt do Assistente, `docs/cockpit-prompts/15-assistente.md`).
 - Só leitura: o painel nunca grava, cria nem repara `data/state/lembretes.json`. Arquivo ilegível ou ocupado mostra o cartão como indisponível: não aparece e o resto do painel carrega.

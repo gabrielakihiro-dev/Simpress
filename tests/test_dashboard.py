@@ -285,6 +285,30 @@ class LembretesAgendadosNoPainelTests(unittest.TestCase):
         self.assertNotIn("Zelda", "\n".join(logs.output))
         self.assertIn("RuntimeError", "\n".join(logs.output))
 
+    def _painel(self, bruto):
+        return make_client([], [], lembretes=lambda: bruto).get("/api/painel").json()["lembretes_agendados"]
+
+    def test_chave_extra_e_descartada_e_total_recalculado(self):
+        bruto = {"total": 99, "atrasados": 2, "hoje": 1, "indisponivel": False, "descricao": "Zelda Ficticia"}
+        self.assertEqual(
+            self._painel(bruto), {"total": 3, "atrasados": 2, "hoje": 1, "indisponivel": False},
+        )
+
+    def test_valor_invalido_ou_nao_dict_vira_indisponivel(self):
+        # Decisão: contagem não inteira, bool, negativa ou ausente não é normalizada; cai em indisponivel.
+        invalidos = [
+            {"atrasados": "2", "hoje": 1},
+            {"atrasados": True, "hoje": 1},
+            {"atrasados": -1, "hoje": 1},
+            {"atrasados": 1.5, "hoje": 1},
+            {"atrasados": 1},
+            [1, 2],
+            None,
+        ]
+        for bruto in invalidos:
+            with self.subTest(bruto=bruto), self.assertLogs("routers.dashboard", level="WARNING"):
+                self.assertEqual(self._painel(bruto), {**self.ZERO, "indisponivel": True})
+
 
 class FiltroBackupAdministradorNoPainelTests(unittest.TestCase):
     def test_long_unused_status_ignora_item_com_administrador(self):

@@ -1,4 +1,5 @@
 import type { ApiFetchError, ApiFetchOptions } from "../../api";
+import { contagemLembretesAgendados } from "../paineis-dados/utilitarios.ts";
 
 // Indicadores da Home: estatísticas do inventário, painel de disponibilidade (readiness) e os cartões de
 // alerta do sino. Só sintaxe apagável (sem enum/namespace): os testes carregam este .ts direto no Node.
@@ -70,6 +71,7 @@ interface ItemProntidao {
   estado: EstadoItemProntidao;
   acao?: AcaoProntidao;
 }
+interface DadosLembretesAgendados { total?: unknown; atrasados?: unknown; hoje?: unknown; indisponivel?: unknown }
 interface DadosAlerta {
   estado?: string;
   total?: unknown;
@@ -101,7 +103,7 @@ interface DadosPainelHome {
   chamados_outro_tecnico?: DadosAlerta;
   falhas_finalizacao_softexpert?: DadosAlerta;
   backups_regionais?: DadosAlerta;
-  lembretes_agendados?: DadosAlerta;
+  lembretes_agendados?: DadosLembretesAgendados;
 }
 interface ItemSemAcesso {
   serie?: string;
@@ -788,24 +790,22 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
   }
 
   // Lembretes agendados (/api/painel): só contagens (atrasados e hoje); nunca descrição, termo, id nem nome.
-  const contagemLembrete = (valor: unknown): number => Math.max(0, Math.floor(Number(valor) || 0));
-
   function textoLembretes(atrasados: number, hoje: number): string {
     if (atrasados && hoje) return `${atrasados} ${pluralize(atrasados, "atrasado")} e ${hoje} para hoje.`;
     if (atrasados) return `${atrasados} ${pluralize(atrasados, "lembrete")} ${pluralize(atrasados, "atrasado")}.`;
     return `${hoje} ${pluralize(hoje, "lembrete")} para hoje.`;
   }
 
-  function renderizarAlertaLembretes(dados: DadosAlerta | null | undefined): void {
+  function renderizarAlertaLembretes(dados: DadosLembretesAgendados | null | undefined): void {
     const card = elemento("alerta-lembretes-agendados");
     if (!card) return;
-    const valido = Boolean(dados) && typeof dados === "object" && !dados?.indisponivel;
-    const atrasados = valido ? contagemLembrete(dados?.atrasados) : 0;
-    const hoje = valido ? contagemLembrete(dados?.hoje) : 0;
-    if (!valido || contagemLembrete(dados?.total) <= 0) {
+    // Mesma regra do badge do sino (contagemLembretesAgendados): esconde sem atrasados e sem hoje, ignorando `total`.
+    const contagem = contagemLembretesAgendados(dados);
+    if (!contagem) {
       ocultarAlertaPainel(card, dados?.indisponivel ? "indisponivel" : "vazio");
       return;
     }
+    const { atrasados, hoje } = contagem;
     const urgente = atrasados >= 1;
     card.dataset.gravidade = urgente ? "urgente" : "atencao";
     const selo = elemento("alerta-lembretes-agendados-selo");

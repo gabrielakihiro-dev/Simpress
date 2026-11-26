@@ -393,11 +393,31 @@ def _finalization_failures_summary(services: DashboardServices) -> Dict[str, Any
         return {"total": 0, "itens": [], "indisponivel": True}
 
 
+def _contagem_valida(valor: Any) -> int:
+    if isinstance(valor, bool) or not isinstance(valor, int) or valor < 0:
+        raise ValueError("contagem inválida")
+    return valor
+
+
+def _lembretes_agendados_allowlist(bruto: Any) -> Dict[str, Any]:
+    """Só as 4 chaves públicas; contagem inválida levanta (vira ``indisponivel``) e o total é recalculado."""
+    if not isinstance(bruto, dict):
+        raise TypeError("resumo de lembretes não é dict")
+    atrasados = _contagem_valida(bruto.get("atrasados"))
+    hoje = _contagem_valida(bruto.get("hoje"))
+    return {
+        "total": atrasados + hoje,
+        "atrasados": atrasados,
+        "hoje": hoje,
+        "indisponivel": bruto.get("indisponivel") is True,
+    }
+
+
 def _lembretes_agendados_summary(services: DashboardServices) -> Dict[str, Any]:
     if services.get_lembretes_agendados is None:
         return {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": False}
     try:
-        return services.get_lembretes_agendados()
+        return _lembretes_agendados_allowlist(services.get_lembretes_agendados())
     except Exception as error:
         # The alert is optional; the inventory summary must still load. Only the class is logged (no reminder text).
         logger.warning("Falha ao calcular o aviso de lembretes agendados: %s.", type(error).__name__)

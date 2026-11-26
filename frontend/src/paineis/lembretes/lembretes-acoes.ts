@@ -28,9 +28,10 @@ const NOVO_VAZIO: Estado["novo"] = { descricao: "", data: "", hora: "", horaDesl
 const comLista = (lembretes: Lembrete[], extra: Partial<Estado> = {}): Partial<Estado> => ({ lembretes, renderizado: true, ...extra });
 const trocar = (id: IdLembrete, atualizado: Lembrete) => ler().lembretes.map(l => (String(l.id) === String(id) ? atualizado : l));
 
-// Depois de cada mutação bem-sucedida: o cartão do sino (#alerta-lembretes-agendados) e o badge pedem o painel de novo. Sem dado do lembrete no evento.
+// Depois de cada mutação que mudou a lista (sucesso, ou 404 na exclusão): o cartão do sino (#alerta-lembretes-agendados) e o badge
+// pedem o painel de novo, sem reaproveitar um pedido que partiu antes da mudança. O evento só leva esse booleano, nunca dado do lembrete.
 function avisarSino() {
-  if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes"));
+  if (typeof document !== "undefined") document.dispatchEvent(new CustomEvent("simpress:atualizar-notificacoes", { detail: { depoisDeMudanca: true } }));
 }
 
 // Item agendado para um dia fora da vista aberta: o toast diz para onde ele foi.
@@ -266,6 +267,7 @@ export async function confirmarExclusao(): Promise<void> {
     removido = true;
   } catch (erro) {
     avisarErro(erro, "Não foi possível excluir o lembrete.");
+    // 404: o item já não existe no servidor, então recontar o sino é correto.
     if ((erro as { status?: number } | null)?.status === 404) removido = true;
   } finally {
     interno.ocupado = false;
