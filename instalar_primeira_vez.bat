@@ -117,9 +117,9 @@ if exist "%MIGRATOR%" (
 echo.
 
 rem ---------------------------------------------------------------
-rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep, RTK, graphify, Node.js e subagentes do maestro (nunca bloqueiam)
+rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep, RTK, graphify, Node.js, GitHub CLI e subagentes do maestro (nunca bloqueiam)
 rem ---------------------------------------------------------------
-echo [5/5] Conferindo ferramentas opcionais e skills ^(ripgrep, RTK, graphify, Node.js, skills e subagentes dos agentes^)...
+echo [5/5] Conferindo ferramentas opcionais e skills ^(ripgrep, RTK, graphify, Node.js, GitHub CLI, skills e subagentes dos agentes^)...
 where rg >nul 2>nul
 if not errorlevel 1 (
     echo   OK: ripgrep ^(rg^) encontrado.
@@ -202,21 +202,58 @@ echo   Para criar o grafo do projeto: /graphify . no Claude Code ^(a extracao de
 where npm >nul 2>nul
 if errorlevel 1 (
     echo   Node.js nao encontrado. O servidor e a automacao funcionam sem ele.
-    echo   Para rodar "npm run test:ui:e2e", instale o Node.js LTS ^(winget install -e --id OpenJS.NodeJS.LTS^).
-    goto checar_skills
+    where winget >nul 2>nul
+    if errorlevel 1 (
+        echo   Para rodar "npm run test:ui:e2e", instale o Node.js LTS ^(winget install -e --id OpenJS.NodeJS.LTS^).
+        goto checar_gh
+    )
+    where nvm >nul 2>nul
+    if not errorlevel 1 (
+        echo   nvm-windows encontrado: o instalador nao sobrepoe o Node gerenciado por ele.
+        echo   Instale uma versao pelo nvm ^(nvm install --lts, depois nvm use^) para rodar "npm run test:ui:e2e".
+        goto checar_gh
+    )
+    echo   Instalando Node.js LTS pelo winget ^(pode pedir permissao do Windows^)...
+    winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+    if errorlevel 1 (
+        echo   [AVISO] Nao foi possivel instalar o Node.js; o servidor nao e afetado.
+    ) else (
+        echo   OK: Node.js instalado. Abra um terminal novo para ele entrar no PATH e execute este instalador de novo:
+        echo   so assim o "npm ci" e o "playwright install" rodam.
+    )
+    goto checar_gh
 )
-if not exist "%PROJECT_DIR%package-lock.json" goto checar_skills
+if not exist "%PROJECT_DIR%package-lock.json" goto checar_gh
 pushd "%PROJECT_DIR%"
 call npm ci --no-audit --no-fund
 if errorlevel 1 (
     echo   [AVISO] npm ci falhou; os testes de interface nao estao prontos. O servidor nao e afetado.
     popd
-    goto checar_skills
+    goto checar_gh
 )
 call npx playwright install chromium
 if errorlevel 1 echo   [AVISO] Chromium dos testes de interface nao foi baixado; o servidor nao e afetado.
 popd
 echo   OK: dependencias dos testes de interface instaladas.
+
+:checar_gh
+where gh >nul 2>nul
+if not errorlevel 1 (
+    echo   OK: GitHub CLI ^(gh^) encontrado.
+    goto checar_skills
+)
+where winget >nul 2>nul
+if errorlevel 1 (
+    echo   GitHub CLI ^(gh^) nao encontrado e o winget nao esta disponivel. Baixe em https://cli.github.com/ ^(opcional^).
+    goto checar_skills
+)
+echo   GitHub CLI ^(gh^) nao encontrado; instalando pelo winget ^(pode pedir permissao do Windows^)...
+winget install -e --id GitHub.cli --accept-package-agreements --accept-source-agreements
+if errorlevel 1 (
+    echo   [AVISO] Nao foi possivel instalar o GitHub CLI; o servidor nao e afetado.
+) else (
+    echo   OK: GitHub CLI instalado. Abra um terminal novo e rode "gh auth login".
+)
 
 :checar_skills
 echo   Sincronizando skills de agentes (Claude Code e Antigravity)...
