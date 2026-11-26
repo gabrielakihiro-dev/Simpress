@@ -23,7 +23,7 @@ Valem junto com o `AGENTS.md` da raiz; texto integral no doc de cada tema (seç�
 ## Assistente (F9) — doc `docs/cockpit-prompts/15-assistente.md`
 
 - Cada ferramenta declara se consulta ou altera; toda alteração para no cartão de confirmação montado pelo programa, uma por turno (`assistant_tools.py`, `assistant_chat.py`).
-- Máscara LGPD antes do envio ao modelo e no histórico (`assistant_lgpd.py`), salvo imagem e áudio, que só saem ao modelo e não são gravados (25/11/2026; `docs/cockpit-prompts/15-assistente.md`); `OPENROUTER_API_KEY` nunca vai ao front-end nem a logs.
+- Máscara LGPD antes do envio ao modelo e no histórico (`assistant_lgpd.py`), salvo imagem e áudio, que só saem ao modelo e não são gravados (25/11/2026); `OPENROUTER_API_KEY` nunca vai ao front-end nem a logs.
 - Mudança de funcionalidade mantém ferramentas, `SYSTEM_PROMPT` e testes do Assistente alinhados.
 
 ## Cadastro e Histórico — doc `docs/operacao/regras-cadastro-historico.md`
@@ -49,5 +49,5 @@ Valem junto com o `AGENTS.md` da raiz; texto integral no doc de cada tema (seç�
 
 ## UX (chamado e ticket) — doc `docs/operacao/automacao-chrome.md`
 
-- Além do invariante da raiz: `BRM551RN1Y` responde 422 `SERIES_SEM_ENVIO_REAL`; descrição e solicitante nunca vão a log ou histórico (`ux_chamados.py`, `ux_ticket.py`); solicitante só de `data/state/ux_solicitante.json` (`SOLICITANTE_PADRAO` vazio) e, sem ele, o envio real é recusado antes do clique.
+- Além da raiz: `BRM551RN1Y` responde 422 `SERIES_SEM_ENVIO_REAL`; descrição e solicitante nunca vão a log ou histórico (`ux_chamados.py`, `ux_ticket.py`); solicitante só de `data/state/ux_solicitante.json` (`SOLICITANTE_PADRAO` vazio) e, sem ele, o envio real é recusado antes do clique.
 - Depois do clique em `Finalizar` ou `Enviar`, espere o número uma vez; timeout é `incerto` e nunca se repete.

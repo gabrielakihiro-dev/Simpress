@@ -1,6 +1,6 @@
 # Regras do projeto
 
-Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity); `CLAUDE.md`, `.claude/rules/` e `.cursor/rules/` só apontam para cá ou para docs. A raiz guarda só o que vale no projeto inteiro; o resto fica no `AGENTS.md` da pasta ou no doc do Índice. Vocabulário: `GLOSSARY.md`.
+Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity); `CLAUDE.md`, `.claude/rules/` e `.cursor/rules/` só apontam para cá ou para docs. A raiz guarda só o que vale no projeto inteiro. Vocabulário: `GLOSSARY.md`.
 
 **Antes de editar arquivo em `domains/`, `scripts/`, `routers/` ou `tests/`, leia o `AGENTS.md` da pasta; na interface (`frontend/` ou `static/`), leia `frontend/AGENTS.md`** (o Codex não os carrega sozinho).
 
@@ -8,7 +8,7 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 
 - FastAPI local: `main.py`, `routers/` (HTTP), `domains/` (regras), `core/`, `security/`, `scripts/` (rotinas e automação); front em `static/` (JS antigo) e React em migração (`frontend/src/`, gerado em `static/dist/`; plano `docs/planos/migracao-react-vite.md`).
 - Só local, dados em `data/`, sem backend remoto nem Supabase; migrar para serviço externo começa por análise que não altera código nem dados; preserve auditoria, sincronização, restauração e reversibilidade.
-- `/api/*` só responde com o cookie `simpress_sessao_<porta>`, criado por `GET /bootstrap?t=<segredo>` (`security/sessao_local.py`); sem cookie, 401. Todo cliente interno novo precisa enviá-lo.
+- `/api/*` só responde com o cookie `simpress_sessao_<porta>`, criado por `GET /bootstrap?t=<segredo>` (`security/sessao_local.py`); sem ele, 401. Todo cliente interno novo o envia.
 
 ## Regras gerais
 
@@ -36,21 +36,21 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 ## Dados operacionais
 
 - Preserve `data/planilhas_entrada`, `data/state` e `.transactions` (planilhas, históricos, anotações, backups) fora do Git, salvo pedido explícito.
-- Arquivos "para a base do servidor local": use-os localmente, preserve os originais e valide com os dados reais.
+- Arquivos "para a base do servidor local": use-os localmente, preserve os originais, valide com dados reais.
 
 ## Verificação
 
 - Antes de concluir, rode `npm run verify`; em mudança de interface, também `npm run test:ui:e2e`.
-- Cada critério de aceite vem como `AC: <critério> — PROVEN BY <evidência>`; sem evidência, não está verificado. Teto de 3 ciclos de correção sobre a mesma falha; depois, pare e devolva o que foi tentado.
+- Cada critério de aceite vem como `AC: <critério> — PROVEN BY <evidência>`; sem evidência, não está verificado. Teto de 3 ciclos de correção sobre a mesma falha; depois, pare e devolva o que tentou.
 - Pedido vago ("verifique que funciona"): antes, escreva o que é observável, qual mecanismo prova, o escopo e o que fazer se falhar.
 
 ## Documentação de mudanças
 
-Mudou tela, rotina, endpoint, texto aprovado, dado gravado ou regra de segurança: no mesmo trabalho, atualize o `.md` da aba, alinhe backend, front-end, testes e Assistente (ferramentas, cartão de confirmação, máscara, testado com o assistente real), registre escrita em sistema externo ou dado local com autorização e data, e informe os `.md` alterados.
+Mudou tela, rotina, endpoint, texto aprovado, dado gravado ou regra de segurança: no mesmo trabalho, atualize o `.md` da aba, alinhe backend, front-end, testes e Assistente (ferramentas, cartão de confirmação, máscara, testado com o assistente real), registre escrita em sistema externo ou dado local com autorização e data, e liste os `.md` alterados.
 
 ## Tamanho das regras
 
-Ao editar `AGENTS.md`, `CLAUDE.md` ou `.cursor/rules/`, siga "Tamanho das regras" em `docs/desenvolvimento/regras-agentes.md`: acima da meta, avise o usuário; acima do teto (`tests/test_rules_size.py` falha), mova o detalhe para a pasta ou o doc e deixe gatilho e caminho.
+Ao editar `AGENTS.md`, `CLAUDE.md` ou `.cursor/rules/`, siga "Tamanho das regras" em `docs/desenvolvimento/regras-agentes.md`: acima da meta, avise; acima do teto (`tests/test_rules_size.py` falha), mova o detalhe e deixe gatilho e caminho.
 
 ## Explicações para leigo
 
@@ -60,7 +60,7 @@ O usuário é leigo em back-end e front-end, mas conhece Git: resumo simples pri
 
 - Commit não autoriza push; informe se houve commit, push e sincronização. Depois de abrir ou atualizar um PR, leia a CI e diga se passou, falhou ou está pendente.
 - Cada agente usa o próprio worktree: confira `git branch --show-current` antes de commitar. Sem `reset --hard`, `git clean` nem force push sem autorização.
-- Ao remover worktree, ao delegar a subagentes, ao planejar ou ao mesclar PRs em sequência (inclui Codex `$maestro-superpower`): leia `docs/desenvolvimento/regras-agentes.md`.
+- Ao remover worktree, delegar a subagentes, planejar ou mesclar PRs em sequência (inclui Codex `$maestro-superpower`): leia `docs/desenvolvimento/regras-agentes.md`.
 
 ## Índice
 
