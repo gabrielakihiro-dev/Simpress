@@ -240,6 +240,52 @@ Antes de cada atualização (seção 4) o sistema guarda uma cópia dos dois inv
 - Backups ficam só neste computador. Faça uma cópia externa de `data/` se precisar de proteção contra perda da máquina ou depois dos 60 dias.
 - Se não houver botão de restaurar, o backup está ausente ou inválido. Não copie arquivos à mão por cima da base sem pedir ajuda.
 
+## 8A. Pacote local (guardar ou levar as configurações para outra máquina)
+
+**Para que serve:** junta num arquivo `.zip` as configurações, os históricos e as planilhas atuais do Simpress, para você guardar uma cópia ou levar tudo para outro computador. Não é o mesmo que o **Backups (F3)** nem que as cópias de cada importação (pasta `_backups`).
+
+**O que o pacote guarda, em resumo:** links e contas das automações (sem senha), dados do cliente, apelidos, nomes de pessoas (apelidos, usuários manuais, usuários do Entra e nomes manuais), as planilhas atuais (cadastro, InvAll e modelo de transferência), o histórico de comparações (o que o **Resumo** usa), o histórico de transferências, lembretes, o relatório de chamados e OS, observações de OS e do Sebrae, e a cobertura.
+
+**O que o pacote NÃO guarda:** chaves de IA e senhas; chamados do Sebrae em andamento; finalizações, envios ao Dashboard e ao SharePoint; chamados UX abertos; marcas de OS finalizada; e-mails já enviados pelo Outlook; cópias antigas de cada importação; caixas de entrada. Motivo: se o pacote voltasse a uma versão antiga desses registros, poderia repetir um envio ou uma finalização real. Conversas do Assistente também ficam de fora.
+
+> **Aviso:** o pacote tem dados pessoais (nomes, e-mails, logins). Não envie por e-mail nem coloque em pasta sincronizada (OneDrive, Dropbox, Google Drive).
+
+**Onde fica:** no painel **Prontidão da base**, cartão **Configuração local**, botão **Configurar**. A seção **Pacote local** fica no fim desse modal.
+
+**Onde os arquivos ficam:** por padrão, na pasta `data/pacotes_locais/` dentro do Simpress. Você pode escolher outra pasta no campo **Pasta do pacote**, desde que ela seja **deste computador**. Não vale OneDrive, pasta de rede ou pen drive. Deixe o campo vazio para voltar ao padrão.
+
+**Como exportar:**
+
+1. Abra **Configuração local** e vá até **Pacote local**.
+2. Clique em **Exportar pacote**. Aparece a mensagem `Pacote exportado: <nome do arquivo>` e o arquivo entra na lista.
+
+**Como restaurar:**
+
+1. Na lista, clique em **Restaurar…** no pacote que você quer usar.
+2. Leia a **Prévia da restauração**: ela mostra o que será substituído, criado, mantido ou apagado. Se houver **Atenção: este pacote muda links e contas das automações**, confira antes de continuar.
+3. Clique em **Confirmar restauração**. Antes de gravar, o Simpress cria sozinho um pacote de desfazer do estado atual.
+4. Quando aparecer `Restauração concluída. Pacote de desfazer: <nome>`, clique em **Recarregar página**.
+
+Se aparecer **Restauração recusada** com "uma automação está em execução" ou "uma importação está em andamento", espere terminar e tente de novo. Nada foi gravado.
+
+**Como desfazer:** cada restauração cria um pacote com o nome **desfazer-...**, que aparece na lista com o tipo **Desfazer**. Para voltar atrás, escolha esse pacote, faça a prévia e confirme a restauração, como no passo acima.
+
+**Como levar para outra máquina:**
+
+1. Na máquina antiga, exporte o pacote.
+2. Copie o arquivo `pacote-local-....zip` à mão (pen drive, cabo ou outro meio) para a pasta de pacotes da máquina nova (`data/pacotes_locais/`, ou a pasta que você escolheu).
+3. Na máquina nova, abra **Configuração local > Pacote local**. O arquivo aparece na lista (se não aparecer, clique em **Salvar pasta** ou recarregue a página).
+4. Confira a prévia e confirme a restauração.
+
+O Simpress não envia o pacote para lugar nenhum: a cópia é feita por você.
+
+**Cuidados:**
+
+- Só as telas de exportar e restaurar funcionam neste computador. Pelo celular ou pela rede, o botão não funciona.
+- O Assistente (F9) explica o Pacote local, mas não exporta, não lista e não restaura. Essas ações são só suas, por clique.
+- Depois de restaurar, o que ficou de fora (envios, finalizações, marcas de OS) continua como está hoje. Confira o Sebrae e as OS antes de agir.
+- Se a restauração falhar com "Falha ao restaurar. Os arquivos anteriores foram recuperados.", o Simpress voltou ao estado de antes. Se aparecer "confira a pasta .transactions antes de usar o app", não use o app e peça ajuda.
+
 ## 9. Os 5 erros mais comuns
 
 ### 1. O `iniciar_servidor.bat` diz que não encontrou Python 3.12 ou superior
