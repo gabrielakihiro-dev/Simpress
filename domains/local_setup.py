@@ -10,15 +10,18 @@ import threading
 import unicodedata
 import zipfile
 import zlib
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO, Mapping, Optional, Union
 
 from openpyxl.cell.cell import MergedCell
+from pydantic import BaseModel, Field, field_validator
 
 from core.config import format_size_limit
 from core.errors import DomainError, DomainValidationError
 from core.integrity import atomic_write_json, load_workbook_safely, lock_paths, quarantine_corrupt_file
 from core.openpyxl_compat import stored_cells
+from domains.transfers import TransferenciaPayload
 
 
 logger = logging.getLogger(__name__)
@@ -397,3 +400,61 @@ def remove_regional_representative(path: Path, city: str) -> bool:
         del current[city]
         atomic_write_json(target, current)
         return True
+
+
+def _valid_time(value: str) -> bool:
+    """True for a real HH:MM:SS (the regex alone accepts 99:99:99)."""
+    try:
+        datetime.strptime(value, "%H:%M:%S")
+    except ValueError:
+        return False
+    return True
+
+
+class RepresentanteRegionalPayload(BaseModel):
+    """Edited regional representative of one city; the JSON keys match the front-end list."""
+    nome: str = Field("", max_length=160)
+    email: str = Field("", max_length=254)
+    telefone: str = Field("", max_length=64)
+    horario: str = ""
+    almoco: str = ""
+    pausaDuracao: str = ""
+
+    @field_validator("nome", "horario", "almoco", "pausaDuracao")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return TransferenciaPayload.validate_email(value)
+
+    @field_validator("telefone")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        return TransferenciaPayload.validate_phone(value)
+
+    @field_validator("horario")
+    @classmethod
+    def validate_schedule(cls, value: str) -> str:
+        if not (re.fullmatch(r"\d{2}:\d{2}:\d{2} às \d{2}:\d{2}:\d{2}", value) and all(map(_valid_time, value.split(" às ")))):
+            raise ValueError("Informe o expediente no formato 08:00:00 às 18:00:00.")
+        inicio, fim = value.split(" às ")
+        if inicio >= fim:  # zero-padded HH:MM:SS, already validated: text order is time order
+            raise ValueError("O expediente precisa começar antes de terminar: o início deve ser anterior ao fim, como 08:00:00 às 18:00:00.")
+        return value
+
+    @field_validator("almoco")
+    @classmethod
+    def validate_lunch(cls, value: str) -> str:
+        if value != "Escritório não fecha" and not (re.fullmatch(r"\d{2}:\d{2}:\d{2}", value) and _valid_time(value)):
+            raise ValueError('Informe o almoço como 12:00:00 ou "Escritório não fecha".')
+        return value
+
+    @field_validator("pausaDuracao")
+    @classmethod
+    def validate_break(cls, value: str) -> str:
+        if value and not (re.fullmatch(r"\d{1,2}h(\d{2})?", value) and int(value.partition("h")[2] or 0) < 60):
+            raise ValueError("Informe a pausa como 1h, 1h30 ou 2h, ou deixe em branco.")
+        return value
