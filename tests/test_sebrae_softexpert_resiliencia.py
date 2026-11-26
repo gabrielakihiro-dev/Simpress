@@ -425,5 +425,106 @@ class GuardPreCliqueTests(unittest.TestCase):
         self.assertEqual(lidos, [True, True, False])
 
 
+
+class EscritaAntesDoCliqueTests(unittest.TestCase):
+    """Clique irreversível anotado logo antes do ``click``: uma exceção do próprio clique nunca leva a outro, e uma recusa
+    antes dele (guarda do rótulo, ``inner_text`` que estoura) não marca nada (26/11/2026)."""
+
+    @staticmethod
+    def _botao(rotulo, *, click=None, inner_text=None):
+        botao = mock.MagicMock()
+        botao.first.inner_text.return_value = rotulo
+        botao.first.inner_text.side_effect = inner_text
+        botao.first.get_attribute.return_value = ""
+        botao.first.click.side_effect = click
+        botao.is_enabled.return_value = True
+        return botao
+
+    def _clicar_finalizar(self, botao, escritas):
+        with (
+            mock.patch.object(S, "_botao_unico", return_value=botao),
+            mock.patch.object(S, "_log"),
+            mock.patch.object(R, "aguardar_estabilidade_pre_clique"),
+        ):
+            S._clicar_finalizar(mock.MagicMock(), mock.MagicMock(), "UTIC-2026-1", escritas)
+
+    def test_finalizar_que_levanta_no_clique_fica_em_escritas(self):
+        escritas: list[str] = []
+        with self.assertRaises(RuntimeError):
+            self._clicar_finalizar(self._botao("Finalizar", click=RuntimeError("Target closed")), escritas)
+        self.assertEqual(escritas, ["finalizar"])
+
+    def test_recusa_antes_do_clique_nao_marca_escrita(self):
+        for botao in (self._botao("Salvar"), self._botao("Finalizar", inner_text=RuntimeError("Timeout 5000ms"))):
+            escritas: list[str] = []
+            with self.subTest(rotulo=botao.first.inner_text.return_value), self.assertRaises(Exception):
+                self._clicar_finalizar(botao, escritas)
+            self.assertEqual(escritas, [])
+            botao.first.click.assert_not_called()
+
+    def test_sim_do_finalizar_marca_confirmado_antes_do_clique(self):
+        dialogo = mock.MagicMock()
+        dialogo.inner_text.return_value = "Deseja finalizar a atividade?"
+        dialogo.get_by_role.return_value.filter.return_value = self._botao("Sim", click=RuntimeError("Target closed"))
+        frame = mock.MagicMock()
+        frame.locator.return_value.filter.return_value.all.return_value = [dialogo]
+        confirmado = [False]
+        with (
+            mock.patch.object(S, "_frames", return_value=[frame]),
+            mock.patch.object(S, "_log"),
+            mock.patch.object(R, "aguardar_estabilidade_pre_clique"),
+        ):
+            with self.assertRaises(RuntimeError):
+                S._confirmar_modal_finalizar(mock.MagicMock(), confirmado)
+        self.assertEqual(confirmado, [True])
+
+    def test_sim_de_associar_marca_respondida_antes_do_clique(self):
+        dialogo = mock.MagicMock()
+        dialogo.inner_text.return_value = "Deseja associar esta atividade ao seu usuário?"
+        dialogo.get_by_role.return_value.or_.return_value.filter.return_value = self._botao("Sim", click=RuntimeError("Target closed"))
+        frame = mock.MagicMock()
+        frame.locator.return_value.filter.return_value.all.return_value = [dialogo]
+        respondidas: list[float] = []
+        with mock.patch.object(S, "_frames", return_value=[frame]), mock.patch.object(S, "_log"):
+            with self.assertRaises(RuntimeError):
+                S._responder_confirmacao([mock.MagicMock()], respondidas)
+        self.assertEqual(len(respondidas), 1)
+
+    def test_cartao_na_central_so_diz_fora_depois_de_duas_leituras_seguidas(self):
+        presente = (mock.MagicMock(), mock.MagicMock())
+        for leituras, esperado in (([None, presente], True), ([presente], True), ([None, None], False)):
+            with self.subTest(leituras=[x is None for x in leituras]):
+                pagina = mock.MagicMock()
+                with (
+                    mock.patch.object(S, "_aguardar_lista"),
+                    mock.patch.object(S, "_localizar_chamado", side_effect=leituras) as localizar,
+                ):
+                    self.assertIs(S.cartao_na_central(pagina, "UTIC-2026-1"), esperado)
+                self.assertEqual(localizar.call_count, len(leituras))
+                self.assertEqual(pagina.goto.call_count, len(leituras))  # recarrega antes de cada leitura
+
+    def _finalizar_que_falha(self, erro):
+        def falhar(_page, _numero, _texto, _pdf, _email, _confirmar, escritas):
+            escritas.append("finalizar")
+            raise erro
+
+        return mock.patch.object(S, "_finalizar", side_effect=falhar)
+
+    def test_erro_depois_do_finalizar_vira_incerto(self):
+        with self._finalizar_que_falha(S.SoftExpertErro("UTIC-2026-1: depois do Finalizar o cartão continua na central")), \
+                mock.patch.object(S, "_log"):
+            resultado = S.finalizar_chamado(mock.MagicMock(), "UTIC-2026-1", "feito")
+        self.assertEqual(resultado["status"], S.STATUS_INCERTO)
+        self.assertEqual(resultado["detalhes"]["mensagem"], S.MENSAGEM_INCERTO)
+        self.assertEqual(resultado["detalhes"]["escritas"], ["finalizar"])
+
+    def test_sessao_expirada_e_cancelamento_sobem_com_as_escritas(self):
+        for erro in (S.SessaoExpirada("login"), R.RotinaCancelada("pare")):
+            with self.subTest(tipo=type(erro).__name__):
+                with self._finalizar_que_falha(erro), self.assertRaises(type(erro)) as contexto:
+                    S.finalizar_chamado(mock.MagicMock(), "UTIC-2026-1", "feito")
+                self.assertEqual(contexto.exception.escritas, ["finalizar"])
+
+
 if __name__ == "__main__":
     unittest.main()
