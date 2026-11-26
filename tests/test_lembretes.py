@@ -857,16 +857,16 @@ class PainelRealLeLembretesDaApiTests(unittest.TestCase):
                     self.assertEqual(criado.status_code, 201, criado.text)
             self.assertTrue((estado / relativo).exists())
 
-            with (
-                mock.patch.object(main, "STATE_DIR", estado),
-                TestClient(
-                    main.app, base_url=f"http://localhost:{main.SERVER_PORT}", client=("127.0.0.1", 50000),
-                    headers={"Cookie": sessao_local.cabecalho_cookie(main.SERVER_PORT)},
-                ) as cliente,
-            ):
+            # Sem ``with``: não roda o lifespan do main.app (workers sobre ``data/`` real).
+            cliente = TestClient(
+                main.app, base_url=f"http://localhost:{main.SERVER_PORT}", client=("127.0.0.1", 50000),
+                headers={"Cookie": sessao_local.cabecalho_cookie(main.SERVER_PORT)},
+            )
+            self.addCleanup(cliente.close)
+            with mock.patch.object(main, "STATE_DIR", estado):
                 resposta = cliente.get("/api/painel")
 
-        self.assertEqual(resposta.status_code, 200, resposta.text[:300])
+        self.assertEqual(resposta.status_code, 200, f"status={resposta.status_code}")
         self.assertEqual(
             resposta.json()["lembretes_agendados"], {"total": 2, "atrasados": 1, "hoje": 1, "indisponivel": False},
         )

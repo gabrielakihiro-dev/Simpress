@@ -149,7 +149,7 @@ Pedido do usuário (25/11/2026). Integração só de leitura com a Central de No
 
 - Grava só `data/state/lembretes.json` (`{"version": 1, "lembretes": [...]}`), com `lock_paths` e `atomic_write_json`.
 - Desde 12/11/2026, o lembrete criado a partir de um termo grava também `termo` (`{"campos": {...}, "itens": [11 respostas], "obs": "..."}`): nome do colaborador, unidade, data, modelos, séries, itens e observações, como digitados. Não há CPF no termo. Nada disso vai para log, Assistente ou sistema externo; o arquivo continua só local.
-- O arquivo contém dado pessoal (nome do colaborador). A descrição nunca vai para log, histórico, Assistente ou conteúdo enviado ao modelo. Log só com a classe do erro e o código fixo (`erro.codigo`, ex.: `lembretes_ilegiveis`), nunca a mensagem nem o conteúdo do arquivo.
+- O arquivo contém dado pessoal (nome do colaborador). A descrição nunca vai para log, histórico, Assistente ou conteúdo enviado ao modelo. Log só com o código fixo (`erro.codigo`, ex.: `lembretes_ilegiveis`) e/ou a classe do erro, nunca a mensagem nem o conteúdo do arquivo.
 - Não há escrita em sistema externo.
 - Bloco 6 (12/11/2026): o `Gerar PDF` dos termos mostra a assinatura do técnico (`GET /api/assinatura-tecnico`, lê `data/state/assinatura_tecnico.svg`, só leitura; nada do termo é enviado). Detalhe em `17-termos.md`, seção "Assinatura do técnico".
 - API `/api/lembretes` (exige o cookie de sessão local; sem ele, 401): `GET /`, `POST /`, `PATCH /{id}`, `DELETE /{id}` e `POST /reagendar-atrasados` (13/11/2026). Contrato em `docs/arquitetura/CONTRATOS_API_BACKEND.md`.

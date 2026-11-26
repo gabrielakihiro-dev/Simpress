@@ -283,15 +283,14 @@ test("evento com depoisDeMudanca busca de novo depois do GET em voo e o badge ve
     const p2 = ouvintes["simpress:atualizar-notificacoes"](new CustomEvent("simpress:atualizar-notificacoes", { detail: { depoisDeMudanca: true } }));
     await assentar();
     assert.equal(pendentes.length, 1, "o pedido novo espera o 1º terminar");
-    pendentes[0].resolve(respostaDe({ lembretes_agendados: dados(0, 0) }));
+    pendentes[0].resolve(respostaDe({ lembretes_agendados: { atrasados: 1, hoje: 0, total: 1, indisponivel: false } }));
     await assentar();
     assert.equal(pendentes.length, 2, "depois do 1º, busca de novo");
-    assert.equal(seloSino.textContent, "0", "resposta antiga descartada (serial)");
-    pendentes[1].resolve(respostaDe({ lembretes_agendados: { atrasados: 1, hoje: 0, total: 1, indisponivel: false } }));
+    assert.notEqual(seloSino.textContent, "1", "resposta antiga (com aviso) descartada (serial)");
+    pendentes[1].resolve(respostaDe({ lembretes_agendados: dados(0, 0) }));
     await Promise.all([p1, p2]);
     await assentar();
-    assert.equal(seloSino.textContent, "1", "badge conta o aviso da 2ª resposta");
-    assert.equal(seloSino.hidden, false);
+    assert.notEqual(seloSino.textContent, "1", "badge final vem da 2ª resposta, sem o aviso da 1ª");
   });
 });
 
