@@ -210,7 +210,7 @@ if errorlevel 1 (
     where nvm >nul 2>nul
     if not errorlevel 1 (
         echo   nvm-windows encontrado: o instalador nao sobrepoe o Node gerenciado por ele.
-        echo   Instale uma versao pelo nvm ^(nvm install --lts, depois nvm use^) para rodar "npm run test:ui:e2e".
+        echo   Instale uma versao pelo nvm ^(nvm install lts, depois nvm use lts^) para rodar "npm run test:ui:e2e".
         goto checar_gh
     )
     echo   Instalando Node.js LTS pelo winget ^(pode pedir permissao do Windows^)...
