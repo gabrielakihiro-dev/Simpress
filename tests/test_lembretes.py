@@ -8,7 +8,7 @@ import json
 import logging
 import tempfile
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import main
-from domains.lembretes import CAMPOS as CAMPOS_DOMINIO, Lembretes
+from domains.lembretes import CAMPOS as CAMPOS_DOMINIO, Lembretes, ler_resumo_agendados, resumo_agendados
 from domains.sebrae_observacoes import FUSO
 from routers.lembretes import create_lembretes_router
 
@@ -712,6 +712,165 @@ class TermoTests(LembretesBase):
         item = self.criar("Saída", origem="devolucao", termo=termo)
         self.assertEqual(len(item["termo"]["campos"]["nome"]), 200)
         self.assertEqual(set(item["termo"]["campos"]), {"nome", "unidade", "data", "modelo", "serie"})
+
+
+HOJE_FIXO = date(2026, 11, 25)
+NOME_FICTICIO = "Zelda Ficticia da Silva"
+
+
+def _item(n: int, **extra) -> dict:
+    base = {
+        "id": f"lem-{n}", "descricao": f"Entregar a {NOME_FICTICIO}", "criado_em": "2026-11-01T10:00:00-03:00",
+        "alterado_em": None, "concluido": False, "concluido_em": None, "origem": None, "termo": None,
+        "data_agendada": None, "hora_agendada": None,
+    }
+    base.update(extra)
+    return base
+
+
+class ResumoAgendadosTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.arquivo = Path(temp.name) / "lembretes.json"
+
+    def gravar(self, itens: list[dict]) -> None:
+        self.arquivo.write_text(json.dumps({"version": 1, "lembretes": itens}), encoding="utf-8")
+
+    def test_classifica_atrasados_hoje_e_ignora_o_resto(self):
+        itens = [
+            _item(1, data_agendada="2026-11-24"),
+            _item(2, data_agendada="2026-01-01", hora_agendada="08:00"),
+            _item(3, data_agendada="2026-11-25"),
+            _item(4, data_agendada="2026-11-25", hora_agendada="00:01"),
+            _item(5, data_agendada="2026-11-26"),
+            _item(6),
+            _item(7, data_agendada="2026-11-20", concluido=True, concluido_em="2026-11-21T10:00:00-03:00"),
+            _item(8, data_agendada="2026-13-45"),
+            _item(9, data_agendada="ontem"),
+        ]
+        self.assertEqual(
+            resumo_agendados(itens, HOJE_FIXO),
+            {"total": 4, "atrasados": 2, "hoje": 2, "indisponivel": False},
+        )
+
+    def test_lista_vazia(self):
+        self.assertEqual(resumo_agendados([], HOJE_FIXO), {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": False})
+
+    def test_arquivo_ausente_conta_zero_e_nao_cria_o_arquivo(self):
+        self.assertEqual(
+            ler_resumo_agendados(self.arquivo, HOJE_FIXO), {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": False},
+        )
+        self.assertFalse(self.arquivo.exists())
+        self.assertFalse(self.arquivo.parent.joinpath("lembretes.json.lock").exists())
+
+    def test_json_invalido_e_indisponivel_e_arquivo_intacto(self):
+        self.arquivo.write_bytes(b'{"version": 1, "lembretes": [{"descricao": "FICTICIO-XYZ"')
+        antes = self.arquivo.read_bytes()
+        with self.assertLogs("domains.lembretes", "WARNING") as logs:
+            resumo = ler_resumo_agendados(self.arquivo, HOJE_FIXO)
+        self.assertEqual(resumo, {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": True})
+        self.assertEqual(self.arquivo.read_bytes(), antes)
+        self.assertGreaterEqual(len(logs.records), 1)
+        for registro in logs.records:
+            self.assertNotIn("FICTICIO", registro.getMessage())
+        self.assertNotIn("FICTICIO", "\n".join(logs.output))
+
+    def test_log_da_falha_inclui_o_codigo_fixo(self):
+        self.arquivo.write_bytes(b'{"version": 1, "lembretes": [')
+        with self.assertLogs("domains.lembretes", "WARNING") as logs:
+            ler_resumo_agendados(self.arquivo, HOJE_FIXO)
+        mensagem = logs.records[0].getMessage()
+        self.assertIn("ErroLembrete", mensagem)
+        self.assertRegex(mensagem, r"\([a-z_]+\)\.$")
+
+    def test_formato_ilegivel_e_indisponivel(self):
+        self.arquivo.write_text(json.dumps({"version": 2, "lembretes": []}), encoding="utf-8")
+        self.assertIs(ler_resumo_agendados(self.arquivo, HOJE_FIXO)["indisponivel"], True)
+
+    def test_permission_error_e_indisponivel(self):
+        self.gravar([_item(1, data_agendada="2026-11-25")])
+        with mock.patch.object(Path, "read_text", side_effect=PermissionError("ocupado")):
+            resumo = ler_resumo_agendados(self.arquivo, HOJE_FIXO)
+        self.assertEqual(resumo, {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": True})
+
+    def test_outro_oserror_e_indisponivel(self):
+        self.gravar([_item(1, data_agendada="2026-11-25")])
+        with mock.patch.object(Path, "read_text", side_effect=OSError("falha de disco")):
+            self.assertIs(ler_resumo_agendados(self.arquivo, HOJE_FIXO)["indisponivel"], True)
+
+    def test_so_numeros_e_nenhum_texto_do_lembrete(self):
+        self.gravar([_item(1, data_agendada="2026-11-24", termo={"campos": {"nome": NOME_FICTICIO}, "itens": [], "obs": ""})])
+        resumo = ler_resumo_agendados(self.arquivo, HOJE_FIXO)
+        self.assertEqual(set(resumo), {"total", "atrasados", "hoje", "indisponivel"})
+        self.assertNotIn(NOME_FICTICIO, json.dumps(resumo))
+        self.assertNotIn("lem-1", json.dumps(resumo))
+
+    def test_leitura_nao_altera_bytes_nem_mtime(self):
+        self.gravar([_item(1, data_agendada="2026-11-24"), _item(2, data_agendada="2026-11-25")])
+        antes_bytes, antes_mtime = self.arquivo.read_bytes(), self.arquivo.stat().st_mtime_ns
+        resumo = ler_resumo_agendados(self.arquivo, HOJE_FIXO)
+        self.assertEqual((resumo["atrasados"], resumo["hoje"]), (1, 1))
+        self.assertEqual(self.arquivo.read_bytes(), antes_bytes)
+        self.assertEqual(self.arquivo.stat().st_mtime_ns, antes_mtime)
+
+    def test_sem_data_de_hoje_usa_o_fuso_de_sao_paulo(self):
+        class RelogioFixo(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                # 25/11 01:00 UTC = 24/11 22:00 em São Paulo.
+                return datetime(2026, 11, 25, 1, 0, tzinfo=timezone.utc).astimezone(tz)
+
+        self.gravar([_item(1, data_agendada="2026-11-24"), _item(2, data_agendada="2026-11-25")])
+        with mock.patch("domains.lembretes.datetime", RelogioFixo):
+            resumo = ler_resumo_agendados(self.arquivo)
+        self.assertEqual((resumo["atrasados"], resumo["hoje"]), (0, 1))
+
+
+class PainelRealLeLembretesDaApiTests(unittest.TestCase):
+    """O ``/api/painel`` do ``main.app`` real lê o mesmo ``lembretes.json`` que a API de Lembretes grava."""
+
+    def test_painel_conta_os_lembretes_gravados_pela_api_no_state_dir(self):
+        from security import sessao_local
+
+        # O roteador de Lembretes do main fixa o caminho na importação: dele sai o nome do arquivo no STATE_DIR.
+        def rotas(lista):
+            for r in lista:  # FastAPI novo agrupa os roteadores incluídos em ``_IncludedRouter``
+                filho = getattr(r, "original_router", None) or getattr(r, "router", None)
+                yield from rotas(filho.routes) if filho is not None else [r]
+
+        rota = next(r for r in rotas(main.app.routes) if getattr(r, "path", None) == "/api/lembretes" and "GET" in r.methods)
+        arquivo_do_main = next(
+            c.cell_contents for c in rota.endpoint.__closure__ if isinstance(c.cell_contents, Lembretes)
+        ).arquivo
+        relativo = arquivo_do_main.relative_to(main.STATE_DIR)
+
+        with tempfile.TemporaryDirectory() as pasta:
+            estado = Path(pasta)
+            app_api = FastAPI()
+            app_api.include_router(create_lembretes_router(estado / relativo))
+            descricao = "descricao-sintetica-painel-omega"
+            hoje = datetime.now(FUSO).date().isoformat()
+            with TestClient(app_api) as api:
+                for data in ("2000-01-01", hoje):
+                    criado = api.post("/api/lembretes", json={"descricao": descricao, "data_agendada": data})
+                    self.assertEqual(criado.status_code, 201, criado.text)
+            self.assertTrue((estado / relativo).exists())
+
+            # Sem ``with``: não roda o lifespan do main.app (workers sobre ``data/`` real).
+            cliente = TestClient(
+                main.app, base_url=f"http://localhost:{main.SERVER_PORT}", client=("127.0.0.1", 50000),
+                headers={"Cookie": sessao_local.cabecalho_cookie(main.SERVER_PORT)},
+            )
+            self.addCleanup(cliente.close)
+            with mock.patch.object(main, "STATE_DIR", estado):
+                resposta = cliente.get("/api/painel")
+
+        self.assertEqual(resposta.status_code, 200, f"status={resposta.status_code}")
+        self.assertEqual(
+            resposta.json()["lembretes_agendados"], {"total": 2, "atrasados": 1, "hoje": 1, "indisponivel": False},
+        )
+        self.assertNotIn(descricao, resposta.text)
 
 
 if __name__ == "__main__":
