@@ -1,6 +1,6 @@
 name: Docs
 
-# Complemento da CI: ela ignora docs/** e **/*.md; aqui só o teste de links da documentação.
+# Complemento da CI: ela ignora docs/** e **/*.md; aqui os testes de links da documentação e do tamanho das regras.
 on:
   push:
     branches: [main]
@@ -29,8 +29,8 @@ jobs:
       # O teste importa `main`, então precisa das dependências do projeto.
       - name: Install Python dependencies
         run: python -m pip install -r requirements-dev.txt
-      - name: Check documentation links
-        run: python -B -m unittest -v test_project_layout.ProjectLayoutTests.test_documentation_links_resolve_from_each_new_folder
+      - name: Check documentation links and rules size
+        run: python -B -m unittest -v test_project_layout.ProjectLayoutTests.test_documentation_links_resolve_from_each_new_folder test_rules_size
         working-directory: tests
         env:
           PYTHONPATH: ${{ github.workspace }}

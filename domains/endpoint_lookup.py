@@ -45,7 +45,7 @@ def _abas(page: Any) -> list[Any]:
     try:
         return list(page.context.pages)
     except Exception as erro:
-        logger.warning("Não foi possível listar as abas do Chrome (%s).", type(erro).__name__)
+        logger.debug("Não foi possível listar as abas do Chrome (%s).", type(erro).__name__)
         return []
 
 
@@ -371,7 +371,7 @@ def _texto_da_aba(aba: Any) -> str:
     try:
         return aba.evaluate("document.body ? document.body.innerText : ''") or ""
     except Exception as erro:
-        logger.warning("Não foi possível ler o texto da aba do Endpoint (%s).", type(erro).__name__)
+        logger.debug("Não foi possível ler o texto da aba do Endpoint (%s).", type(erro).__name__)
         return ""
 
 

@@ -127,7 +127,6 @@ class UxChamadosTests(unittest.TestCase):
 
     def test_send_failure_logs_only_exception_type(self):
         sessao = self.preparar()
-        self.portal.falhar_envio = True
         with mock.patch.object(self.portal, "enviar", side_effect=TimeoutError("SEGREDO-123")):
             with self.assertLogs(ux_chamados.logger, level="WARNING") as capturado:
                 self.assertEqual(self.executar(sessao, enviar=True, confirmado=True)["status"], "incerto")
