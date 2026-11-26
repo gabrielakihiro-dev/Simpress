@@ -188,6 +188,12 @@ if /i "%BOOTSTRAP_LAUNCHER%"=="%PYTHON%" (
 )
 echo   graphify nao encontrado e o uv nao esta disponivel; instalando com pip --user...
 "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% -m pip install --user graphifyy
+if errorlevel 1 goto graphify_resultado
+rem pip --user poe o graphify.exe em %APPDATA%\Python\Python3XX\Scripts, fora do PATH: inclui essa pasta no PATH do usuario (sem setx, que corta em 1024 caracteres).
+set "PIP_USER_SCRIPTS="
+for /f "usebackq delims=" %%D in (`call "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% -c "import sysconfig; print(sysconfig.get_path('scripts', 'nt_user'))"`) do set "PIP_USER_SCRIPTS=%%D"
+if defined PIP_USER_SCRIPTS powershell -NoProfile -ExecutionPolicy Bypass -Command "$d=$env:PIP_USER_SCRIPTS; $p=[Environment]::GetEnvironmentVariable('Path','User'); if (($p -split ';') -notcontains $d) { [Environment]::SetEnvironmentVariable('Path', (($p, $d) -join ';').Trim(';'), 'User') }"
+ver >nul
 
 :graphify_resultado
 if errorlevel 1 (
