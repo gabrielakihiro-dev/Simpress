@@ -519,6 +519,36 @@ class FinalizarUmTest(FinalizarBase):
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertFalse(fin.caminho_job(self.dir).exists())
 
+    def test_falha_ao_apagar_o_orfao_mantem_o_409_e_sem_executor_nao_descarta(self):
+        self.descrever(A, B)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)
+        agora = fin.agora_local() + fin.JOB_ORFAO + timedelta(minutes=1)
+        with patch.object(fin, "agora_local", return_value=agora), patch.object(Path, "unlink", side_effect=PermissionError("OneDrive")):
+            self.assertEqual(self.post(FINALIZAR, json={"numero": B, "confirmado": True}).status_code, 409)
+        self.assertTrue(fin.caminho_job(self.dir).exists())
+        with patch.object(fin, "agora_local", return_value=agora):
+            self.assertIsNone(fin.descartar_job_orfao(self.dir, agora - timedelta(minutes=2)))  # dentro do prazo
+
+    def test_sem_executor_o_orfao_nao_e_descartado(self):
+        self.descrever(A)
+        self.assertEqual(self.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)
+        self.runner = None  # simula services.runner ausente numa nova app
+        app = FastAPI()
+
+        @app.exception_handler(DomainError)
+        async def erro(_request, error):
+            return JSONResponse({"detail": error.detail}, status_code=error.status_code)
+
+        app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
+            caminhos=lambda: self.caminhos, max_upload_bytes=lambda: self.limite, registros=lambda: [],
+            relatorio_chamados=lambda: {"chamados": []}, runner=None,
+        )))
+        conteudo = montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO"))
+        with patch.object(fin, "agora_local", return_value=fin.agora_local() + fin.JOB_ORFAO + timedelta(minutes=1)):
+            resposta = TestClient(app).post("/api/sebrae/dashboard", files={"file": ("D.xlsx", conteudo, "application/octet-stream")})
+        self.assertEqual(resposta.status_code, 409)
+        self.assertTrue(fin.caminho_job(self.dir).exists())
+
     def test_pedido_velho_nao_trava_um_novo(self):
         self.descrever(A)
         antigo = (fin.agora_local() - fin.JOB_VALIDADE - timedelta(minutes=5)).isoformat(timespec="seconds")

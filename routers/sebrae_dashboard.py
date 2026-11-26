@@ -582,7 +582,6 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             # tudo o que a resposta e as gravações leem, ANTES de gravar: arquivo ilegível dá 503 sem gravar nada (``_estado`` roda no fim)
             anteriores = sebrae_novos.ler_existentes(services.caminhos().existentes, estrito=True)
             obs.ler_observacoes(_pasta_estado())
-            sebrae_credenciais.numeros(_pasta_estado())
             fin.ler_estado(_pasta_estado())
             arquivo_marcas = marcas.caminho_marcas(_pasta_estado())
             marcas.validar_legivel(arquivo_marcas)  # marks unreadable: stop before anything of this import is written
@@ -1012,7 +1011,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except Exception as erro:  # noqa: BLE001
             logger.warning("Estado do executor de rotinas ilegível (%s).", type(erro).__name__)
             raise DomainBusyError("Não foi possível conferir se há rotina em execução. Tente de novo.") from erro
-        if ativa is None and (orfaos := fin.descartar_job_orfao(_pasta_estado())) is not None:  # mesma regra de ``_exigir_rotina_livre``
+        if ativa is None and services.runner is not None and (orfaos := fin.descartar_job_orfao(_pasta_estado())) is not None:  # mesma regra de ``_exigir_rotina_livre``
             logger.warning("Pedido de finalização órfão descartado (%s chamado(s)).", orfaos)
         if fin.job_pendente(_pasta_estado()) or (ativa is not None and ativa.get("rotina") in ("fechar", "enviar")):
             raise DomainConflictError(mensagem)
@@ -1026,7 +1025,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             if fin.job_pendente(pasta):
                 raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.") from None
             return
-        if ativa is None and (orfaos := fin.descartar_job_orfao(pasta)) is not None:  # nenhuma rotina rodando e o pedido nunca foi consumido
+        if ativa is None and services.runner is not None and (orfaos := fin.descartar_job_orfao(pasta)) is not None:  # nenhuma rotina rodando e o pedido nunca foi consumido
             logger.warning("Pedido de finalização órfão descartado (%s chamado(s)).", orfaos)
         if fin.job_pendente(pasta):
             raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.")

@@ -154,6 +154,24 @@ class LeituraTest(unittest.TestCase):
         self.rodar([item(n, "x") for n in numeros[:2]], leituras)
         self.assertEqual([c.numero for c in sebrae_novos.ler_novos(self.caminhos.novos)["chamados"]], list(numeros[:2]))
 
+    def _interrompida_com_anteriores(self, existentes, listados):
+        numeros = ("UTIC-2026-0002", "UTIC-2026-0003", "UTIC-2026-0004")
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")
+        self.rodar([item(n, "x") for n in numeros], {n: ChamadoSoftExpert(n, titulo="antigo") for n in numeros})
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, existentes, "d.xlsx")
+        self.rotinas.cancelar_em = "UTIC-2026-0003"
+        with self.assertRaises(KeyboardInterrupt):
+            self.rodar([item(n, "x") for n in listados], {n: ChamadoSoftExpert(n, titulo="relido") for n in listados})
+        return {c.numero for c in sebrae_novos.ler_novos(self.caminhos.novos)["chamados"]}
+
+    def test_interrompida_nao_traz_de_volta_chamado_que_sumiu_da_listagem(self):
+        salvos = self._interrompida_com_anteriores(["UTIC-2026-0001"], ["UTIC-2026-0002", "UTIC-2026-0003"])
+        self.assertEqual(salvos, {"UTIC-2026-0002", "UTIC-2026-0003"})  # o 0004 saiu do SoftExpert
+
+    def test_interrompida_nao_traz_de_volta_chamado_que_ja_entrou_no_dashboard(self):
+        salvos = self._interrompida_com_anteriores(["UTIC-2026-0001", "UTIC-2026-0004"], ["UTIC-2026-0002", "UTIC-2026-0003", "UTIC-2026-0004"])
+        self.assertEqual(salvos, {"UTIC-2026-0002", "UTIC-2026-0003"})
+
     def buscas(self):
         return [i for i in sebrae_historico.listar(self.caminhos.historico)["itens"] if i["tipo"] == "busca"]
 

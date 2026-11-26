@@ -623,16 +623,20 @@ def job_pendente(state_dir: Path, agora: Optional[datetime] = None) -> bool:
 def descartar_job_orfao(state_dir: Path, agora: Optional[datetime] = None) -> Optional[int]:
     """Para uso com o executor de rotinas livre: apaga o job com mais de ``JOB_ORFAO``; devolve quantos chamados ele tinha (``None`` se não apagou)."""
     caminho = caminho_job(state_dir)
-    with lock_paths([caminho]):
-        job = _ler_json(caminho)
-        if job is None or not _job_valido(job, agora):
-            return None
-        criado = datetime.fromisoformat(str(job.get("criado_em")))
-        if criado.tzinfo is None:
-            criado = criado.replace(tzinfo=FUSO)
-        if (agora or agora_local()) - criado <= JOB_ORFAO:
-            return None
-        caminho.unlink(missing_ok=True)
+    try:
+        with lock_paths([caminho]):
+            job = _ler_json(caminho)
+            if job is None or not _job_valido(job, agora):
+                return None
+            criado = datetime.fromisoformat(str(job.get("criado_em")))
+            if criado.tzinfo is None:
+                criado = criado.replace(tzinfo=FUSO)
+            if (agora or agora_local()) - criado <= JOB_ORFAO:
+                return None
+            caminho.unlink(missing_ok=True)
+    except (OSError, FileBusyError, FileTransactionError) as erro:  # não apagou: o pedido segue pendente (409), nunca 500
+        logger.warning("Pedido de finalização órfão não pôde ser apagado (%s).", type(erro).__name__)
+        return None
     numeros = job.get("numeros")
     return len(numeros) if isinstance(numeros, list) else 0
 

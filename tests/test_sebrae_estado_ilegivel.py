@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.errors import DomainBusyError
-from domains import sebrae_credenciais as cred, sebrae_novos
+from domains import sebrae_credenciais as cred, sebrae_finalizacao as fin, sebrae_novos
 from domains import sebrae_observacoes as obs
 from domains.sebrae_chamados import ChamadoSoftExpert
 from tests.test_sebrae_dashboard_gravacao import montar
@@ -23,11 +23,10 @@ class CredenciaisIlegiveisTest(unittest.TestCase):
     def test_ausente_vale_vazio(self):
         self.assertEqual((cred.ler(self.dir, "UTIC-2026-0001"), cred.numeros(self.dir)), ([], frozenset()))
 
-    def test_json_invalido_ou_leitura_negada_levanta_e_nada_e_gravado(self):
+    def test_gravar_e_apagar_recusam_arquivo_ilegivel_sem_regravar(self):
         self.arquivo.write_bytes(LIXO)
         for operacao in (lambda: cred.guardar(self.dir, "UTIC-2026-0001", "Senha: Abc12345"),
-                         lambda: cred.remover(self.dir, "UTIC-2026-0001"),
-                         lambda: cred.numeros(self.dir), lambda: cred.ler(self.dir, "UTIC-2026-0001")):
+                         lambda: cred.remover(self.dir, "UTIC-2026-0001")):
             with self.assertRaises(DomainBusyError):
                 operacao()
         self.assertEqual(self.arquivo.read_bytes(), LIXO)
@@ -36,6 +35,12 @@ class CredenciaisIlegiveisTest(unittest.TestCase):
             with self.assertRaises(DomainBusyError):
                 cred.guardar(self.dir, "UTIC-2026-0001", "Senha: Abc12345")
         self.assertEqual(cred.numeros(self.dir), {"UTIC-2026-0009"})
+
+    def test_leitura_para_a_tela_e_tolerante(self):
+        self.arquivo.write_bytes(LIXO)
+        with self.assertLogs("domains.sebrae_credenciais", "WARNING"):
+            self.assertEqual((cred.numeros(self.dir), cred.ler(self.dir, "UTIC-2026-0001")), (frozenset(), []))
+        self.assertEqual(self.arquivo.read_bytes(), LIXO)
 
 
 class NovosIlegiveisTest(unittest.TestCase):
@@ -88,8 +93,13 @@ class ImportacaoComEstadoIlegivelTest(RotasBase):
     def test_existentes_ilegivel_nao_vira_nunca_importado(self):
         self._recusa_sem_gravar(self.caminhos.existentes)
 
-    def test_senhas_ilegiveis_recusam_antes_de_gravar(self):
-        self._recusa_sem_gravar(cred.caminho(self.dir))
+    def test_senhas_ilegiveis_nao_bloqueiam_a_importacao_e_ficam_preservadas(self):
+        cred.caminho(self.dir).write_bytes(LIXO)
+        self.assertEqual(self.importar(self.nova).status_code, 200)
+        self.assertEqual(cred.caminho(self.dir).read_bytes(), LIXO)
+
+    def test_estado_de_finalizacao_ilegivel_recusa_antes_de_gravar(self):
+        self._recusa_sem_gravar(fin._estado(self.dir))
 
     def test_observacoes_ilegiveis_recusam_antes_de_gravar(self):
         self._recusa_sem_gravar(obs.caminho_observacoes(self.dir))

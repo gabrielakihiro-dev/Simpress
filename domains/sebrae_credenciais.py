@@ -12,6 +12,7 @@ decisão do usuário 25/11/2026). Chamado novo, ainda fora da coluna C, e chamad
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence
@@ -20,6 +21,8 @@ from core.errors import DomainBusyError
 from core.integrity import atomic_write_json, lock_paths
 from domains.sebrae_arquivo import STATUS_FINALIZADO
 from domains.sebrae_dashboard import OMITIDO, omitir_credenciais
+
+logger = logging.getLogger(__name__)
 
 ARQUIVO = "sebrae_credenciais.json"
 MAX_VALORES = 10
@@ -50,8 +53,19 @@ def extrair(*textos: Any) -> List[str]:
     return valores[:MAX_VALORES]
 
 
-def _ler_tudo(arquivo: Path) -> Dict[str, List[str]]:
-    """Arquivo ausente: ``{}``. Ilegível (OneDrive, antivírus) ou inválido: erro, para ninguém regravar o que sobrou."""
+def _ler_tudo(arquivo: Path, estrito: bool = False) -> Dict[str, List[str]]:
+    """Ausente: ``{}``. Ilegível (OneDrive, antivírus) ou inválido: ``DomainBusyError`` com ``estrito`` (antes de regravar, para
+    ninguém sobrescrever o que sobrou); na leitura de tela, ``{}`` e log só do tipo, sem derrubar a F5."""
+    try:
+        return _ler_arquivo(arquivo)
+    except DomainBusyError as erro:
+        if estrito:
+            raise
+        logger.warning("Registro de senhas dos chamados ilegível (%s).", type(erro.__cause__ or erro).__name__)
+        return {}
+
+
+def _ler_arquivo(arquivo: Path) -> Dict[str, List[str]]:
     try:
         dados = json.loads(arquivo.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -70,7 +84,7 @@ def guardar(state_dir: Path, numero: str, *textos: Any) -> bool:
         return False
     arquivo = caminho(state_dir)
     with lock_paths([arquivo]):
-        dados = _ler_tudo(arquivo)
+        dados = _ler_tudo(arquivo, estrito=True)
         dados[numero] = valores
         arquivo.parent.mkdir(parents=True, exist_ok=True)
         atomic_write_json(arquivo, dados)
@@ -89,7 +103,7 @@ def numeros(state_dir: Path) -> frozenset:
 def remover(state_dir: Path, *numeros: str) -> None:
     arquivo = caminho(state_dir)
     with lock_paths([arquivo]):
-        dados = _ler_tudo(arquivo)
+        dados = _ler_tudo(arquivo, estrito=True)
         removidos = [numero for numero in numeros if dados.pop(numero, None) is not None]
         if removidos:
             atomic_write_json(arquivo, dados)
