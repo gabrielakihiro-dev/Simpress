@@ -76,7 +76,8 @@ function comDocumento(corpo) {
   const anteriores = { document: globalThis.document, react: globalThis.SimpressReact };
   globalThis.document = {
     getElementById: id => (id === "comparacao-planilhas-conteudo" ? conteudo : null),
-    createElement: tag => ({ tag, className: "", textContent: "" }),
+    // setAttribute não enumerável: o deepEqual compara só tag, classe, texto e atributos.
+    createElement: tag => Object.defineProperty({ tag, className: "", textContent: "" }, "setAttribute", { value(nome, valor) { this[nome] = valor; } }),
   };
   try {
     corpo(conteudo);
@@ -94,7 +95,7 @@ test("sem o painel React o resultado da Comparação sai de Carregando para o es
   delete globalThis.SimpressReact;
   criarComparisonResult(pontesQueNaoDevolvem()).renderizarResultadoComparacao({ evento_id: "evento-1" });
   assert.equal(conteudo.dataset.estado, "erro");
-  assert.deepEqual(conteudo.filhos, [{ tag: "p", className: "ck-nota ck-nota--erro", textContent: "Não foi possível abrir a comparação." }]);
+  assert.deepEqual(conteudo.filhos, [{ tag: "p", className: "ck-nota ck-nota--erro", textContent: "Não foi possível abrir a comparação.", role: "status" }]);
 }));
 
 test("com o painel montado, o render que não devolve nada não troca o conteúdo", () => comDocumento(conteudo => {

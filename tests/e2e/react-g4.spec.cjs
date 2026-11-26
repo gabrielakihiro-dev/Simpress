@@ -262,7 +262,7 @@ test.describe("comportamento (1366 px)", () => {
     const modal = await abrirChamado(page);
     await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
     await modal.getByRole("button", { name: "Revisar e enviar" }).click();
-    const confirmacao = page.getByRole("dialog", { name: "Confirmar chamado no UX" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Confirmar chamado no UX" });
     await expect(confirmacao).toContainText(DESCRICAO);
     await confirmacao.getByRole("button", { name: "Cancelar" }).click();
     await expect(modal.getByRole("button", { name: "Revisar e enviar" })).toBeEnabled();
@@ -274,7 +274,7 @@ test.describe("comportamento (1366 px)", () => {
     const modal = await abrirChamado(page);
     await modal.getByLabel("Problema").selectOption("Notebook - Teclado");
     await modal.getByRole("button", { name: "Revisar e enviar" }).click();
-    await page.getByRole("dialog", { name: "Confirmar chamado no UX" }).getByRole("button", { name: "Enviar solicitação" }).click();
+    await page.getByRole("alertdialog", { name: "Confirmar chamado no UX" }).getByRole("button", { name: "Enviar solicitação" }).click();
     await expect(page.locator("#ux-chamado-status")).toHaveText("Não foi possível receber o resultado. Confira no UX se a solicitação foi criada antes de tentar novamente.");
     await expect(modal.getByRole("button", { name: "Conferi no UX; preparar de novo" })).toBeVisible();
     await expect(modal.getByRole("button", { name: "Revisar e enviar" })).toBeDisabled();
@@ -336,7 +336,7 @@ test.describe("comportamento (1366 px)", () => {
       window.confirmarAcao = (...args) => { window.__confirmacoesUx += 1; return original(...args); };
     });
     await modal.getByRole("button", { name: "Revisar e enviar" }).dblclick();
-    const confirmacao = page.getByRole("dialog", { name: "Confirmar chamado no UX" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Confirmar chamado no UX" });
     await confirmacao.getByRole("button", { name: "Enviar solicitação" }).click();
     await expect(page.locator("#ux-chamado-status")).toHaveText("Chamado enviado. OS #98765.");
     await expect(confirmacao).toBeHidden();
@@ -366,7 +366,7 @@ test.describe("comportamento (1366 px)", () => {
     }
     // A guarda vale também na chamada direta (window.executarChamadoUX), sem passar pelo botão.
     await page.evaluate(() => window.executarChamadoUX(true));
-    await expect(page.getByRole("dialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
+    await expect(page.getByRole("alertdialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
     for (const [rotulo, valor] of Object.entries(campos)) await modal.getByLabel(rotulo).fill(valor);
     await expect(motivo).toBeHidden();
     await expect(modal.getByRole("button", { name: "Simular preenchimento" })).toBeEnabled();
@@ -374,7 +374,7 @@ test.describe("comportamento (1366 px)", () => {
     await modal.getByLabel("Nome").fill("  ");
     for (const nome of ["Simular preenchimento", "Revisar e enviar"]) await expect(modal.getByRole("button", { name: nome })).toBeDisabled();
     await page.evaluate(() => window.executarChamadoUX(true));
-    await expect(page.getByRole("dialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
+    await expect(page.getByRole("alertdialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
     expect(pedidos.map(({ caminho }) => caminho)).toEqual(["/api/ux/abrir-chamado/preparar"]);
     // Espaços nas pontas não vão para o UX.
     await modal.getByLabel("Nome").fill(SOLICITANTE.nome);
@@ -398,7 +398,7 @@ test.describe("comportamento (1366 px)", () => {
     for (const nome of ["Simular preenchimento", "Revisar e enviar"]) await expect(modal.getByRole("button", { name: nome })).toBeDisabled();
     await page.evaluate(() => window.executarChamadoUX(false));
     await page.evaluate(() => window.executarChamadoUX(true));
-    await expect(page.getByRole("dialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
+    await expect(page.getByRole("alertdialog", { name: "Confirmar chamado no UX" })).toHaveCount(0);
     expect(pedidos.map(({ caminho }) => caminho)).toEqual(["/api/ux/abrir-chamado/preparar"]);
   });
 

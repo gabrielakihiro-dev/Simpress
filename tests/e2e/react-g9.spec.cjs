@@ -159,7 +159,7 @@ const BOTAO_RESTAURAR = "Restaurar versões anteriores à atualização de 25/10
 
 async function restaurarPrimeiro(page) {
   await page.getByRole("button", { name: BOTAO_RESTAURAR }).click();
-  const confirmacao = page.getByRole("dialog", { name: "Restaurar inventários?" });
+  const confirmacao = page.getByRole("alertdialog", { name: "Restaurar inventários?" });
   await confirmacao.getByRole("button", { name: "Restaurar" }).click();
   await expect(confirmacao).toBeHidden();
 }
@@ -257,7 +257,7 @@ test.describe("Histórico de planilhas", () => {
     await abrirHistorico(page);
 
     await page.getByRole("button", { name: "Restaurar versões anteriores à atualização de 25/10/2026, 10:00:00" }).click();
-    const confirmacao = page.getByRole("dialog", { name: "Restaurar inventários?" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Restaurar inventários?" });
     await expect(confirmacao).toBeVisible();
     await expect(confirmacao).toContainText("Reverter a atualização registrada em 25/10/2026, 10:00:00?");
     await expect(confirmacao).toContainText("no endpoint: endpoint-anterior-g9.csv (10 registros)");
@@ -284,7 +284,7 @@ test.describe("Histórico de planilhas", () => {
 
     const botao = page.getByRole("button", { name: "Desfazer restauração de 25/10/2026, 08:00:00" });
     await botao.click();
-    const confirmacao = page.getByRole("dialog", { name: "Restaurar inventários?" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Restaurar inventários?" });
     await expect(confirmacao).toBeVisible();
     await confirmacao.getByRole("button", { name: "Cancelar" }).click();
     await expect(confirmacao).toBeHidden();
@@ -392,7 +392,7 @@ test.describe("Histórico de planilhas", () => {
     await page.goto("/");
     await abrirHistoricoSemNavegar(page);
     await page.getByRole("button", { name: "Excluir atualização de 20/10/2026, 09:00:00" }).click();
-    await page.getByRole("dialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
+    await page.getByRole("alertdialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
     await expect(page.locator(TOTAL)).toHaveText("3 registros");
 
     const respostaAtrasada = page.waitForResponse(response => new URL(response.url()).pathname === "/api/historico-comparacoes");
@@ -417,7 +417,7 @@ test.describe("Histórico de planilhas", () => {
 
     painel.length = 0;
     await page.getByRole("button", { name: "Excluir atualização de 20/10/2026, 09:00:00" }).click();
-    await page.getByRole("dialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
+    await page.getByRole("alertdialog", { name: "Excluir atualização?" }).getByRole("button", { name: "Excluir" }).click();
     await expect(page.locator(TOTAL)).toHaveText("3 registros");
     await page.waitForLoadState("networkidle");
     expect(painel.length).toBe(PAINEL_POR_EXCLUSAO);
@@ -429,7 +429,7 @@ test.describe("Histórico de planilhas", () => {
     await abrirHistorico(page);
 
     await page.getByRole("button", { name: "Excluir atualização de 20/10/2026, 09:00:00" }).click();
-    const confirmacao = page.getByRole("dialog", { name: "Excluir atualização?" });
+    const confirmacao = page.getByRole("alertdialog", { name: "Excluir atualização?" });
     await expect(confirmacao).toContainText("Tem certeza de que deseja excluir esta atualização de 20/10/2026, 09:00:00? Essa ação não poderá ser desfeita.");
     await confirmacao.getByRole("button", { name: "Excluir" }).click();
 

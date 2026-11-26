@@ -129,7 +129,7 @@ test("Transporte opens the ticket; an ambiguous address needs a choice; Simular 
   expect(chamadas.at(-1).corpo).toMatchObject({ enviar: false, confirmado: false, descricao: REGISTRO_OK, solicitante: SOLICITANTE });
 
   await finalizar.click();
-  const confirmacao = page.getByRole("dialog", { name: "Finalizar ticket no UX" });
+  const confirmacao = page.getByRole("alertdialog", { name: "Finalizar ticket no UX" });
   await expect(confirmacao).toContainText(opcoes[1]);
   expect(chamadas.filter(({ corpo }) => corpo.enviar === true)).toHaveLength(0);
   await confirmacao.getByRole("button", { name: "Finalizar ticket" }).click();

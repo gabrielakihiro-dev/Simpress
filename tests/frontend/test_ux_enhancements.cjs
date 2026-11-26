@@ -126,7 +126,7 @@ test("notifications dispatch simpress:notify without changing the toast", () => 
   const events = [];
   const appended = [];
   class FakeCustomEvent { constructor(type, init) { this.type = type; this.detail = init.detail; } }
-  const node = () => ({ setAttribute() {}, replaceChildren() {}, remove() {}, className: "", textContent: "", dataset: {} });
+  const node = () => ({ setAttribute() {}, replaceChildren() {}, remove() {}, addEventListener() {}, className: "", textContent: "", dataset: {} });
   const document = {
     getElementById: () => ({ appendChild: child => appended.push(child) }),
     createElement: node,
@@ -145,6 +145,70 @@ test("notifications dispatch simpress:notify without changing the toast", () => 
     lucide: { createIcons() {} }, motion: null, createIcon: node,
   });
   assert.doesNotThrow(() => legacy.show("ok", "info"));
+});
+
+test("toast pausa com o mouse em cima ou o foco dentro e some 4 s depois de sair (26/11/2026)", () => {
+  // Relógio falso: o toast continua com os 4 s (17-termos.md conta com eles), só para enquanto alguém o lê.
+  let agora = 0;
+  const timers = new Map();
+  let proximo = 1;
+  const window = {
+    setTimeout: (fn, ms) => { timers.set(proximo, { fn, em: agora + ms }); return proximo++; },
+    clearTimeout: id => timers.delete(id),
+    matchMedia: consulta => ({ matches: consulta === "(hover: hover)" && comMouse }),
+  };
+  let comMouse = true;
+  const passar = ms => {
+    agora += ms;
+    for (const [id, t] of [...timers]) if (t.em <= agora) { timers.delete(id); t.fn(); }
+  };
+  const ouvintes = {};
+  let removido = false;
+  let remocoes = 0;
+  const toast = {
+    setAttribute() {}, replaceChildren() {}, remove() { removido = true; remocoes++; }, className: "", dataset: {},
+    addEventListener: (tipo, fn) => { ouvintes[tipo] = fn; }, contains: alvo => alvo === "dentro",
+  };
+  const notifications = createNotifications({
+    document: { getElementById: () => ({ appendChild() {} }), createElement: () => toast },
+    window, lucide: { createIcons() {} }, motion: null, createIcon: () => ({}),
+  });
+  notifications.show("Falhou.", "error");
+  passar(3000);
+  ouvintes.mouseenter();
+  passar(10000);
+  assert.equal(removido, false, "com o mouse em cima não some");
+  ouvintes.focusin();
+  ouvintes.mouseleave();
+  passar(10000);
+  assert.equal(removido, false, "com o foco dentro não some");
+  ouvintes.focusout({ relatedTarget: "dentro" });
+  passar(10000);
+  assert.equal(removido, false, "foco que anda dentro do toast não retoma");
+  ouvintes.focusout({ relatedTarget: null });
+  passar(3999);
+  assert.equal(removido, false);
+  passar(1);
+  assert.equal(removido, true, "some 4 s depois de sair");
+  ouvintes.mouseenter();
+  ouvintes.mouseleave();
+  passar(10000);
+  assert.equal(remocoes, 1, "passar o mouse num toast que já está sumindo não agenda outro fim");
+
+  removido = false;
+  notifications.show("Salvo.");
+  passar(4000);
+  assert.equal(removido, true, "sem interação, segue os 4 s");
+
+  // Tela de toque (sem hover): só o foco pausa; o toque não prende o toast sobre os botões.
+  comMouse = false;
+  for (const tipo of Object.keys(ouvintes)) delete ouvintes[tipo];
+  removido = false;
+  notifications.show("Cidade, endereço e CNPJ são campos obrigatórios.", "warning");
+  assert.equal(ouvintes.mouseenter, undefined);
+  assert.equal(typeof ouvintes.focusin, "function");
+  passar(4000);
+  assert.equal(removido, true, "no toque o toast some nos 4 s");
 });
 
 test("index loads the refinement layer last and links every transfer label", () => {
