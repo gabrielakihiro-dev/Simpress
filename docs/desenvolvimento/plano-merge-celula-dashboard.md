@@ -18,7 +18,7 @@ Data: 11/11/2026. Branch `claude/dashboard-merge-celula-1a44e3`. Plano aprovado 
 ## Regras invioláveis (todas as etapas)
 
 - Q, T, U, V são fórmulas: nunca escritas. W nunca tocada. C de linha existente nunca reescrita. Valor em branco do site nunca apaga.
-- Linhas do SP sem operação ficam byte a byte iguais (não passam por `_reescrever_linha`).
+- Linhas do SP sem operação ficam byte a byte iguais (não passam por `_reescrever_linha`; só o `s=` de F, G e H das linhas de dados vira estilo à esquerda, em toda gravação).
 - Só se escreve no arquivo gerado; nada no Excel Online. `Duplicata` antes de sobrepor, `Keep both` recusado, `Save Conflict` sem Retry, cliques irreversíveis sem repetição, 409 para `versao_importacao` ausente ou antiga: tudo como hoje.
 - Nada de envio real, Chrome de automação ou `data/` real. Só mocks e fixtures.
 - LGPD: valores de célula só no arquivo de estado dos conflitos e na resposta da API lida pela tela. Mensagem de erro, `descrever_erro`, arquivo de resultado, logs e Assistente levam só contagem, letras de coluna e números de chamado.

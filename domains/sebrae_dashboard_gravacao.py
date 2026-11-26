@@ -42,6 +42,7 @@ FORMULAS_DA_LINHA = ("Q", "T", "U", "V")
 MAX_CARACTERES_CELULA = 32_767
 LIMITE_H_LIDO = 2000  # ChamadoAberto.descricao (coluna H lida) é cortada aqui
 INDICE_DA_COLUNA_W = 23
+COLUNAS_A_ESQUERDA = ("F", "G", "H")  # ATENDIMENTO REALIZADO, TITULO, DESCRICAO CHAMADO: always left-aligned in the data rows
 
 _SHEET_TAG = re.compile(r"<sheet\b[^>]*/>")
 _ATRIBUTO = re.compile(r'([\w:]+)="([^"]*)"')
@@ -500,9 +501,10 @@ def _chave_da_linha(linha: _Linha, compartilhadas: Sequence[str]) -> Tuple[int, 
 
 
 def _assinatura(linha: _Linha) -> Tuple[Tuple[str, str], ...]:
-    """Cells A:W of a row as stored (value, formula, style), without the row number: what a sort must only move."""
+    """Cells A:W of a row as stored (value, formula, style), without the row number: what a sort must only move (the style of F, G, H is
+    ignored: ``_alinhar_a_esquerda`` rewrites it after the sort)."""
     return tuple(
-        (letra, re.sub(r' r="[A-Z]+\d+"', "", linha.celulas[letra], count=1))
+        (letra, re.sub(r' r="[A-Z]+\d+"' + (r'| s="\d+"' if letra in COLUNAS_A_ESQUERDA else ""), "", linha.celulas[letra], count=2 if letra in COLUNAS_A_ESQUERDA else 1))
         for letra in sorted(linha.celulas, key=_letra_para_indice) if _letra_para_indice(letra) <= INDICE_DA_COLUNA_W
     )
 
@@ -857,11 +859,101 @@ def _entregar(
     _conferir(conteudo, anteriores, novos, pacote, ordem, categorias)
     return conteudo, ordem.mapa
 
+_XF = re.compile(r"<xf\b[^>]*?/>|<xf\b[^>]*?>.*?</xf>", re.DOTALL)
+_CELULA_FGH = re.compile(r'<c r="([FGH])(\d+)"([^>]*?)(/?)>')
+
+
+def _xf_a_esquerda(xf: str) -> str:
+    """The ``cellXfs`` entry with ``horizontal="left"``; everything else (numFmt, font, fill, border, wrap, vertical...) is kept."""
+    abertura = re.match(r"<xf\b[^>]*?(?=/?>)", xf).group(0)  # type: ignore[union-attr]
+    corpo = xf[len(abertura):]
+    abertura = re.sub(r'\s+applyAlignment="[^"]*"', "", abertura) + ' applyAlignment="1"'
+    alinhamento = re.search(r"<alignment\b[^>]*?/?>", corpo)
+    if alinhamento is None:
+        corpo = '><alignment horizontal="left"/></xf>' if corpo == "/>" else corpo.replace(">", '><alignment horizontal="left"/>', 1)
+    else:
+        tag = alinhamento.group(0)
+        nova = re.sub(r'\bhorizontal="[^"]*"', 'horizontal="left"', tag) if "horizontal=" in tag else tag.replace("<alignment", '<alignment horizontal="left"', 1)
+        corpo = corpo.replace(tag, nova, 1)
+    return abertura + corpo
+
+
+def _a_esquerda(xf: str) -> bool:
+    alinhamento = re.search(r"<alignment\b[^>]*?/?>", xf)
+    return alinhamento is not None and _atributos(alinhamento.group(0)).get("horizontal") == "left"
+
+
+def _chave_xf(xf: str) -> str:
+    """The xf without the order of its attributes (the clone is compared with the styles that are already left-aligned)."""
+    return re.sub(r"<(xf|alignment|protection)\b([^>]*?)(/?)>", lambda m: f"<{m.group(1)} {sorted(_ATRIBUTO.findall(m.group(2)))}{m.group(3)}>", xf)
+
+
+def _cellxfs(estilos: str) -> Optional[Tuple["re.Match[str]", List[str]]]:
+    """``<cellXfs>`` and its entries; ``None`` when it is missing or its ``count`` does not match the entries (then nothing is touched)."""
+    bloco = re.search(r"<cellXfs\b[^>]*>(.*?)</cellXfs>", estilos, re.DOTALL)
+    if bloco is None:
+        return None
+    xfs = _XF.findall(bloco.group(1))
+    contagem = _atributos(re.match(r"<cellXfs\b[^>]*>", bloco.group(0)).group(0)).get("count")  # type: ignore[union-attr]
+    return (bloco, xfs) if contagem is None or contagem == str(len(xfs)) else None
+
+
+def _alinhar_a_esquerda(pacote: _Pacote, folha: str) -> Tuple[str, Optional[bytes]]:
+    """F, G and H of the data rows of ``Tabela3`` (2 .. last; never the header) get a left-aligned style: gives the sheet and the new ``styles.xml``.
+
+    Only the ``s=`` of cells that already exist changes (no ``<c>`` is created) and only ``cellXfs`` grows, once per distinct source style
+    (a style that is already left-aligned, with ``applyAlignment="1"``, or has a left-aligned twin, is reused)."""
+    if "xl/styles.xml" not in pacote.partes:
+        return folha, None
+    try:
+        estilos = pacote.texto("xl/styles.xml")
+    except UnicodeDecodeError as erro:
+        raise GravacaoInvalida("A estrutura do Dashboard guardado não é a esperada.") from erro
+    lido = _cellxfs(estilos)
+    if lido is None:
+        return folha, None
+    bloco, xfs = lido
+    originais = len(xfs)
+    mapa: Dict[int, int] = {}
+
+    def novo_estilo(antigo: int) -> int:
+        if antigo not in mapa:
+            origem = xfs[antigo]
+            if _a_esquerda(origem) and _atributos(re.match(r"<xf\b[^>]*?(?=/?>)", origem).group(0)).get("applyAlignment") == "1":  # type: ignore[union-attr]
+                mapa[antigo] = antigo
+            else:
+                novo = _xf_a_esquerda(origem)
+                chave = _chave_xf(novo)
+                gemeos = [i for i, x in enumerate(xfs) if _a_esquerda(x) and _chave_xf(_xf_a_esquerda(x)) == chave]
+                if not gemeos:
+                    xfs.append(novo)
+                mapa[antigo] = gemeos[0] if gemeos else len(xfs) - 1
+        return mapa[antigo]
+
+    def trocar(achado: "re.Match[str]") -> str:
+        if not 2 <= int(achado.group(2)) <= pacote.tabela_ultima_linha:
+            return achado.group(0)
+        atributos = achado.group(3)
+        antigo = re.search(r'\bs="(\d+)"', atributos)
+        indice = int(antigo.group(1)) if antigo else 0
+        if indice >= originais:
+            return achado.group(0)
+        novo = novo_estilo(indice)
+        atributos = re.sub(r'\bs="\d+"', f's="{novo}"', atributos) if antigo else atributos + f' s="{novo}"'
+        return f'<c r="{achado.group(1)}{achado.group(2)}"{atributos}{achado.group(4)}>'
+
+    inicio, fim = folha.find("<sheetData>"), folha.find("</sheetData>")
+    folha = folha[:inicio] + _CELULA_FGH.sub(trocar, folha[inicio:fim]) + folha[fim:]
+    if len(xfs) == originais:
+        return folha, None
+    abertura = re.sub(r'\bcount="\d+"', f'count="{len(xfs)}"', re.match(r"<cellXfs\b[^>]*>", bloco.group(0)).group(0))  # type: ignore[union-attr]
+    return folha, (estilos[:bloco.start()] + abertura + "".join(xfs) + "</cellXfs>" + estilos[bloco.end():]).encode("utf-8")
+
 
 def _montar(
     pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str], sem_calc_chain: bool = False, categorias: bool = False,
 ) -> bytes:
-    """The workbook with the rewritten rows spliced into the sheet; every other part is copied as it was.
+    """The workbook with the rewritten rows spliced into the sheet; every other part is copied as it was (except ``xl/styles.xml``, which only gains left-aligned clones of the styles of F, G and H).
 
     ``sem_calc_chain``: rows moved, so the calculation chain (which lists cells by address) is dropped with its
     content type and relationship; Excel rebuilds it on load."""
@@ -882,6 +974,9 @@ def _montar(
         ):
             if nome in partes:
                 partes[nome] = re.sub(padrao, "", partes[nome].decode("utf-8")).encode("utf-8")
+    novo_texto, estilos = _alinhar_a_esquerda(pacote, novo_texto)  # single exit of atualizar, registrar_encerramentos and reaplicar
+    if estilos is not None:
+        partes["xl/styles.xml"] = estilos
     partes[pacote.aba] = novo_texto.encode("utf-8")
     partes["xl/workbook.xml"] = _recalcular_ao_abrir(pacote.texto("xl/workbook.xml")).encode("utf-8")
     if categorias:
@@ -973,11 +1068,22 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
             folha = arquivo.read(pacote.aba).decode("utf-8")
             ElementTree.fromstring(folha)
             ElementTree.fromstring(arquivo.read("xl/workbook.xml"))
+            if "xl/styles.xml" in arquivo.namelist():
+                estilos = arquivo.read("xl/styles.xml").decode("utf-8")
+                ElementTree.fromstring(estilos)
+                novo, original = _cellxfs(estilos), _cellxfs(pacote.texto("xl/styles.xml"))
+                if novo is not None and original is not None:  # else ``_alinhar_a_esquerda`` left the styles alone
+                    for m in _CELULA_FGH.finditer(folha):
+                        indice = re.search(r'\bs="(\d+)"', m.group(3))
+                        estilo = int(indice.group(1)) if indice else 0
+                        # a cell whose style pointed outside the original list is left as it was (not blocking)
+                        if 2 <= int(m.group(2)) <= pacote.tabela_ultima_linha and estilo < len(original[1]) and not (estilo < len(novo[1]) and _a_esquerda(novo[1][estilo])):
+                            raise GravacaoInvalida("F, G e H da cópia não ficaram alinhadas à esquerda; nada foi entregue.")
             if categorias and not _categorias_conferem(arquivo, pacote):
                 raise GravacaoInvalida("A lista de categorias da cópia não confere com a original; nada foi entregue.")
         if ler_coluna_c(conteudo) != anteriores | frozenset(novos):
             raise GravacaoInvalida("A coluna C da cópia não confere com o esperado; nada foi entregue.")
-    except (zipfile.BadZipFile, ElementTree.ParseError) as erro:
+    except (zipfile.BadZipFile, ElementTree.ParseError, UnicodeDecodeError) as erro:
         raise GravacaoInvalida("A cópia gerada não passou na conferência; nada foi entregue.") from erro
     if not ordem.ultimo:
         return
