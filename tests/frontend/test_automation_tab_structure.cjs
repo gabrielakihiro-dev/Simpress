@@ -315,7 +315,10 @@ test("a rotina só começa por clique e um segundo clique não inicia outra", ()
   const iniciar = acoes.slice(acoes.indexOf("export async function iniciarRotinaAutomacao"), acoes.indexOf("export async function cancelarRotinaAutomacao"));
   assert.match(iniciar, /if \(!ROTINAS\[rotina\] \|\| atual\.ocupado\) return;/);
   assert.match(iniciar, /if \(atual\.emAndamento\) \{\s*if \(atual\.rotinaAtiva === rotina\) acompanharRotina\(\);\s*return;\s*\}/);
-  assert.ok(iniciar.indexOf("mudar({ ocupado: true") < iniciar.indexOf("await consultarAutomacao"), "ocupado antes de qualquer await");
+  const primeiroAwait = iniciar.search(/\bawait\b/);
+  assert.ok(primeiroAwait > 0, "a função tem await");
+  const marcaOcupado = iniciar.indexOf("mudar({ ocupado: true");
+  assert.ok(marcaOcupado >= 0 && marcaOcupado < primeiroAwait, "ocupado antes de qualquer await");
   assert.match(iniciar, /method: "POST"/);
   assert.match(iniciar, /body: JSON\.stringify\(rotina === "enviar" \? \{ rotina, confirmado: true \} : \{ rotina \}\)/);
   // Escrita no SharePoint: "enviar" só vai ao servidor depois do diálogo e com confirmado: true.

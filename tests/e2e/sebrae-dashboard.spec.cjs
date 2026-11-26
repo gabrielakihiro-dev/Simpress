@@ -1122,3 +1122,40 @@ test("Conflitos de edição: sem rolagem horizontal de 320px a 2560px e sem falh
     expect(resultado.violations.map(v => `${v.id}: ${v.nodes.length}`)).toEqual([]);
   }
 });
+
+test("Enviar ao SharePoint pede confirmação: Cancelar e Esc não enviam; Confirmar envia com confirmado: true", async ({ page, request }) => {
+  const { painel, antigo } = await abrirAntigo(page, request);
+  await completarCampos(antigo);
+  const modal = page.locator("#modal-confirmar-acao");
+  await painel.locator("#btn-sebrae-atualizar").click();
+  await Promise.all([page.waitForEvent("download"), page.keyboard.press("Escape")]); // gera a cópia atualizada: libera o botão Enviar
+  const enviar = painel.locator("#btn-sebrae-enviar");
+  await expect(enviar).toBeEnabled();
+  const posts = [];
+  await page.route("**/api/automacao/executar", route => {
+    posts.push(route.request().postDataJSON());
+    return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ detail: "Rotina sintética recusada no teste." }) });
+  });
+
+  await enviar.click();
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText("Enviar ao SharePoint?");
+  await expect(modal.locator("#btn-confirmar-acao-ok")).toHaveText("Enviar ao SharePoint");
+  await modal.locator("#btn-confirmar-acao-cancelar").click();
+  await expect(modal).toBeHidden();
+  await expect(enviar).toBeEnabled();
+  expect(posts).toHaveLength(0);
+
+  await enviar.click();
+  await expect(modal).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(modal).toBeHidden();
+  await expect(enviar).toBeEnabled();
+  expect(posts).toHaveLength(0);
+
+  await enviar.click();
+  await expect(modal).toBeVisible();
+  await modal.locator("#btn-confirmar-acao-ok").click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]).toEqual({ rotina: "enviar", confirmado: true });
+});
