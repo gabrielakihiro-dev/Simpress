@@ -32,7 +32,7 @@ from domains import (
 from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
 from domains import sebrae_dashboard_tela as tela
 from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c, ler_status_chamados
-from domains.sebrae_dashboard_tela import NOME_ATUALIZADO, SebraeDashboardServices
+from domains.sebrae_dashboard_tela import NOME_ATUALIZADO as NOME_ATUALIZADO, SebraeDashboardServices as SebraeDashboardServices  # reexportados (main.py e testes)
 
 MAX_CHAMADOS_POR_EXPORTACAO = 200
 logger = logging.getLogger(__name__)

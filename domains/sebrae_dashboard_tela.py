@@ -19,7 +19,7 @@ from domains.assistant_lgpd import e_solicitante_sistema
 from domains.chrome_automation import ChromeAutomationRunner
 
 NOME_ATUALIZADO = "Dashboard Operacional_SEBRAE.xlsx"
-logger = logging.getLogger("routers.sebrae_dashboard")  # nome do logger mantido para a saída e os filtros de log não mudarem
+logger = logging.getLogger("routers.sebrae_dashboard")  # mesmo logger do router: os testes usam assertLogs com esse nome e a saída de log não muda
 
 
 @dataclass(frozen=True)
@@ -67,15 +67,15 @@ def nao_encontrados(services: SebraeDashboardServices, antigos: Mapping[str, Map
 
 def automaticos_dos_abertos(
     services: SebraeDashboardServices, abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]],
-    relatorio: Optional[Mapping[str, Any]], indice: Optional[Mapping[str, Any]],
+    relatorio_lido: Optional[Mapping[str, Any]], indice: Optional[Mapping[str, Any]],
 ) -> Dict[str, Dict[str, str]]:
     """What "Atualizar Dashboard" fills in the old open rows: G, H and I from the SoftExpert read, then E, K, L and N
     from the name cross-reference fed by that same read (screen and write use this one function).
 
-    ``relatorio`` and ``indice`` are read once by the caller and shared with ``os_novas_dos_abertos``."""
+    ``relatorio_lido`` and ``indice`` are read once by the caller and shared with ``os_novas_dos_abertos``."""
     efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
     cruzados = sebrae_novos.preenchimentos(
-        efetivos, registros, relatorio, services.vinculos_os(), indice, sebrae_os_recusadas.ler_ou_vazio(pasta_estado(services)),
+        efetivos, registros, relatorio_lido, services.vinculos_os(), indice, sebrae_os_recusadas.ler_ou_vazio(pasta_estado(services)),
     )
     lidos = sebrae_novos.preenchimentos_softexpert(abertos, antigos)
     return {n: {**lidos.get(n, {}), **cruzados.get(n, {})} for n in {*lidos, *cruzados}}
@@ -83,7 +83,7 @@ def automaticos_dos_abertos(
 
 def os_novas_dos_abertos(
     services: SebraeDashboardServices, abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]],
-    automaticos: Mapping[str, Mapping[str, str]], relatorio: Optional[Mapping[str, Any]], indice: Optional[Mapping[str, Any]],
+    automaticos: Mapping[str, Mapping[str, str]], relatorio_lido: Optional[Mapping[str, Any]], indice: Optional[Mapping[str, Any]],
 ) -> Dict[str, Dict[str, Any]]:
     """``{numero: sugestão de OS nova}`` dos antigos em aberto (``sebrae_os_nova``); a tela e a gravação usam esta função.
 
@@ -101,7 +101,7 @@ def os_novas_dos_abertos(
     ]
     try:
         return sebrae_os_nova.os_novas(
-            efetivos, relatorio, list(services.vinculos_os()), sebrae_os_recusadas.ler(pasta_estado(services)), registros, indice,
+            efetivos, relatorio_lido, list(services.vinculos_os()), sebrae_os_recusadas.ler(pasta_estado(services)), registros, indice,
             sebrae_os_recusadas.mantidas(pasta_estado(services)),
         )
     except DomainBusyError as erro:
