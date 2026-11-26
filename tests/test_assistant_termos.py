@@ -27,7 +27,7 @@ class AssistenteTermosTests(unittest.TestCase):
             '"Hoje"',
             '"Em breve"',
             "data agendada",
-            "não dispara alarme nem aviso",
+            "o sino do cabeçalho mostra só a contagem de atrasados e de hoje",
             "<série> - <nome completo>",
             '"Criar lembrete"',
             "só depois da confirmação do usuário",

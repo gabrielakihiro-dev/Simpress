@@ -13,7 +13,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from core.integrity import atomic_write_json
+from core.integrity import atomic_write_json, lock_paths, quarantine_corrupt_file
 
 logger = logging.getLogger(__name__)
 
@@ -56,22 +56,36 @@ class NotasStore:
         self._lock = threading.Lock()
 
     def _ler(self) -> List[Dict[str, Any]]:
-        """Saved notes, or [] when there are none or the file is unreadable."""
+        """Saved notes, or [] when there are none or the file is unreadable (never touches the file)."""
+        return self._ler_estado(para_gravar=False)[0]
+
+    def _ler_estado(self, para_gravar: bool) -> "tuple[List[Dict[str, Any]], bool]":
+        """(notes, corrupted). ``corrupted`` is True only for invalid JSON or a wrong structure; the caller passes it
+        to ``_gravar``, which copies the original to quarantine right before overwriting.
+        Any other read error (a locked file): the reader gets [], the writer gets the OSError and writes nothing."""
         try:
             itens = json.loads(self._caminho.read_text(encoding="utf-8")).get("notas", [])
         except FileNotFoundError:
-            return []
-        except (OSError, ValueError, AttributeError):
+            return [], False
+        except (ValueError, AttributeError):  # ValueError includes UnicodeDecodeError
             logger.warning("Não foi possível ler os lembretes do assistente.")
-            return []
+            return [], True
+        except OSError:
+            if para_gravar:
+                raise
+            logger.warning("Não foi possível ler os lembretes do assistente.")
+            return [], False
         if not isinstance(itens, list):
-            return []
+            return [], True
         return [
             {**{campo: item.get(campo) for campo in _CAMPOS}, "concluida": bool(item.get("concluida"))} for item in itens
             if isinstance(item, dict) and isinstance(item.get("id"), str) and isinstance(item.get("texto"), str)
-        ]
+        ], False
 
-    def _gravar(self, notas: List[Dict[str, Any]]) -> None:
+    def _gravar(self, notas: List[Dict[str, Any]], corrompido: bool = False) -> None:
+        if corrompido:  # copy first; if the copy fails nothing is written
+            quarantine_corrupt_file(self._caminho)
+            logger.warning("Lembretes ilegíveis copiados para quarentena; recomeçando vazio.")
         atomic_write_json(self._caminho, {"notas": notas})
 
     def listar(self, incluir_concluidas: bool = True) -> List[Dict[str, Any]]:
@@ -91,33 +105,33 @@ class NotasStore:
             return _validar(texto, prazo, len(self._ler()))
 
     def criar(self, texto: Any, prazo: Any = None) -> Dict[str, Any]:
-        with self._lock:
-            notas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            notas, corrompido = self._ler_estado(para_gravar=True)
             dados = _validar(texto, prazo, len(notas))
             existentes = {n["id"] for n in notas}
             nota_id = secrets.token_hex(6)
             while nota_id in existentes:
                 nota_id = secrets.token_hex(6)
             nota = {"id": nota_id, **dados, "criada_em": datetime.now().astimezone().isoformat(timespec="seconds"), "concluida": False}
-            self._gravar(notas + [nota])
+            self._gravar(notas + [nota], corrompido)
             return nota
 
     def marcar(self, nota_id: str, concluida: bool = True) -> Optional[Dict[str, Any]]:
         """Mark done (or open again); None when the id does not exist."""
-        with self._lock:
-            notas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            notas, corrompido = self._ler_estado(para_gravar=True)
             nota = next((n for n in notas if n["id"] == nota_id), None)
             if nota is None:
                 return None
             nota["concluida"] = bool(concluida)
-            self._gravar(notas)
+            self._gravar(notas, corrompido)
             return nota
 
     def apagar(self, nota_id: str) -> bool:
-        with self._lock:
-            notas = self._ler()
+        with self._lock, lock_paths([self._caminho]):
+            notas, corrompido = self._ler_estado(para_gravar=True)
             restantes = [n for n in notas if n["id"] != nota_id]
             if len(restantes) == len(notas):
                 return False
-            self._gravar(restantes)
+            self._gravar(restantes, corrompido)
             return True

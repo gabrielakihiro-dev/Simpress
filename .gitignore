@@ -178,6 +178,8 @@ __pycache__/
 /config/cliente.json
 # Local per-city edits of the regional representatives (names, e-mails, phones).
 /config/representantes_regionais.json
+# Quarantine copies of unreadable local JSON files (quarantine_corrupt_file); same personal data as the original, any folder.
+*.corrompido-*.json
 
 # graphify (grafo de conhecimento local)
 graphify-out/
