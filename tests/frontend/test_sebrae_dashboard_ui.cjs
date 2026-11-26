@@ -2925,13 +2925,13 @@ const portao = () => { let abrir; const espera = new Promise(resolver => { abrir
 
 /** Servidor falso: guarda descrição e observação nos itens da carga, para a recarga devolvê-las como o servidor faria. */
 function servidorBlocoC(carga, { falharDescricao = false, portaoPost = null } = {}) {
-  const estado = { falharDescricao, puts: [], posts: [], gets: 0 };
+  const estado = { falharDescricao, falharEm: "", falharLapis: false, falharPost: false, portaoGet: null, puts: [], posts: [], gets: 0 };
   const apiFetch = async (url, opcoes = {}) => {
     const corpo = opcoes.body ? JSON.parse(opcoes.body) : null;
     if (opcoes.method === "PUT" && url.endsWith("/finalizacao")) {
       estado.puts.push(corpo.descricao_finalizacao);
-      if (estado.falharDescricao) throw Object.assign(new Error("indisponível"), { status: 503 });
       const numero = decodeURIComponent(url.split("/")[4]);
+      if (estado.falharDescricao || estado.falharEm === numero) throw Object.assign(new Error("indisponível"), { status: 422 });
       const item = carga.novos.formulario.find(n => n.numero === numero);
       if (item) item.softexpert = { ...item.softexpert, descricao_finalizacao: corpo.descricao_finalizacao, descricao_definida: true };
       return { descricao_finalizacao: corpo.descricao_finalizacao };
@@ -2941,13 +2941,17 @@ function servidorBlocoC(carga, { falharDescricao = false, portaoPost = null } = 
       carga.importado.abertos[0].observacao = corpo.observacao;
       return { observacao: corpo.observacao };
     }
-    if (opcoes.method === "PUT" && url.endsWith("/descricao")) return { descricao: corpo.descricao || "Travando.", descricao_editada: corpo.descricao };
+    if (opcoes.method === "PUT" && url.endsWith("/descricao")) {
+      if (estado.falharLapis) throw Object.assign(new Error("recusado"), { status: 422 });
+      return { descricao: corpo.descricao || "Travando.", descricao_editada: corpo.descricao };
+    }
     if (opcoes.method === "POST" && (url === POST_ATUALIZAR || url === POST_FINALIZAR)) {
       estado.posts.push({ url, corpo });
       if (portaoPost) await portaoPost.espera;
+      if (estado.falharPost) throw Object.assign(new Error("Importação mudou."), { status: 409 });
       return url === POST_ATUALIZAR ? { arquivo: "Dashboard.xlsx", conteudo_base64: "AA==", linhas: [], base: {}, ...ENVIO_INICIADO } : { iniciado: true };
     }
-    if (!opcoes.method) estado.gets += 1;
+    if (!opcoes.method) { estado.gets += 1; if (estado.portaoGet) await estado.portaoGet.espera; }
     return structuredClone(carga);
   };
   return { estado, apiFetch };
@@ -3043,35 +3047,6 @@ test("recarga com texto não salvo: descrição e observação são salvas antes
   assert.equal(doc.activeElement, novo.querySelector("textarea[data-sebrae-descricao]"));
 });
 
-test("recarga com salvamento que falha mantém a tela e o texto digitado", async () => {
-  const { el, feature, estado } = await telaBlocoC(UM_FINALIZAVEL());
-  const antigo = cartaoDe(el, "UTIC-2026-1500");
-  estado.falharDescricao = true;
-  digitarCampo(antigo.querySelector("textarea[data-sebrae-descricao]"), "Texto que não salvou.");
-  await feature.carregarNovosSebrae();
-  assert.equal(cartaoDe(el, "UTIC-2026-1500"), antigo);
-  assert.equal(antigo.querySelector("textarea[data-sebrae-descricao]").value, "Texto que não salvou.");
-});
-
-test("recarga espera o editor do lápis com texto não salvo e segue quando ele fecha", async () => {
-  global.window = global.window || {};
-  const { el, feature } = await telaBlocoC(UM_FINALIZAVEL());
-  global.window.setTimeout = funcao => { setImmediate(funcao); return 0; };
-  const antigo = el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo");
-  const lapis = antigo.querySelector("button[data-sebrae-editar-descricao]");
-  lapis.dispatchEvent({ type: "click", currentTarget: lapis });
-  digitarCampo(antigo.querySelector("textarea[data-sebrae-descricao-editada]"), "Descrição em edição.");
-  let terminou = false;
-  const recarga = feature.carregarNovosSebrae().then(() => { terminou = true; });
-  for (let i = 0; i < 10; i++) await esvaziarFila();
-  assert.equal(terminou, false, "a recarga espera");
-  assert.equal(el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo"), antigo, "o editor segue no mesmo cartão");
-  const cancelar = antigo.querySelector("button[data-sebrae-cancelar-descricao]");
-  cancelar.dispatchEvent({ type: "click", currentTarget: cancelar });
-  await recarga;
-  assert.notEqual(el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo"), antigo);
-});
-
 test("Atualizar Dashboard fica desabilitado durante o POST, mesmo quando um recálculo de botão acontece", async () => {
   const carga = UM_FINALIZAVEL();
   const porta = portao();
@@ -3158,4 +3133,170 @@ test("PDF em envio trava Finalizar e Atualizar Dashboard até terminar", async (
   for (let i = 0; i < 5; i++) await esvaziarFila();
   assert.equal(botao.disabled, false);
   assert.equal(el["btn-sebrae-atualizar"].disabled, false);
+});
+
+test("422 permanente: a recarga acontece, o texto volta ao cartão e o aviso aparece", async () => {
+  const { el, feature, estado, toasts } = await telaBlocoC(UM_FINALIZAVEL());
+  const antigo = cartaoDe(el, "UTIC-2026-1500");
+  estado.falharDescricao = true;
+  digitarCampo(antigo.querySelector("textarea[data-sebrae-descricao]"), "Texto que não salva.");
+  const gets = estado.gets;
+  await feature.carregarNovosSebrae();
+  assert.ok(estado.gets > gets, "a lista foi pedida de novo");
+  const novo = cartaoDe(el, "UTIC-2026-1500");
+  assert.notEqual(novo, antigo);
+  assert.equal(novo.querySelector("textarea[data-sebrae-descricao]").value, "Texto que não salva.");
+  assert.deepEqual(toasts.at(-1), ["Texto não salvo mantido nos campos.", "warning"]);
+  assert.equal(el["sebrae-novos-lista"].getAttribute("aria-busy"), null);
+});
+
+test("chamado que saiu da lista: avisa uma vez com o número, descarta o texto e não trava as recargas seguintes", async () => {
+  const carga = UM_FINALIZAVEL();
+  const { el, feature, estado, toasts } = await telaBlocoC(carga);
+  estado.falharDescricao = true;
+  digitarCampo(cartaoDe(el, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]"), "Texto de quem saiu.");
+  carga.novos.formulario = [];
+  await feature.carregarNovosSebrae();
+  assert.deepEqual(toasts.at(-1), ["UTIC-2026-1500: o chamado saiu da lista; o texto não salvo foi descartado.", "warning"]);
+  assert.equal(cartaoDe(el, "UTIC-2026-1500"), undefined);
+  const avisos = toasts.length;
+  const gets = estado.gets;
+  await feature.carregarNovosSebrae();
+  assert.ok(estado.gets > gets);
+  assert.equal(toasts.length, avisos, "nenhum aviso repetido");
+});
+
+test("lápis com Salvar que falhou: a recarga acontece e o texto do lápis é preservado em editor aberto", async () => {
+  const { el, feature, estado } = await telaBlocoC(UM_FINALIZAVEL());
+  estado.falharLapis = true;
+  const antigo = el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo");
+  const lapis = antigo.querySelector("button[data-sebrae-editar-descricao]");
+  lapis.dispatchEvent({ type: "click", currentTarget: lapis });
+  digitarCampo(antigo.querySelector("textarea[data-sebrae-descricao-editada]"), "Descrição em edição.");
+  const salvar = antigo.querySelector("button[data-sebrae-salvar-descricao]");
+  salvar.dispatchEvent({ type: "click", currentTarget: salvar });
+  await esvaziarFila();
+  const gets = estado.gets;
+  await feature.carregarNovosSebrae();
+  assert.ok(estado.gets > gets, "sem espera: a lista foi pedida de novo");
+  const novo = el["sebrae-antigos-lista"].querySelector("details.sebrae-antigo");
+  assert.notEqual(novo, antigo);
+  assert.equal(novo.querySelector("textarea[data-sebrae-descricao-editada]").value, "Descrição em edição.");
+  assert.equal(novo.querySelector(".sebrae-descricao__editor").hidden, false, "o editor reabriu com o texto");
+});
+
+test("digitou com a consulta em voo: o texto vai ao servidor e volta no cartão novo", async () => {
+  const { el, feature, estado } = await telaBlocoC(UM_FINALIZAVEL());
+  const porta = portao();
+  estado.portaoGet = porta;
+  const recarga = feature.carregarNovosSebrae();
+  for (let i = 0; i < 5; i++) await esvaziarFila();
+  digitarCampo(cartaoDe(el, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]"), "Digitado durante a consulta.");
+  estado.portaoGet = null;
+  porta.abrir();
+  await recarga;
+  const novo = cartaoDe(el, "UTIC-2026-1500");
+  assert.equal(novo.querySelector("textarea[data-sebrae-descricao]").value, "Digitado durante a consulta.");
+  await esvaziarFila();
+});
+
+test("Atualizar só barra quando o chamado com descrição não salva seria finalizado; nos outros segue e avisa", async () => {
+  const carga = cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false)), novoDe("UTIC-2026-1501", "Camila", softexpertVazio(true))]);
+  const { el, feature, app, estado, toasts } = await telaBlocoC(carga);
+  app.confirmarAcao = async () => true;
+  marcarFinalizado(cartaoDe(el, "UTIC-2026-1500"));
+  digitarCampo(cartaoDe(el, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]"), "Teclado trocado.");
+  await esvaziarFila();
+  estado.falharEm = "UTIC-2026-1501";
+  digitarCampo(cartaoDe(el, "UTIC-2026-1501").querySelector("textarea[data-sebrae-descricao]"), "Não salva.");
+  await feature.atualizarDashboardSebrae();
+  assert.equal(estado.posts.at(-1)?.url, POST_ATUALIZAR, "o Atualizar seguiu");
+  assert.ok(toasts.some(([texto, tipo]) => texto === "Descrição não salva: UTIC-2026-1501." && tipo === "warning"));
+});
+
+async function finalizarCom({ confirmar = true, falharPost = false, falharDescricao = false } = {}) {
+  const { el, app, estado, toasts } = await telaBlocoC(UM_FINALIZAVEL());
+  app.confirmarAcao = async () => confirmar;
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  marcarFinalizado(cartao);
+  digitarCampo(cartao.querySelector("textarea[data-sebrae-descricao]"), "Teclado trocado.");
+  await esvaziarFila();
+  estado.falharPost = falharPost;
+  estado.falharDescricao = falharDescricao;
+  if (falharDescricao) digitarCampo(cartao.querySelector("textarea[data-sebrae-descricao]"), "Outro texto.");
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  for (let i = 0; i < 25; i++) await esvaziarFila();
+  return { botao, estado, toasts };
+}
+
+test("a trava do Finalizar é liberada com o diálogo cancelado, com o POST em erro e com a descrição que não salva", async () => {
+  const cancelado = await finalizarCom({ confirmar: false });
+  assert.equal(cancelado.botao.disabled, false);
+  assert.equal(cancelado.estado.posts.length, 0);
+  const comErro = await finalizarCom({ falharPost: true });
+  assert.equal(comErro.botao.disabled, false);
+  assert.deepEqual(comErro.toasts.at(-1), ["Importação mudou.", "error"]);
+  const semDescricao = await finalizarCom({ falharDescricao: true });
+  assert.equal(semDescricao.botao.disabled, false);
+  assert.equal(semDescricao.estado.posts.length, 0);
+  assert.deepEqual(semDescricao.toasts.at(-1), ["Salve a descrição antes de finalizar.", "error"]);
+});
+
+test("Finalizar com recarga durante o diálogo: o erro do POST aparece no cartão atual", async () => {
+  const carga = UM_FINALIZAVEL();
+  const { el, feature, app, estado } = await telaBlocoC(carga);
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  marcarFinalizado(cartao);
+  digitarCampo(cartao.querySelector("textarea[data-sebrae-descricao]"), "Teclado trocado.");
+  await esvaziarFila();
+  estado.falharPost = true;
+  app.confirmarAcao = async () => { await feature.carregarNovosSebrae(); return true; };
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  for (let i = 0; i < 25; i++) await esvaziarFila();
+  const novo = cartaoDe(el, "UTIC-2026-1500");
+  assert.notEqual(novo, cartao);
+  assert.match(novo.querySelector(".sebrae-chamado__resultado").textContent, /Importação mudou\./);
+  assert.equal(novo.querySelector("button[data-sebrae-finalizar]").disabled, false);
+});
+
+test("PDF: o contador por chamado só destrava quando envio e remoção terminam; erro também destrava", async () => {
+  const carga = UM_FINALIZAVEL();
+  const envio = portao();
+  const remocao = portao();
+  let falharEnvio = false;
+  const servidor = servidorBlocoC(carga);
+  const apiFetch = async (url, opcoes = {}) => {
+    if (url.endsWith("/anexo")) {
+      if (opcoes.method === "POST") { await envio.espera; if (falharEnvio) throw new Error("PDF recusado"); return { pdf: { nome: "a.pdf", tamanho: 10 } }; }
+      if (opcoes.method === "DELETE") { await remocao.espera; return { pdf: null }; }
+    }
+    return servidor.apiFetch(url, opcoes);
+  };
+  const { el } = await renderizarCartoes(carga, null, apiFetch);
+  await esvaziarFila();
+  global.FormData = global.FormData || class { append() {} };
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  digitarCampo(cartao.querySelector('[data-sebrae-campo="B"]'), "REDE");
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  const arquivo = cartao.querySelector("input[data-sebrae-pdf]");
+  const remover = cartao.querySelector("button[data-sebrae-pdf-remover]");
+  assert.equal(el["btn-sebrae-atualizar"].disabled, false, "habilitado antes");
+  arquivo.files = [{ name: "a.pdf" }];
+  arquivo.dispatchEvent({ type: "change", currentTarget: arquivo });
+  remover.dispatchEvent({ type: "click", currentTarget: remover });
+  await esvaziarFila();
+  assert.deepEqual([botao.disabled, arquivo.disabled, remover.disabled, el["btn-sebrae-atualizar"].disabled], [true, true, true, true]);
+  envio.abrir();
+  for (let i = 0; i < 5; i++) await esvaziarFila();
+  assert.equal(botao.disabled, true, "a remoção ainda está em curso");
+  assert.equal(el["btn-sebrae-atualizar"].disabled, true);
+  remocao.abrir();
+  for (let i = 0; i < 5; i++) await esvaziarFila();
+  assert.deepEqual([botao.disabled, arquivo.disabled, remover.disabled, el["btn-sebrae-atualizar"].disabled], [false, false, false, false]);
+  falharEnvio = true;
+  arquivo.dispatchEvent({ type: "change", currentTarget: arquivo });
+  for (let i = 0; i < 5; i++) await esvaziarFila();
+  assert.deepEqual([botao.disabled, arquivo.disabled, el["btn-sebrae-atualizar"].disabled], [false, false, false], "erro também libera");
 });
