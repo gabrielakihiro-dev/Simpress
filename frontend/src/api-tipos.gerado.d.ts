@@ -341,10 +341,6 @@ export type EstadoMovimentacaoPayload = {
   "divergencia"?: DivergenciaPayload | null;
 };
 
-export type ExportarPayload = {
-  "chamados": ChamadoManual[];
-};
-
 export type FichaPayload = {
   "ficha": Record<string, unknown>;
 };
@@ -1570,11 +1566,6 @@ export interface Rotas {
   "POST /api/sebrae/dashboard/pendente/reenviar": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
-  };
-  "POST /api/sebrae/exportar": {
-    consulta: never;
-    corpo: ExportarPayload;
     resposta: unknown;
   };
   "POST /api/sebrae/finalizacao/desfazer-outro-tecnico": {

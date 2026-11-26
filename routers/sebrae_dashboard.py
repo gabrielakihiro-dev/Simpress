@@ -53,12 +53,6 @@ class ChamadoManual(BaseModel):
     G: str = Field("", max_length=sebrae_novos.MAX_TITULO)  # title typed on the site; blank keeps the one from SoftExpert/Dashboard
 
 
-class ExportarPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    chamados: List[ChamadoManual] = Field(..., min_length=1, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
-
-
 class AtualizarPayload(BaseModel):
     """``chamados``: novos, escritos nas primeiras linhas livres. ``edicoes``: antigos EM ABERTO/sem status, só campos manuais."""
 
@@ -763,29 +757,6 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         if sha256:  # sem planilha legível não há o que aprender
             _reindexar_categoria(conteudo)
         return preservada
-
-    @router.post("/api/sebrae/exportar")
-    def exportar(payload: ExportarPayload):
-        """Blocos A:P e R:S dos chamados enviados; 422 se faltar campo manual ou o chamado já não for novo."""
-        caminhos = services.caminhos()
-        importado = sebrae_novos.ler_existentes(caminhos.existentes)
-        if importado is None:
-            raise DomainValidationError("Importe o Dashboard antes de exportar.", status_code=422)
-        novos = _novos(caminhos, importado["numeros"])
-        if novos is None:
-            raise DomainValidationError("Busque os chamados novos antes de exportar.", status_code=422)
-        manuais = {item.numero: item.model_dump(exclude={"numero"}) for item in payload.chamados}
-        if len(manuais) != len(payload.chamados):
-            raise DomainValidationError("Há chamados repetidos na exportação.", status_code=422)
-        escolhidos = [c for c in novos["chamados"] if c.numero in manuais]
-        desconhecidos = sorted(set(manuais) - {c.numero for c in escolhidos})
-        if desconhecidos:
-            raise DomainValidationError(f"{desconhecidos[0]} não está entre os chamados novos.", status_code=422)
-        try:
-            resultado = sebrae_novos.exportar(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], services.vinculos_os())
-        except sebrae_novos.ManuaisInvalidos as erro:
-            raise DomainValidationError(str(erro), status_code=422) from None
-        return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/dashboard/atualizar")
     def atualizar_dashboard(payload: AtualizarPayload):

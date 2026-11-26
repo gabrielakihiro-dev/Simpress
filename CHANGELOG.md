@@ -46,6 +46,10 @@ O inicializador mostra a seção da versão nova antes de perguntar se você que
 
 - **Dashboard Sebrae, Atualizar e envio ao SharePoint (26/11/2026):** o segundo envio sem reimportar não apaga mais a OS (coluna E) que o primeiro levou: só o clique em `Remover` apaga a E; `Atualizar Dashboard` responde 409 enquanto a finalização ou o envio rodam (antes podia regravar a cópia sem o D e o R do chamado recém-finalizado); editar só A, B, J ou S de um chamado antigo com R só com a data não trava mais o Atualizar; `os-recusada`, `os-manter` e `os-remover` aceitam só `UTIC-AAAA-N`; nome de arquivo da pasta (ex.: `Relatório carregado para RH.xlsx`) não confirma mais o envio.
 
+### Removido
+
+- **Fluxo antigo da rotina Sebrae (26/11/2026):** saíram `scripts/sebrae_excel.py` (gravação no Excel Online), `scripts/sebrae_rotina.py`, `domains/sebrae_orquestracao.py`, `scripts/sebrae_sombra.py` (modo sombra com Ollama), as funções `extrair_chamados` e `coletar_numeros` de `scripts/sebrae_softexpert.py` e a rota `POST /api/sebrae/exportar` (sem botão nem chamador, gerava saída sem `versao_importacao`), com os testes que só os cobriam. Nada muda para o usuário: `--rotina sebrae` segue lendo o SoftExpert (`sebrae_leitura`) e o Dashboard só é alterado pelo arquivo gerado e pelo `enviar`.
+
 ### Alterado
 
 - **Atualizar não mexe em chamado já finalizado (26/11/2026, decisão do usuário):** a cada `Atualizar Dashboard`, a linha que o Dashboard importado já traz com D `FINALIZADO` e R `dd/MM/aaaa HH:mm` fica como está, mesmo que o R digitado à mão difira do registrado ao finalizar; D e R registrados só voltam à linha ainda não finalizada com R válido. A gravação logo depois da finalização (rotina `fechar`) não mudou.
