@@ -669,6 +669,29 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator('button[data-filter="todos"]')).toHaveAttribute("aria-pressed", "true");
   });
 
+  for (const tema of ["light", "dark"]) {
+    test(`Lista da Home: o item ativo das setas tem contorno visível, tema ${tema}`, async ({ page }) => {
+      await preparar(page, { tema });
+      const lista = page.locator("#home-equipment-list");
+      await expect(lista.locator("[role='option']")).toHaveCount(6);
+      await lista.focus();
+      await page.keyboard.press("ArrowDown");
+      const ativo = lista.locator("[role='option']").first();
+      await expect(ativo).toHaveClass(/is-focused/);
+      await expect(lista).toHaveAttribute("aria-activedescendant", await ativo.getAttribute("id"));
+      const estilo = await ativo.evaluate(el => {
+        const css = getComputedStyle(el);
+        const destaque = document.createElement("span");
+        destaque.style.color = "var(--cor-destaque)";
+        el.append(destaque);
+        const cor = getComputedStyle(destaque).color;
+        destaque.remove();
+        return { estilo: css.outlineStyle, largura: css.outlineWidth, cor: css.outlineColor, destaque: cor };
+      });
+      expect(estilo).toEqual({ estilo: "solid", largura: "2px", cor: estilo.destaque, destaque: estilo.destaque });
+    });
+  }
+
   test("Histórico de apelidos: desfazer e excluir chamam as rotas esperadas depois de confirmar", async ({ page }) => {
     const ambiente = await preparar(page);
     await buscar(page, "BRJ0001");
