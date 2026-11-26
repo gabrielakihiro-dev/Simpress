@@ -26,12 +26,12 @@ test("Resumo lists notebooks past 60 days after the 7+ table, with estimated day
     ],
   });
   assert.match(html, /Passou de 60 dias sem acesso \(2\)<\/h4>/);
-  assert.ok(html.indexOf("Sem acesso há 7 dias ou mais") < html.indexOf("Passou de 60 dias sem acesso"));
+  assert.ok(html.indexOf("Sem acesso de 7 a 59 dias") < html.indexOf("Passou de 60 dias sem acesso"));
   assert.match(html, /Hostname\/Apelido, Série, Dias sem acesso, Situação/);
   const linhas = [...html.matchAll(/<tr [^>]*data-sem-acesso-60-situacao="([^"]+)"[\s\S]*?<\/tr>/g)];
   assert.deepEqual(linhas.map(([, situacao]) => situacao), ["saiu_endpoint", "passou"]);
   assert.match(linhas[0][0], /~64[\s\S]*Saiu para Ausentes no Endpoint/);
-  assert.match(linhas[1][0], />61<[\s\S]*Ainda em Sem acesso há 7 dias ou mais/);
+  assert.match(linhas[1][0], />61<[\s\S]*Ainda no Endpoint, sem acesso/);
   assert.match(linhas[1][0], /&lt;b&gt;PRNOTE-N1/);
   assert.match(html, /href="\/api\/config\/local\/endpoint\/staged-computers"[^>]*data-endpoint-staged-link/);
 });
@@ -54,4 +54,38 @@ test("Past-60-day rows get an annotation cell and a filter category only in a sa
   const semContexto = renderizar({ sem_acesso_60_dias: itens });
   assert.doesNotMatch(semContexto, /data-annotation-id="id-x1"/);
   assert.doesNotMatch(semContexto, /Situação, Anotações/);
+});
+
+test("7 a 59 dias exclui as séries que já estão na de 60+ (decisão do usuário, 26/11/2026)", () => {
+  const comparison = {
+    sem_acesso_7_dias: [
+      { serie: "A1", computador: "PRNOTE-A1", dias_sem_verificacao: 9 },
+      { serie: "N1", computador: "PRNOTE-N1", dias_sem_verificacao: 61 },
+    ],
+    sem_acesso_60_dias: [
+      { serie: "N1", computador: "PRNOTE-N1", dias: 61, situacao: "passou" },
+      { serie: "X1", computador: "PRNOTE-X1", dias: 64, situacao: "saiu_endpoint" },
+    ],
+  };
+  // A lista de 60+ é derivada da 7+ de origem: ela continua inteira, só a de 7 a 59 perde a sobreposição.
+  assert.deepEqual(renderer.listasComparacao(comparison).semAcesso7DiasOrdenados.map(item => item.serie), ["A1"]);
+  assert.equal(comparison.sem_acesso_7_dias.length, 2);
+  const html = renderizar(comparison);
+  assert.match(html, /Sem acesso de 7 a 59 dias/);
+  assert.equal([...html.matchAll(/data-comparison-category="sem_acesso_7_dias"/g)].length, 1);
+  assert.equal([...html.matchAll(/data-comparison-category="sem_acesso_60_dias"/g)].length, 2);
+  // Sem a lista de 60+ (resultado antigo), nada é tirado.
+  assert.equal(renderer.listasComparacao({ sem_acesso_7_dias: comparison.sem_acesso_7_dias }).semAcesso7DiasOrdenados.length, 2);
+});
+
+test("A anotação da linha de 7+ que saiu da tela continua editável na linha de 60+ da mesma série", () => {
+  const html = renderizar({
+    evento_id: "evt-1", contexto_historico: true,
+    sem_acesso_7_dias: [{ serie: "N1", computador: "PRNOTE-N1", dias_sem_verificacao: 61, anotacao_id: "id-7", anotacao: "Usuário de férias." }],
+    sem_acesso_60_dias: [{ serie: "N1", computador: "PRNOTE-N1", dias: 61, situacao: "passou", anotacao_id: "id-60" }],
+  });
+  assert.doesNotMatch(html, /data-comparison-category="sem_acesso_7_dias"/);
+  const [linha] = [...html.matchAll(/<tr [^>]*data-sem-acesso-60-situacao="[^"]+"[\s\S]*?<\/tr>/g)].map(([trecho]) => trecho);
+  assert.match(linha, /data-annotation-id="id-60"/);
+  assert.match(linha, /Anotação anterior[\s\S]*data-annotation-id="id-7"[^>]*>Usuário de férias\.<\/textarea>/);
 });
