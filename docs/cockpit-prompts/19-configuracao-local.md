@@ -291,7 +291,7 @@ Nota: a tupla `FORA` existe para documentar. A inclusão no pacote é decidida s
 
 - O conteúdo do pacote fica em memória durante a validação (até 300 MB). Se os pacotes crescerem, trocar por releitura do zip.
 - Restaurar não devolve marcas de ações irreversíveis: o que ficou de fora continua como está hoje. Depois de restaurar, confira o Sebrae e a OS antes de agir.
-- Os tipos da tela são mínimos e locais (`pacote.tsx`); trocar por `frontend/src/api-tipos.gerado.d.ts` quando `python scripts/gerar_tipos_api.py` for rodado.
+- Os tipos da tela vêm de `frontend/src/api-tipos.gerado.d.ts` (`PacoteLocal*`); regenere com `python scripts/gerar_tipos_api.py` ao mudar o contrato.
 
 ## Testes
 
