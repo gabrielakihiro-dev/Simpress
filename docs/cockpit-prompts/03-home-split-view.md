@@ -70,6 +70,11 @@ A linha selecionada recebe uma barra de accent de 2px à esquerda (`border-left:
 - Pesquisa da Home sem resultado: o autocompletar mostra `Você quis dizer <usuário mais próximo>?` (campo `sugestao` de `/api/buscar-expandida`); só aparece se a sugestão achar equipamento e nada é gravado.
 - Barra de pesquisa (04/11/2026, pedido do usuário): `Enter` na barra (`#input-serial`) ou `Buscar Equipamento` leva sempre à Home (F1) (`app.ativarAbaTransferencia("home")`, que também fecha painéis F5–F9) antes de pesquisar; só navegação, sem escrita.
 - Com um único caractere, invalida e cancela a requisição anterior da lista e mostra `Digite ao menos 2 caracteres para filtrar a lista.`; uma resposta atrasada não altera a lista, a contagem nem a paginação. Limpar a busca volta a listar o inventário.
+- Lista e busca (26/11/2026, pedido do usuário; só tela, nada é gravado):
+  - Com 2 ou mais caracteres, a recarga da lista entra na mesma espera de 200 ms do autocompletar: digitar rápido gera um único pedido. Vazio ou 1 caractere continua imediato.
+  - Se `Carregar mais` falhar, os itens já exibidos e o botão continuam na tela; só a contagem (`#home-list-count`) mostra o erro, e um novo clique tenta de novo.
+  - O item ativo das setas (`.ck-item.is-focused`) tem contorno de 2px em `--cor-destaque`, nos dois temas; a seleção continua com a barra à esquerda.
+  - ARIA do autocompletar: `role="listbox"` fica em `#autocomplete-list` (nome `Sugestões de equipamentos`), alvo do `aria-controls` de `#input-serial`; `#autocomplete-box` não tem papel. As linhas são `role="option"` e recebem o `aria-activedescendant`.
 - Mantenha o autocomplete (`#autocomplete-box`) funcionando — ele pode aparecer sobre a lista ou como dropdown da busca.
 - Os dados vêm da mesma fonte atual (API de equipamentos). Use o JS existente em `equipment-search.js` e adapte a renderização.
 

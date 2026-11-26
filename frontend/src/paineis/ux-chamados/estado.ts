@@ -18,6 +18,7 @@ interface Pedido {
   revisao: number;
   session_id?: string | null;
   ocupado?: boolean;
+  enviando?: boolean; // envio confirmado em andamento: Fechar e Esc não fecham
   falha?: boolean;
 }
 
@@ -31,6 +32,7 @@ interface Estado {
   status: string;
   conferido: boolean; // botão "Conferi no UX; preparar de novo" visível
   ocupado: boolean;
+  enviando: boolean;
   preparado: boolean;
   pronto: boolean; // libera Simular e Revisar e enviar
   motivo: string; // por que os dois botões estão desabilitados
@@ -47,7 +49,7 @@ const app = () => window as unknown as AppAntigo;
 
 let estado: Estado = {
   serie: "", modelo: "", descricao: "", opcoes: [], problema: "", solicitante: SEM_SOLICITANTE,
-  status: "", conferido: false, ocupado: false, preparado: false, pronto: false, motivo: "",
+  status: "", conferido: false, ocupado: false, enviando: false, preparado: false, pronto: false, motivo: "",
 };
 const ouvintes = new Set<() => void>();
 function mudar(parcial: Partial<Estado>) {
@@ -91,7 +93,8 @@ function cancelarSessaoUX(session_id?: string | null) {
 }
 
 export function fecharChamadoUX() {
-  if (!vigente) return;
+  // Fechar agora perderia o número da OS em envio (as saídas de executarChamadoUX param em !atual).
+  if (!vigente || vigente.enviando) return;
   const encerrado = vigente;
   vigente = null;
   cancelarSessaoUX(encerrado.session_id);
@@ -114,7 +117,7 @@ function controles(ocupado: boolean) {
     : vigente?.falha
       ? "Simulação e envio indisponíveis: a preparação no UX não foi concluída. A descrição foi mantida; corrija o que a mensagem acima indica e abra o chamado de novo."
       : "Simulação e envio indisponíveis: esta sessão do UX já foi usada. Abra o chamado de novo se precisar.";
-  mudar({ ocupado, preparado, pronto, motivo });
+  mudar({ ocupado, enviando: Boolean(vigente?.enviando), preparado, pronto, motivo });
 }
 
 export function atualizarProblemaChamadoUX() {
@@ -222,6 +225,8 @@ export async function executarChamadoUX(enviar: boolean) {
         confirmar: "Enviar solicitação",
       });
       if (!confirmou || !atual(pedido)) return;
+      pedido.enviando = true;
+      controles(true);
     }
     mudar({ status: enviar ? "Enviando a solicitação ao UX…" : "Preenchendo o formulário no Chrome de automação…" });
     const dados = await post<Envio>("enviar", { session_id, serial, problema, descricao, solicitante, enviar, confirmado: enviar });
@@ -252,9 +257,10 @@ export async function executarChamadoUX(enviar: boolean) {
       app().showToast(mensagem(erro), "error"); // só a linha de status passava despercebida
     }
   } finally {
+    pedido.enviando = false; // sempre: se a seleção mudou no meio, Fechar não pode ficar travado
     if (atual(pedido)) {
       pedido.ocupado = false;
       controles(false);
-    }
+    } else atualizarProblemaChamadoUX();
   }
 }

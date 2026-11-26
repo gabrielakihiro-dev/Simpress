@@ -77,6 +77,7 @@ class FakeElement {
   remove() { this.isConnected = false; }
   replaceChildren(...children) { this.children = children.flatMap(child => child.isDocumentFragment ? child.children : [child]); }
   append(...children) { children.forEach(child => this.appendChild(child)); }
+  prepend(...children) { this.children.unshift(...children); }
   appendChild(child) {
     if (child.isDocumentFragment) this.children.push(...child.children);
     else this.children.push(child);
@@ -138,6 +139,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
       return elements.get(id);
     },
     createElement: tag => tag === "template" ? new FakeTemplate(tag) : new FakeElement(tag),
+    createElementNS: (_namespace, tag) => new FakeElement(tag),
     createDocumentFragment() {
       const fragment = new FakeElement("#document-fragment");
       fragment.isDocumentFragment = true;
