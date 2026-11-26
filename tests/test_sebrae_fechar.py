@@ -73,6 +73,8 @@ class Rotinas:
         self.logs.append(texto)
 
     def descrever_erro(self, erro, so_tipo=False):
+        if so_tipo and not isinstance(erro, SoftExpertErro) and not getattr(erro, "em_conflito", False):  # RotinaErro: mensagem própria
+            return type(erro).__name__
         return str(erro) or type(erro).__name__
 
     def registrar_erro(self, pagina, origem):
@@ -330,6 +332,13 @@ class FinalizarTest(FecharBase):
         self.assertRegex(linha_xml(self.saida.read_bytes(), 3), R_1405)
         self.assertEqual(len(self.rotinas.enviadas), 1)
 
+    def test_erro_de_terceiro_grava_so_o_tipo_no_resultado(self):
+        self.descrever(A)
+        codigo, _ = self.rodar({A: RuntimeError("Locator.click: Dado Sigiloso do chamado")}, [A])
+        self.assertEqual(codigo, 1)
+        self.assertEqual(self.por_numero()[A]["mensagem"], "RuntimeError")
+        self.assertNotIn("Sigiloso", repr(self.resultado()))
+
     def test_status_erro_da_funcao_vira_erro_sem_data(self):
         self.descrever(A)
         codigo, _ = self.rodar({A: com_status("erro", mensagem="não confere", motivo="campo", escritas=["Categoria"])}, [A])
@@ -407,7 +416,7 @@ class EnvioFalhoTest(FecharBase):
         aviso = self.resultado()["sharepoint"]
         self.assertEqual(
             {k: aviso[k] for k in ("falhou", "motivo", "copia_local", "copia_sharepoint")},
-            {"falhou": True, "motivo": "sem login no SharePoint", "copia_local": str(pendente), "copia_sharepoint": True},
+            {"falhou": True, "motivo": "RuntimeError", "copia_local": str(pendente), "copia_sharepoint": True},
         )
         self.assertEqual(len(aviso["sugestoes"]), 3)
         self.assertTrue(fin.aviso_do_pendente(self.dir)["copia_sharepoint"])
@@ -699,7 +708,7 @@ class ReenviarTest(FecharBase):
         self.assertEqual(self.pedir(), 1)
         self.assertTrue(pendente.exists())
         aviso = self.resultado()["sharepoint"]
-        self.assertEqual((aviso["falhou"], aviso["motivo"], aviso["copia_local"]), (True, "ainda sem login", str(pendente)))
+        self.assertEqual((aviso["falhou"], aviso["motivo"], aviso["copia_local"]), (True, "RuntimeError", str(pendente)))
         self.assertFalse(self.resultado()["em_andamento"])
 
     def test_reenvio_sem_pendente_falha_com_mensagem_e_resultado_final(self):

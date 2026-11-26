@@ -346,6 +346,7 @@ const concluir = async () => {
 $('final-sim').addEventListener('click', concluir);
 $('final-nao').addEventListener('click', () => $('dlg-final').classList.add('oculto'));
 $('finalizar').addEventListener('click', () => {
+  if (D.confirmacao_final === 'nativa_estranha') { confirm('Dado Sigiloso 123?'); return; }
   if (D.confirmacao_final === 'nativa') { if (confirm('Deseja finalizar esta atividade?')) concluir(); return; }
   $('dlg-final-texto').textContent = D.confirmacao_final === 'estranha'
     ? 'Deseja excluir todos os registros?' : 'Deseja finalizar esta atividade?';
@@ -1511,6 +1512,17 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(self.bancada.finalizados, [])
         self.assertEqual(self.abas_do_registro(), [])
 
+    def test_dialogo_nativo_inesperado_nao_vai_ao_log_nem_ao_resultado(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, confirmacao_final="nativa_estranha")]
+        page = self.abrir_lista()
+        logs: list = []
+        with patch.object(se, "_log", side_effect=logs.append):
+            resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(resultado["detalhes"]["motivo"], se.MOTIVO_CONFIRMACAO_INESPERADA)
+        self.assertNotIn("Sigiloso", " ".join(logs) + repr(resultado))
+        self.assertEqual(self.bancada.finalizados, [])
+
     def test_botoes_proibidos_da_tela_de_finalizacao_ficam_com_zero_cliques(self):
         self.bancada.chamados = [chamado(1, finalizacao=True), chamado(2, finalizacao=True, solicitante="API SEBRAE")]
         page = self.abrir_lista()
@@ -1542,7 +1554,7 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         with patch.object(se, "_log", side_effect=logs.append), patch.object(se, "_preencher_atendimento", side_effect=erro):
             resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
         saida = " ".join(logs) + repr(resultado)
-        self.assertIn("TimeoutError", resultado["detalhes"]["mensagem"])
+        self.assertIn("TimeoutError em Locator.click", resultado["detalhes"]["mensagem"])
         for segredo in ("Sigilos", "Fulana"):
             self.assertNotIn(segredo, saida)
         self.assertIn("Solicitante API SEBRAE: não", saida)

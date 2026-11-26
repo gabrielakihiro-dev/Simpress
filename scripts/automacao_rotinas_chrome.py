@@ -310,7 +310,7 @@ def etapa_resiliente(
         except EtapaInstavel as erro:
             if tentativa >= tentativas:
                 raise
-            log("Etapa", f"{descricao}: tentativa {tentativa}/{tentativas} instável ({erro}); refazendo.")
+            log("Etapa", f"{descricao}: tentativa {tentativa}/{tentativas} instável ({descrever_erro(erro, so_tipo=True)}); refazendo.")
             (recuperar or _recuperar_padrao)()
             verificar_cancelamento()
     raise AssertionError("inacessível: o loop sempre retorna ou relança")
@@ -3021,12 +3021,21 @@ def executar(rotina: str, sem_finalizar: bool = False, planilha_ux: Path | None 
                 browser.close()
 
 
+def resumo_erro_de_terceiro(erro: BaseException) -> str:
+    """Tipo e, se houver, a chamada do Playwright (``Locator.click``); o resto da mensagem traz texto da página (LGPD)."""
+    chamada = re.match(r"\w+\.\w+(?=:)", (str(erro).strip().splitlines() or [""])[0])
+    return type(erro).__name__ + (f" em {chamada.group(0)}" if chamada else "")
+
+
 def descrever_erro(erro: Exception, *, so_tipo: bool = False) -> str:
-    """``so_tipo``: erro de terceiros (Playwright) vira só o tipo, pois a mensagem traz texto da página (LGPD)."""
+    """``so_tipo``: erro de terceiros (Playwright), mesmo embrulhado em ``RotinaErro``, vira só o resumo (LGPD)."""
     if isinstance(erro, RotinaErro):
+        causa = erro.__cause__
+        if so_tipo and causa is not None and not isinstance(causa, RotinaErro):
+            return resumo_erro_de_terceiro(causa)
         return str(erro)
     if so_tipo:
-        return type(erro).__name__
+        return resumo_erro_de_terceiro(erro)
     # Erros do Playwright trazem o log de chamadas inteiro; a primeira linha basta no terminal.
     primeira = (str(erro).strip().splitlines() or [""])[0]
     return f"{type(erro).__name__}: {primeira}"

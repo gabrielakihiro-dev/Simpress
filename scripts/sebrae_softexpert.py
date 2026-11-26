@@ -293,8 +293,7 @@ def _cancelamento(detalhe: str = "") -> None:
 
 
 def _so_tipo(erro: BaseException) -> str:
-    """Só o tipo da exceção: a mensagem do Playwright traz texto e HTML da página, que pode ter dado pessoal."""
-    return f"Falha inesperada na página ({type(erro).__name__})."
+    return f"Falha inesperada na página ({_rotinas().resumo_erro_de_terceiro(erro)})."
 
 
 class SoftExpertErro(_rotinas().RotinaErro):
@@ -1689,7 +1688,7 @@ def _clicar_finalizar(page: "Page", janela: "Page", numero: str, escritas: List[
         def andou() -> bool:
             if inesperados:
                 raise SoftExpertErro(
-                    f"Confirmação inesperada depois do Finalizar ({inesperados[0][:80]!r}); recusada.",
+                    "Confirmação inesperada depois do Finalizar; recusada.",
                     MOTIVO_CONFIRMACAO_INESPERADA,
                 )
             if janela.is_closed():

@@ -311,6 +311,16 @@ class LoginAbasTests(unittest.TestCase):
         self.assertEqual(automacao.descrever_erro(ValueError("Dado Sigiloso"), so_tipo=True), "ValueError")
         self.assertEqual(automacao.descrever_erro(automacao.RotinaErro("mensagem própria"), so_tipo=True), "mensagem própria")
 
+    def test_descrever_erro_so_tipo_cobre_erro_de_terceiro_embrulhado(self):
+        try:
+            try:
+                raise ValueError("Locator.click: Timeout\nDado Sigiloso")
+            except ValueError as causa:
+                raise automacao.EtapaInstavel(str(causa)) from causa
+        except automacao.EtapaInstavel as erro:
+            texto = automacao.descrever_erro(erro, so_tipo=True)
+        self.assertEqual(texto, "ValueError em Locator.click")
+
     def test_microsoft_login_nao_loga_o_email(self):
         page, _clicados, relogio = self._conta_microsoft(["pessoa.simpress@exemplo.invalid"])
         logs = []

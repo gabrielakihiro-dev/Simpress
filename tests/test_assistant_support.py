@@ -290,6 +290,15 @@ class MaskTests(unittest.TestCase):
         outra.mascarar({"usuario_logado": "João Silva Santos"})
         self.assertNotIn("Silva", outra.ocultar_conhecidos("JOAO SILVA SANTOS ligou", completo=True))
 
+    def test_ocultar_conhecidos_accent_round_trip_in_normal_mode(self) -> None:
+        mask = Mascara()
+        mask.mascarar({"usuario_logado": "João Silva Santos"})
+        oculto = mask.ocultar_conhecidos("Joao Silva Santos ligou")
+        self.assertNotIn("Silva", oculto)
+        self.assertEqual(mask.restaurar(oculto), "Joao Silva Santos ligou".replace("Joao", "João", 0).replace("Joao Silva Santos", "João Silva Santos"))
+        decomposto = "Jo\u0061\u0303o Silva Santos ligou"  # "a" + til solto
+        self.assertNotIn("Silva", mask.ocultar_conhecidos(decomposto))
+
     def test_ocultar_conhecidos_completo_drops_a_visible_first_name_of_any_length(self) -> None:
         # Disk history and web search: "Ana [PESSOA_n]" (3 letters) must lose "Ana" too, not only 4+ letter names.
         mask = Mascara()
