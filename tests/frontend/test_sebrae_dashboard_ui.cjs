@@ -276,6 +276,15 @@ test("resumos do início e do fim da finalização em massa contam cada resultad
   assert.equal(resumoResultado(resultado), "Finalização no SoftExpert terminada: 2 finalizado(s), 1 já finalizado(s), 1 com erro, 1 não encontrado(s), 1 sem descrição.");
   assert.equal(resumoResultado({ resultados: [], cancelado: true }), "Finalização cancelada.");
   assert.match(resumoResultado({ resultados: [{ status: "ok" }, { status: "finalizado_outro_tecnico" }, { status: "finalizado_outro_tecnico" }] }), /2 finalizado\(s\) por outro técnico/);
+  // incerto (Finalizar clicado sem confirmação) e sem_encerramento entram no resumo; antes viravam "terminada: ."
+  assert.equal(resumoResultado({ resultados: [{ status: "incerto" }, { status: "sem_encerramento" }] }),
+    "Finalização no SoftExpert terminada: 1 incerto(s): confira no SoftExpert, 1 sem DT ENCERRAMENTO (R).");
+  assert.equal(textoResultado({ status: "incerto", mensagem: "Confira no SoftExpert; o site não clica de novo." }),
+    "Finalizar clicado, resultado não confirmado: Confira no SoftExpert; o site não clica de novo.");
+  assert.ok(podeFinalizar("feito", { status: "incerto" }, false)); // pedir de novo só confere a central
+  // PDF já enviado num pedido anterior: a tela diz que não foi enviado de novo, também no "ok"
+  assert.equal(textoResultado({ status: "ok", encerrado_em: "28/10/2026 10:10", pdf_nao_reenviado: true }),
+    "Finalizado no SoftExpert (encerrado em 28/10/2026 10:10). O PDF já tinha sido enviado num pedido anterior e não foi enviado de novo; confira o anexo no SoftExpert.");
 });
 
 test("tamanho do PDF aparece em B, KB ou MB", () => {
@@ -1176,6 +1185,29 @@ test("API SEBRAE: trocar D para FINALIZADO, digitar R e clicar leva A, B, J e S 
   await esvaziarFila();
   assert.equal(cartaoDe(el2, "UTIC-2026-1500").querySelector("textarea[data-sebrae-descricao]").value, "Revisado.");
   assert.equal(puts(outras).length, 0);
+});
+
+test("chamado incerto: o diálogo diz que só confere a central, sem clicar Finalizar de novo", async () => {
+  const chamadas = [];
+  const soft = { ...softexpertVazio(true), descricao_finalizacao: "Feito.", finalizacao: { status: "incerto", em: "", encerrado_em: "" } };
+  const { el, app } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1502", "Fulano Teste", soft)]), null, chamadas);
+  await esvaziarFila();
+  const dialogos = [];
+  app.confirmarAcao = async opcoes => { dialogos.push(opcoes); return false; };
+  const cartao = cartaoDe(el, "UTIC-2026-1502");
+  const digitar = (letra, valor) => { const campo = cartao.querySelector(`[data-sebrae-campo="${letra}"]`); campo.value = valor; campo.dispatchEvent({ type: "input", currentTarget: campo }); };
+  digitar("A", "CLIENTE");
+  digitar("D", "FINALIZADO");
+  digitar("J", "INCIDENTE");
+  digitar("R", "2026-10-30T14:05");
+  const botao = cartao.querySelector("button[data-sebrae-finalizar]");
+  botao.dispatchEvent({ type: "click", currentTarget: botao });
+  for (let i = 0; i < 20 && !dialogos.length; i++) await esvaziarFila();
+  assert.equal(dialogos.length, 1);
+  assert.equal(dialogos[0].titulo, "Conferir no SoftExpert");
+  assert.match(dialogos[0].mensagem, /não clica de novo: só confere a central de tarefas/);
+  assert.match(dialogos[0].mensagem, /DT ENCERRAMENTO \(R\): 30\/10\/2026 14:05\./);
+  assert.equal(chamadas.filter(c => c.metodo === "POST" && c.url.includes("finalizar-softexpert")).length, 0); // cancelado: nada sai
 });
 
 // ---- Atualizar Dashboard envia ao SharePoint junto (09/11/2026) ----

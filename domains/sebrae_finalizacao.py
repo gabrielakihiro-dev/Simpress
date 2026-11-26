@@ -54,6 +54,11 @@ STATUS_PRONTO = "pronto"  # --sem-finalizar: the form was filled and checked, Fi
 # Regra do usuário (12/11/2026): fora da central, com D=FINALIZADO e R informados pelo usuário, o chamado foi finalizado por outro técnico.
 STATUS_OUTRO_TECNICO = "finalizado_outro_tecnico"
 STATUS_FINALIZADOS = frozenset({STATUS_OK, STATUS_OUTRO_TECNICO})  # os dois saem das listas abertas e levam D/R ao Dashboard
+# Finalizar foi clicado, mas o resultado não foi confirmado (sessão caiu, cancelamento, cartão ainda na central). Não conta como
+# finalizado; o próximo pedido nunca clica de novo: só confere a central (fora = ok com o R do usuário; dentro = continua incerto).
+STATUS_INCERTO = "incerto"
+MENSAGEM_INCERTO = "Finalizar foi clicado, mas o resultado não foi confirmado. Confira no SoftExpert; o site não clica de novo."
+MENSAGEM_INCERTO_NA_CENTRAL = "Ainda na central de tarefas: finalize à mão no SoftExpert e peça de novo para o site registrar."
 
 SUGESTOES_SHAREPOINT: Tuple[str, str, str] = (
     "Confira se o login do SharePoint está ativo no Chrome de automação (porta 9333) e use \"Tentar substituir de novo\".",
@@ -388,12 +393,45 @@ def _caminho_pdf(state_dir: Path, numero: str, pdf: Any) -> Optional[Path]:
     return candidato if candidato.resolve(strict=False).parent == pasta.resolve(strict=False) else None
 
 
-def dados_para_finalizar(state_dir: Path, numero: str) -> Tuple[str, Optional[Path]]:
-    """Text and PDF of the ticket as stored NOW (read at run time, never taken from the job file)."""
-    item = ler_estado(state_dir).get(numero, {})
-    descricao = str(item.get("descricao_finalizacao") or "").strip()
+def _marca_do_pdf(state_dir: Path, numero: str, caminho: Path) -> Dict[str, Any]:
+    versao = caminho.parent.name if caminho.parent != pasta_anexos(state_dir, numero) else ""
+    return {"nome": caminho.name, "tamanho": caminho.stat().st_size, "versao": versao}
+
+
+def _pdf_atual(state_dir: Path, numero: str, item: Mapping[str, Any]) -> Tuple[Optional[Path], bool]:
+    """(stored PDF or None, whether that same PDF already went to SoftExpert in a run that did not finalize)."""
     caminho = _caminho_pdf(state_dir, numero, item.get("pdf"))
-    return descricao, caminho if caminho is not None and caminho.is_file() else None
+    if caminho is None or not caminho.is_file():
+        return None, False
+    enviado = item.get("anexo_enviado")
+    try:
+        return caminho, bool(enviado) and enviado == _marca_do_pdf(state_dir, numero, caminho)
+    except OSError:  # o PDF sumiu entre as checagens (trocado na tela): sem PDF, como se não houvesse
+        return None, False
+
+
+def dados_para_finalizar(state_dir: Path, numero: str) -> Tuple[str, Optional[Path]]:
+    """Text and PDF of the ticket as stored NOW (read at run time, never taken from the job file).
+
+    The PDF already sent to SoftExpert (``anexo_enviado``, same name, size and version) comes back as ``None``: never sent twice."""
+    item = ler_estado(state_dir).get(numero, {})
+    caminho, enviado = _pdf_atual(state_dir, numero, item)
+    return str(item.get("descricao_finalizacao") or "").strip(), None if enviado else caminho
+
+
+def pdf_ja_enviado(state_dir: Path, numero: str) -> bool:
+    return _pdf_atual(state_dir, numero, ler_estado(state_dir).get(numero, {}))[1]
+
+
+def registrar_anexo_enviado(state_dir: Path, numero: str, pdf: Path) -> Dict[str, Any]:
+    """Remembers that ``pdf`` (the file used in this run) was sent to SoftExpert, so a new request does not upload it again."""
+    marca = _marca_do_pdf(state_dir, numero, pdf)
+    return _alterar(state_dir, numero, lambda item: item.update(anexo_enviado=marca))
+
+
+def finalizacao_incerta(state_dir: Path, numero: str) -> bool:
+    fin = ler_estado(state_dir).get(numero, {}).get("finalizacao")
+    return isinstance(fin, dict) and fin.get("status") == STATUS_INCERTO
 
 
 def registrar_finalizacao(state_dir: Path, numero: str, status: str, encerrado_em: str = "") -> Dict[str, Any]:
@@ -447,7 +485,8 @@ def congelar_os_vinculada(state_dir: Path, numero: str, vinculo: Optional[Mappin
 
 def ja_finalizado(state_dir: Path, numero: str) -> bool:
     fin = ler_estado(state_dir).get(numero, {}).get("finalizacao")
-    return isinstance(fin, dict) and fin.get("status") in STATUS_FINALIZADOS  # nao_encontrado e ja_finalizado antigos não bloqueiam
+    # nao_encontrado, ja_finalizado antigos e incerto não bloqueiam (incerto: a rotina só confere a central, sem clicar)
+    return isinstance(fin, dict) and fin.get("status") in STATUS_FINALIZADOS
 
 
 def encerramentos_registrados(state_dir: Path) -> Dict[str, str]:
@@ -612,29 +651,39 @@ def _codigo_da_falha(item: Mapping[str, Any]) -> str:
 def falhas_da_finalizacao(state_dir: Path, rotina_ativa: Callable[[], bool]) -> Dict[str, Any]:
     """Aviso do sino (pedido do usuário, 24/11/2026): o que a última ``fechar`` não finalizou no SoftExpert.
 
-    ``itens`` = ``[{numero, motivo}]`` com ``motivo`` em ``erro``, ``tempo_esgotado``, ``sessao_expirada``, ``interrompida``
+    ``itens`` = ``[{numero, motivo}]`` com ``motivo`` em ``erro``, ``tempo_esgotado``, ``sessao_expirada``, ``incerto`` (Finalizar
+    clicado sem confirmação; vem também do estado, até virar ok, mesmo depois de outra rotina), ``registro_local`` (finalizado, mas o
+    registro local falhou), ``interrompida``
     (rotina parou no meio: ``em_andamento`` gravado e ``rotina_ativa()`` falso), ``planilha`` (finalizado, mas a DT ENCERRAMENTO
     não foi gravada no Dashboard: o chamado não foi achado ou é ambíguo na coluna C, ou ``numero`` vazio quando o lote falhou) ou
     ``sharepoint`` (envio falhou ou é incerto). ``rotina_ativa`` só é chamada com ``em_andamento`` gravado (o ``/api/painel`` não
     consulta o runner à toa). Chamado que agora consta como finalizado sai do aviso de erro. Só número UTIC e código: nunca ``mensagem``."""
     resultado = ler_resultado(state_dir)
+    estado = ler_estado(state_dir)
+    status_no_estado = {n: item["finalizacao"].get("status") for n, item in estado.items() if isinstance(item.get("finalizacao"), dict)}
+    # incerto gravado no estado: o aviso fica até virar ok, mesmo que outra rotina substitua o último resultado
+    incertos = [{"numero": n, "motivo": "incerto"} for n, st in sorted(status_no_estado.items()) if st == STATUS_INCERTO]
     if not resultado or resultado.get("acao") != ACAO_FINALIZAR:
-        return {"total": 0, "itens": []}
-    finalizados = {n for n, item in ler_estado(state_dir).items()
-                   if isinstance(item.get("finalizacao"), dict) and item["finalizacao"].get("status") in STATUS_FINALIZADOS}
+        return {"total": len(incertos), "itens": incertos}
+    finalizados = {n for n, st in status_no_estado.items() if st in STATUS_FINALIZADOS}
     itens: List[Dict[str, str]] = []
     vistos: set[str] = set()
     sem_r: List[Dict[str, str]] = []  # finalizados cuja coluna R não foi gravada: ficam fora do filtro dos finalizados
     for item in resultado.get("resultados") or []:
         if not isinstance(item, dict):
             continue
+        if item.get("status") in STATUS_FINALIZADOS and item.get("registro_local") == "falhou" and item.get("numero") not in finalizados:
+            try:
+                sem_r.append({"numero": validar_numero(item.get("numero")), "motivo": "registro_local"})
+            except DomainValidationError:
+                pass
         if item.get("status") in STATUS_FINALIZADOS and str(item.get("planilha") or "") not in ("", "gravado"):
             try:
                 sem_r.append({"numero": validar_numero(item.get("numero")), "motivo": "planilha"})
             except DomainValidationError:
                 pass
             continue
-        if item.get("status") != STATUS_ERRO:
+        if item.get("status") not in (STATUS_ERRO, STATUS_INCERTO):
             continue
         try:
             numero = validar_numero(item.get("numero"))
@@ -643,7 +692,8 @@ def falhas_da_finalizacao(state_dir: Path, rotina_ativa: Callable[[], bool]) -> 
         if numero in finalizados or (numero and numero in vistos):
             continue
         vistos.add(numero)
-        itens.append({"numero": numero, "motivo": _codigo_da_falha(item)})
+        itens.append({"numero": numero, "motivo": "incerto" if item.get("status") == STATUS_INCERTO else _codigo_da_falha(item)})
+    itens.extend(i for i in incertos if i["numero"] not in vistos)
     itens.extend(sem_r)
     if str(resultado.get("planilha") or "").strip():
         itens.append({"numero": "", "motivo": "planilha"})  # erro do lote (Dashboard importado ausente, gravação recusada)

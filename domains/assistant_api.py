@@ -494,7 +494,7 @@ def _aviso_pendente_seguro(aviso: Any) -> Optional[Dict[str, Any]]:
 
 
 _STATUS_FINALIZACAO = frozenset({fin.STATUS_OK, fin.STATUS_OUTRO_TECNICO, fin.STATUS_JA_FINALIZADO, fin.STATUS_NAO_ENCONTRADO, fin.STATUS_ERRO,
-                                 fin.STATUS_SEM_DESCRICAO, fin.STATUS_SEM_ENCERRAMENTO, fin.STATUS_PRONTO})
+                                 fin.STATUS_INCERTO, fin.STATUS_SEM_DESCRICAO, fin.STATUS_SEM_ENCERRAMENTO, fin.STATUS_PRONTO})
 # Codes `sebrae_fechar`/`sebrae_softexpert` write in `motivo` (scripts/sebrae_softexpert.py MOTIVO_*); anything else is matched as text.
 _MOTIVOS_FINALIZACAO = frozenset({"numero_nao_confere", "titulo_nao_confere", "nao_encontrado_na_lista", "formulario_indisponivel",
                                   "confirmacao_inesperada", "erro_inesperado", "softexpert_indisponivel", "sessao_expirada"})

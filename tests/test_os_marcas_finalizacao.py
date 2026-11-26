@@ -176,6 +176,8 @@ class FonteNaoEncontradoTests(MarcasBase):
         self.assertEqual(self.ler(finalizacao={"UTIC-2026-8": finalizado(None)}, **self.BASE), [])
         [marca] = self.ler(finalizacao={"UTIC-2026-8": finalizado(None, status="erro")}, **self.BASE)
         self.assertEqual(marca["origem"], "outro_tecnico")
+        # incerto (26/11/2026): o próprio site clicou Finalizar; nunca é atribuído a outro técnico
+        self.assertEqual(self.ler(finalizacao={"UTIC-2026-8": finalizado(None, status="incerto")}, **self.BASE), [])
 
     def test_disappears_when_the_next_read_finds_it(self):
         self.assertEqual(len(self.ler(**self.BASE)), 1)
@@ -287,6 +289,7 @@ class DetectarSaidasTests(unittest.TestCase):
     def test_site_ok_is_not_an_exit_but_site_error_is(self):
         mapa = {"UTIC-2026-2": {"status": "EM ABERTO"}, "UTIC-2026-3": {"status": "EM ABERTO"}}
         self.assertEqual(self.detectar(mapa, {"UTIC-2026-1": finalizado()}), [])
+        self.assertEqual(self.detectar(mapa, {"UTIC-2026-1": finalizado(status="incerto")}), [])  # clique do próprio site
         self.assertEqual(len(self.detectar(mapa, {"UTIC-2026-1": finalizado(status="erro")})), 1)
 
     def test_ticket_without_a_link_is_not_an_exit(self):

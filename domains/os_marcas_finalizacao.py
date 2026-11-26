@@ -37,7 +37,10 @@ from domains.inventory_comparison import normalize_reference_value
 from domains.os_observacoes import chave_os
 from domains.sebrae_arquivo import STATUS_FINALIZADO
 from domains.sebrae_dashboard_gravacao import CHAVE_DE_LINHA
-from domains.sebrae_finalizacao import STATUS_OK
+from domains.sebrae_finalizacao import STATUS_INCERTO, STATUS_OK
+
+# Clique do próprio site em Finalizar (``ok``, ou ``incerto`` ainda sem confirmação): nunca vira marca de outro técnico.
+_CLICADO_PELO_SITE = frozenset({STATUS_OK, STATUS_INCERTO})
 from domains.sebrae_observacoes import agora_iso
 from domains.sebrae_vinculos import vinculo_do_chamado
 
@@ -219,8 +222,8 @@ def _montar(dados: Mapping[str, Any], fontes: FontesMarcas) -> Dict[str, Dict[st
     for numero in fontes.nao_encontrados:
         numero = _chamado(numero)
         fin = (fontes.finalizacao.get(numero) or {}).get("finalizacao")
-        if isinstance(fin, dict) and fin.get("status") == STATUS_OK:
-            continue  # o site finalizou: é a marca ``site``, não a de outro técnico
+        if isinstance(fin, dict) and fin.get("status") in _CLICADO_PELO_SITE:
+            continue  # o site finalizou (ou clicou Finalizar, incerto): não é a marca de outro técnico
         vinculo = _vinculo_atual_tolerante(fontes, numero) if numero in abertos else None
         if vinculo:
             candidata(vinculo.get("serie"), vinculo.get("os"), numero, ORIGEM_OUTRO_TECNICO, MOTIVO_NAO_ENCONTRADO, fontes.nao_encontrados_em, True)
@@ -319,8 +322,8 @@ def detectar_saidas(
         if atual is not None and atual.get("status") != STATUS_FINALIZADO:
             continue  # segue aberto
         fin = (finalizacao.get(numero) or {}).get("finalizacao")
-        if isinstance(fin, dict) and fin.get("status") == STATUS_OK:
-            continue  # o site finalizou: é a marca ``site``
+        if isinstance(fin, dict) and fin.get("status") in _CLICADO_PELO_SITE:
+            continue  # o site finalizou (ou clicou Finalizar, incerto): não é de outro técnico
         vinculo = resolver(numero)
         if vinculo:
             saidas.append({"serie": vinculo["serie"], "os": vinculo["os"], "chamado": numero})

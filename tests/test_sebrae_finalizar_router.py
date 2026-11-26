@@ -437,6 +437,14 @@ class FinalizarUmTest(FinalizarBase):
         self.assertEqual(resposta.status_code, 409)
         self.assertEqual(self.runner.iniciadas, [])
 
+    def test_chamado_incerto_e_aceito_de_novo_para_a_rotina_so_conferir_a_central(self):
+        # Finalizar clicado sem confirmação (26/11/2026): a rota aceita; a rotina fechar só confere a central, sem clicar.
+        self.descrever(A)
+        fin.registrar_finalizacao(self.dir, A, fin.STATUS_INCERTO)
+        resposta = self.post(FINALIZAR, json={"numero": A, "confirmado": True})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
+
     def test_rotina_em_andamento_responde_409_e_o_pedido_nao_fica_guardado(self):
         self.descrever(A)
         self.runner.erro = DomainConflictError("Já há uma rotina em execução.")
