@@ -1079,10 +1079,10 @@ test("janela Chamado × OS: abre o modal com o cartão só leitura e só a OS do
 });
 
 // ---- Relatório mensal (F8): quatro sub-abas ----
-const REL_ABAS = [["visao", "Visão geral"], ["os", "OS e pedidos do mês"], ["sebrae", "Chamados (F5)"], ["base", "Base atual"]];
+const REL_ABAS = [["visao", "Visão geral"], ["os", "OS e pedidos do mês"], ["sebrae", "Chamados (F5)"], ["base", "Base atual"], ["tendencias", "Tendências"]];
 const REL_COM_CONTAGEM = ["os", "sebrae"];
 
-test("Relatório mensal (F8): quatro abas ligadas por ARIA e os painéis moram dentro de #cockpit-monthly-details", () => {
+test("Relatório mensal (F8): cinco abas ligadas por ARIA e os painéis moram dentro de #cockpit-monthly-details", () => {
   const painel = html.match(/<section[^>]*data-cockpit-tool-panel="relatorio"[\s\S]*?\n        <\/section>/)?.[0] || "";
   assert.match(painel, /<div class="rel-abas" role="tablist" aria-label="Assuntos do relatório">/);
   assert.deepEqual([...painel.matchAll(/<button[^>]*role="tab"[^>]*id="rel-aba-(\w+)"/g)].map(m => m[1]), REL_ABAS.map(([nome]) => nome));
@@ -1237,13 +1237,14 @@ function criarAmbienteRelatorio() {
     createTextNode: texto => fake.createTextNode(texto),
     createDocumentFragment: () => fake.createElement("#fragment"),
   };
-  const servidor = { relatorio: mes => relatorioExemplo(mes), sebrae: { importado: null, novos: null }, sebraeErro: null, pedidos: [], toasts: [] };
+  const servidor = { relatorio: mes => relatorioExemplo(mes), tendencias: dias => ({ dias, inicio: "2026-10-28", data_corte: "2026-11-25", tempo_medio_os: { media_dias: 12.4, encerradas: 38, encerradas_sem_data: 0, media_dias_anterior: null, encerradas_anterior: 0 }, sem_acesso_7_dias: { pontos: [], historico_desde: null } }), sebrae: { importado: null, novos: null }, sebraeErro: null, pedidos: [], toasts: [] };
   const apiFetch = async url => {
     servidor.pedidos.push(url);
     if (url.startsWith("/api/sebrae/novos")) {
       if (servidor.sebraeErro) throw servidor.sebraeErro;
       return servidor.sebrae;
     }
+    if (url.startsWith("/api/relatorio-mensal/tendencias")) return servidor.tendencias(Number(new URL(url, "http://local").searchParams.get("dias")));
     return servidor.relatorio(new URL(url, "http://local").searchParams.get("mes"));
   };
   const api = criarFerramentasCockpit({ app: { apiFetch, showToast: (texto, tipo) => servidor.toasts.push([texto, tipo]) }, appState: {}, apiFetch });
@@ -1309,7 +1310,7 @@ test("Relatório mensal (F8): abre na Visão geral e preenche painéis, seções
   await comRelatorio(async ({ el, aba, painel, visiveis, selecionada, tabindices }) => {
     assert.deepEqual(visiveis(), ["visao"]);
     assert.deepEqual(selecionada(), ["visao"]);
-    assert.deepEqual(tabindices(), [0, -1, -1, -1]);
+    assert.deepEqual(tabindices(), [0, -1, -1, -1, -1]);
     assert.equal(el("cockpit-monthly-attention").hidden, false);
     // Cada seção continua descendente de #cockpit-monthly-details, com o id do título que os links usam.
     const secoes = el("cockpit-monthly-details").querySelectorAll("[data-rel-secao]");
@@ -1420,28 +1421,48 @@ test("Relatório mensal (F8): clique, setas, Home e End trocam de aba com tabind
     aba("os").click();
     assert.deepEqual(visiveis(), ["os"]);
     assert.deepEqual(selecionada(), ["os"]);
-    assert.deepEqual(tabindices(), [-1, 0, -1, -1]);
+    assert.deepEqual(tabindices(), [-1, 0, -1, -1, -1]);
     const direita = tecla("os", "ArrowRight");
     assert.equal(direita.prevenido, true);
     assert.deepEqual(selecionada(), ["sebrae"]);
     assert.deepEqual(visiveis(), ["sebrae"]);
-    assert.deepEqual(tabindices(), [-1, -1, 0, -1]);
+    assert.deepEqual(tabindices(), [-1, -1, 0, -1, -1]);
     assert.equal(global.document.activeElement, aba("sebrae"), "a seta leva o foco para a aba nova");
     tecla("sebrae", "ArrowLeft");
     assert.deepEqual(selecionada(), ["os"]);
     tecla("os", "End");
-    assert.deepEqual(selecionada(), ["base"]);
-    assert.equal(global.document.activeElement, aba("base"));
-    tecla("base", "ArrowRight");
+    assert.deepEqual(selecionada(), ["tendencias"]);
+    assert.equal(global.document.activeElement, aba("tendencias"));
+    tecla("tendencias", "ArrowRight");
     assert.deepEqual(selecionada(), ["visao"], "ArrowRight na última volta para a primeira");
     tecla("visao", "ArrowLeft");
-    assert.deepEqual(selecionada(), ["base"], "ArrowLeft na primeira vai para a última");
-    tecla("base", "Home");
+    assert.deepEqual(selecionada(), ["tendencias"], "ArrowLeft na primeira vai para a última");
+    tecla("tendencias", "Home");
     assert.deepEqual(selecionada(), ["visao"]);
     assert.deepEqual(visiveis(), ["visao"]);
     const outra = tecla("visao", "a");
     assert.equal(outra.prevenido, false, "tecla fora do conjunto não é consumida");
     assert.deepEqual(selecionada(), ["visao"]);
+  });
+});
+
+test("Relatório mensal (F8): Tendências carrega na primeira abertura, troca de período recarrega e trocar o mês não busca de novo", async () => {
+  await comRelatorio(async ({ aba, el, painel, servidor, esperar, mudarMes }) => {
+    const buscas = () => servidor.pedidos.filter(url => url.startsWith("/api/relatorio-mensal/tendencias"));
+    assert.deepEqual(buscas(), [], "nada é buscado antes de abrir a aba");
+    aba("tendencias").click();
+    await esperar();
+    assert.deepEqual(buscas(), ["/api/relatorio-mensal/tendencias?dias=30"]);
+    assert.match(textoDe(painel("tendencias")), /Tempo médio das OS.*12,4 dias.*Sem dados suficientes nos últimos 30 dias\.Menos de 2 atualizações/);
+    aba("visao").click();
+    aba("tendencias").click();
+    await mudarMes("2026-10");
+    assert.equal(buscas().length, 1, "voltar à aba e trocar o mês não recarrega");
+    painel("tendencias").querySelector('[data-rel-periodo="90"]').click();
+    await esperar();
+    assert.equal(buscas().at(-1), "/api/relatorio-mensal/tendencias?dias=90");
+    assert.equal(painel("tendencias").querySelector('[data-rel-periodo="90"]').getAttribute("aria-pressed"), "true");
+    assert.ok(el("rel-tend-tempo"));
   });
 });
 
@@ -1471,7 +1492,7 @@ test("Relatório mensal (F8): a aba escolhida sobrevive à recarga quieta e à t
     await esperar();
     assert.deepEqual(visiveis(), ["sebrae"], "recarga quieta mantém a aba");
     assert.deepEqual(selecionada(), ["sebrae"]);
-    assert.deepEqual(tabindices(), [-1, -1, 0, -1]);
+    assert.deepEqual(tabindices(), [-1, -1, 0, -1, -1]);
     assert.deepEqual(["os", "sebrae"].map(nome => el(`rel-${nome}-contagem`).textContent), ["5", "1"], "o contador é atualizado também na recarga quieta");
     servidor.relatorio = mes => relatorioExemplo(mes, { os: 0, sebrae: 7 });
     await mudarMes("2026-10");

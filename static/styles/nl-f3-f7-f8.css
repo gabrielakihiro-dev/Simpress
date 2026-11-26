@@ -244,6 +244,29 @@ section.ck-ferr-painel[data-cockpit-tool-panel="relatorio"] {
   & .nf8-seg__op[aria-pressed="true"] { border-color: rgba(var(--nl-i), .45); background: rgba(var(--nl-i), .14); color: var(--nl-itx); }
   & .nf8-seg__op:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 1px; }
 
+  /* Tendências (30/90 dias): cabeçalho com segmentado "Período", dois cartões (ciano e fúcsia) lado a lado, caixas que quebram linha */
+  & .nf8-tend__cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  & .nf8-tend__titulo, & .nf8-tend__periodo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+  & .nf8-tend__selo { display: inline-flex; align-items: center; width: fit-content; padding: 3px 10px; border: 1px solid var(--nl-bd); border-radius: 999px; color: var(--nl-mut); font: 400 12px/1.4 var(--fonte-corpo); }
+  & .nf8-tend__corpo { min-width: 0; }
+  & .nf8-tend__grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  & .nf8-tend__cartao { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  & .nf8-tend__sub, & .nf8-tend__nota { margin: 0; color: var(--nl-mut); font: 400 12px/1.4 var(--fonte-corpo); }
+  & .nf8-tend__num { color: var(--nl-tx); font: 700 32px/1.1 var(--fonte-corpo); letter-spacing: -.02em; }
+  & .nf8-tend__num small { color: var(--nl-mut); font: 500 14px/1.3 var(--fonte-corpo); letter-spacing: 0; }
+  & .nf8-tend__caixas { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+  & .nf8-tend__caixa { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 12px; border: 1px solid var(--nl-bd); border-radius: var(--nl-raio-controle); background: var(--nl-card2); }
+  & .nf8-tend__caixa b { color: var(--nl-tx); font: 600 16px/1.3 var(--fonte-corpo); }
+  & .nf8-tend__caixa span { color: var(--nl-mut); font: 400 12px/1.3 var(--fonte-corpo); }
+  & .nf8-tend__caixa b.nf8-tend__bom { color: var(--nl-etx); }
+  & .nf8-tend__svg { display: block; width: 100%; height: auto; max-height: 160px; overflow: visible; }
+  & .nf8-tend__svg text { fill: var(--nl-mut); font: 400 11px/1 var(--fonte-mono); }
+  & .nf8-tend__reticula line { stroke: var(--nl-bd); }
+  & .nf8-tend__linha { fill: none; stroke: var(--tom); stroke-width: 2.5; stroke-linejoin: round; }
+  & .nf8-tend__ponto { fill: var(--tom); }
+  & .nf8-tend__vazio, & .nf8-tend__aviso { margin: 0; padding: 16px; border: 1px dashed var(--nl-bd2); border-radius: var(--nl-raio-controle); color: var(--nl-mut); }
+  & .nf8-tend__vazio strong { display: block; margin-bottom: 2px; color: var(--nl-tx2); font-weight: 600; }
+
   /* Gráfico semanal: legenda com totais, eixo Y com grade tracejada, grupos de 3 barras por semana, rótulos embaixo */
   & .nf8-g { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   & .nf8-leg { display: flex; flex-wrap: wrap; gap: 8px 20px; font: 400 13px/1.3 var(--fonte-corpo); color: var(--nl-tx2); }
@@ -292,7 +315,7 @@ label.mr-rotulo .mr-req { margin-left: 2px; color: var(--nl-rtx); }
     & #cockpit-monthly-periods .ck-pilula { flex: 1 1 0; min-height: 44px; padding: 0 8px; }
     & .rel-abas-barra { padding-inline: 12px; }
     & .rel-abas { display: flex; width: 100%; }
-    & .ck-rel__atencao-grade, & .nf8-cham-grade { grid-template-columns: minmax(0, 1fr); }
+    & .ck-rel__atencao-grade, & .nf8-cham-grade, & .nf8-tend__grade { grid-template-columns: minmax(0, 1fr); }
     & :is(.ck-rel__atencao, .nf8-chamados, .nf8-cham-info) .ck-rel__numeros { gap: 8px 32px; }
     & .nf8-cham-num { font-size: 32px; }
     & [data-rel-secao="movimento"] .ck-rel__secao-cab > .nf8-seg { display: flex; width: 100%; margin-left: 0; }
