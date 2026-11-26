@@ -481,6 +481,69 @@ export type OsRecusadaPayload = {
   "os": string;
 };
 
+export type PacoteLocalExportacao = {
+  "arquivo": string;
+  "tamanho_bytes": number;
+  "arquivos": number;
+  "ausentes": number;
+  "criado_em": string;
+};
+
+export type PacoteLocalItem = {
+  "arquivo": string;
+  "tipo": "exportacao" | "desfazer";
+  "criado_em": string;
+  "tamanho_bytes": number;
+};
+
+export type PacoteLocalLista = {
+  "pasta": string;
+  "pasta_padrao": boolean;
+  "pacotes": PacoteLocalItem[];
+  "erro_pasta"?: string | null;
+};
+
+export type PacoteLocalPastaPayload = {
+  "pasta"?: string;
+};
+
+export type PacoteLocalPrevia = {
+  "arquivo": string;
+  "tipo": "exportacao" | "desfazer";
+  "versao_app": string;
+  "criado_em": string;
+  "itens": PacoteLocalPreviaItem[];
+  "totais": PacoteLocalPreviaTotais;
+  "muda_links": boolean;
+  "preview_token": string;
+};
+
+export type PacoteLocalPreviaItem = {
+  "caminho": string;
+  "acao": "substituir" | "criar" | "igual" | "manter" | "apagar";
+};
+
+export type PacoteLocalPreviaTotais = {
+  "substituir": number;
+  "criar": number;
+  "igual": number;
+  "manter": number;
+  "apagar": number;
+};
+
+export type PacoteLocalRestauracao = {
+  "substituidos": number;
+  "criados": number;
+  "apagados": number;
+  "mantidos": number;
+  "pacote_desfazer": string;
+};
+
+export type PacoteLocalRestaurarPayload = {
+  "preview_token": string;
+  "confirmado"?: boolean;
+};
+
 export type PendenciaUsuarioPayload = {
   "decisao": string;
 };
@@ -1431,6 +1494,31 @@ export interface Rotas {
     consulta: never;
     corpo: never;
     resposta: unknown;
+  };
+  "GET /api/pacote-local": {
+    consulta: never;
+    corpo: never;
+    resposta: PacoteLocalLista;
+  };
+  "POST /api/pacote-local/exportar": {
+    consulta: never;
+    corpo: never;
+    resposta: PacoteLocalExportacao;
+  };
+  "PUT /api/pacote-local/pasta": {
+    consulta: never;
+    corpo: PacoteLocalPastaPayload;
+    resposta: PacoteLocalLista;
+  };
+  "GET /api/pacote-local/{arquivo}/previa": {
+    consulta: never;
+    corpo: never;
+    resposta: PacoteLocalPrevia;
+  };
+  "POST /api/pacote-local/{arquivo}/restaurar": {
+    consulta: never;
+    corpo: PacoteLocalRestaurarPayload;
+    resposta: PacoteLocalRestauracao;
   };
   "GET /api/painel": {
     consulta: never;
