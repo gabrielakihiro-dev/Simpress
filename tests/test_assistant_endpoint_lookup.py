@@ -17,7 +17,7 @@ class AssistantEndpointTests(unittest.TestCase):
             return await awaitable
         async def response(*args):
             return 200, {"status": "not_found", "serial": "ABC"}
-        with patch("domains.assistant_api.asyncio.wait_for", side_effect=wait), patch("domains.assistant_api._asgi_call", side_effect=response):
+        with patch("domains.assistant_transporte.asyncio.wait_for", side_effect=wait), patch("domains.assistant_transporte._asgi_call", side_effect=response):
             transport = asgi_transport(lambda: None, 8000)
             transport("POST", "/api/endpoint/consultar", None, {"serial": "ABC"})
             transport("POST", "/api/endpoint/controle-remoto", None, {"serial": "ABC"})
