@@ -2223,8 +2223,9 @@ MSG_DASHBOARD_ABERTO = (
 )
 AVISO_DASHBOARD_ABERTO = "Feche o Dashboard no Excel; o envio ao SharePoint continua sozinho quando ele for liberado."
 MSG_DASHBOARD_LIBERADO = f"{MARCA_DASHBOARD_LIBERADO}; continuando."
-MSG_DASHBOARD_ESPERA_ENCERRADA = f"{MARCA_DASHBOARD_LIBERADO} da espera: a rotina parou sem substituir o Dashboard."
+MSG_DASHBOARD_ESPERA_ENCERRADA = f"{MARCA_DASHBOARD_LIBERADO} da espera."
 GOTO_PASTA_MS = 30_000  # volta à pasta depois do aviso de bloqueio: prazo curto, o vigia do cancelamento já não age aqui
+GOTO_CANCELAMENTO_MS = 8_000  # saída da pasta ao cancelar antes do Replace: o cancelamento termina perto dos 10 s
 # "em uso ou bloqueado" nas mensagens: domains/assistant_api_comum.py reconhece a falha por esse trecho (dashboard_em_uso_no_sharepoint).
 MSG_DASHBOARD_CONTINUOU_ABERTO = (
     f"O Dashboard continuou em uso ou bloqueado (aberto no Excel) por {ESPERA_DASHBOARD_LIVRE_S // 60} min; nada foi substituído no SharePoint. Feche-o e envie de novo."
@@ -2327,7 +2328,6 @@ class EsperaDashboard:
 def _voltar_a_pasta_depois_do_bloqueio(page: "Page", espera: EsperaDashboard) -> None:
     """O aviso de bloqueio não some quando o arquivo é liberado: volta à pasta com goto LOGO (o aviso e o "Retry" dele somem, e o
     upload que falhou é descartado; nunca reload) e só depois espera o intervalo de nova tentativa. Nunca clica em "Retry"."""
-    verificar_cancelamento()
     page.goto(pasta_dashboard_url(), wait_until="domcontentloaded", timeout=GOTO_PASTA_MS)
     verificar_cancelamento()
     aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
@@ -2929,19 +2929,6 @@ def enviar_arquivo_para_pasta(
             bloqueado = _acompanhar_envio(page, espera, _incerto)
         except EnvioNaoIniciado:
             raise
-        except RotinaCancelada:
-            # Cancelado antes do Replace: fecha o diálogo de nome repetido; se ele continuar na tela, um clique esquecido em Replace
-            # sobreporia o Dashboard sem registro, então o envio fica incerto.
-            if not marcado and not _dialogo_de_nome_fechado(page):
-                _incerto()
-            if not marcado:
-                # O diálogo pode ainda nem ter aparecido: navegar descarta o upload pendente e qualquer diálogo futuro na aba que
-                # fica para trás. Sem conseguir navegar, nada prova que o Replace não vai aparecer armado: incerto.
-                try:
-                    page.goto(pasta_dashboard_url(), wait_until="domcontentloaded", timeout=GOTO_PASTA_MS)
-                except Exception:
-                    _incerto()
-            raise
         except Exception:
             _incerto()
             raise
@@ -2953,19 +2940,57 @@ def enviar_arquivo_para_pasta(
         retomar = True
 
 
-def _dialogo_de_nome_fechado(page: "Page") -> bool:
-    """Escape no diálogo Replace/Keep both; ``True`` só se nenhum dos dois botões continua visível (sem como conferir: ``False``)."""
+def _fechar_dialogo_de_nome(page: "Page") -> str:
+    """Escape no diálogo Replace/Keep both: "fechado" (estava visível e sumiu com o Escape), "ausente" (já não estava visível antes
+    do Escape) ou "aberto" (continua visível, ou sem como conferir)."""
     try:
+        botoes = page.get_by_role("button", name=_BOTAO_SUBSTITUIR).or_(page.get_by_role("button", name=_BOTAO_MANTER_AMBOS))
+        if botoes.filter(visible=True).count() == 0:
+            return "ausente"
         page.keyboard.press("Escape")
         page.wait_for_timeout(500)
-        botoes = page.get_by_role("button", name=_BOTAO_SUBSTITUIR).or_(page.get_by_role("button", name=_BOTAO_MANTER_AMBOS))
-        return botoes.filter(visible=True).count() == 0
+        return "fechado" if botoes.filter(visible=True).count() == 0 else "aberto"
+    except Exception:
+        return "aberto"
+
+
+def _sair_para_a_pasta(page: "Page") -> bool:
+    """goto na pasta com prazo curto: descarta o upload pendente e qualquer diálogo Replace que ainda fosse aparecer. ``False`` se falhou."""
+    try:
+        page.goto(pasta_dashboard_url(), wait_until="domcontentloaded", timeout=GOTO_CANCELAMENTO_MS)
+        return True
     except Exception:
         return False
 
 
+def _cancelar_sem_replace_armado(page: "Page", incerto: Callable[[], None], *, dialogo_visto: bool) -> None:
+    """Cancelado depois de escolher o arquivo e antes do Replace: nada pode ficar armado na aba que fica para trás.
+
+    Diálogo que fechou com o Escape, ou que nunca apareceu: goto na pasta; sem conseguir navegar, incerto. Diálogo que continuou na
+    tela, ou que sumiu sozinho depois de visto (um clique de outra pessoa em Replace?): incerto e goto de melhor esforço.
+    """
+    situacao = _fechar_dialogo_de_nome(page)
+    if situacao == "aberto" or (situacao == "ausente" and dialogo_visto):
+        incerto()
+        _sair_para_a_pasta(page)
+    elif not _sair_para_a_pasta(page):
+        incerto()
+
+
 def _acompanhar_envio(page: "Page", espera: "EsperaDashboard | None", incerto: Callable[[], None]) -> bool:
-    """Acompanha o upload depois de escolher o arquivo; ``True``: o aviso de bloqueio apareceu antes do Replace (nada subiu)."""
+    """Acompanha o upload depois de escolher o arquivo; ``True``: o aviso de bloqueio apareceu antes do Replace (nada subiu).
+
+    Cancelado antes do Replace: ``_cancelar_sem_replace_armado`` e relança."""
+    estado = {"dialogo_visto": False, "replace": False}
+    try:
+        return _acompanhar_upload(page, espera, incerto, estado)
+    except RotinaCancelada:
+        if not estado["replace"]:
+            _cancelar_sem_replace_armado(page, incerto, dialogo_visto=estado["dialogo_visto"])
+        raise
+
+
+def _acompanhar_upload(page: "Page", espera: "EsperaDashboard | None", incerto: Callable[[], None], estado: "dict[str, bool]") -> bool:
     log("Dashboard", "Arquivo escolhido; esperando o diálogo Replace/Keep both, o andamento ou o aviso de envio concluído.")
     # Só os visíveis: 27/11/2026, elementos duplicados ocultos no DOM enganavam o .first e a contagem.
     substituir = page.get_by_role("button", name=_BOTAO_SUBSTITUIR).filter(visible=True)
@@ -2994,6 +3019,7 @@ def _acompanhar_envio(page: "Page", espera: "EsperaDashboard | None", incerto: C
             return True
         # O diálogo de nome repetido pode aparecer a qualquer momento da espera; Replace no máximo uma vez.
         if not substituiu and visivel(substituir.or_(manter)):
+            estado["dialogo_visto"] = True
             if not visivel(substituir):
                 try:
                     page.keyboard.press("Escape")
@@ -3005,11 +3031,20 @@ def _acompanhar_envio(page: "Page", espera: "EsperaDashboard | None", incerto: C
             log("Dashboard", "Diálogo de nome repetido visto; clicando em Replace uma única vez.")
             try:
                 aguardar_estabilidade_pre_clique(lambda: visivel(substituir), "Substituir o Dashboard no SharePoint")
-            except RotinaErro as erro:  # o Replace não foi clicado: fecha o diálogo e nada é substituído
-                if _dialogo_de_nome_fechado(page):
+            except RotinaErro as erro:  # o Replace não foi clicado por esta rotina
+                situacao = _fechar_dialogo_de_nome(page)
+                if situacao == "fechado":  # estava na tela e o Escape fechou: nada foi substituído
                     raise EnvioNaoIniciado(str(erro)) from erro
-                raise RotinaErro(f"{erro} O diálogo Replace/Keep both continuou na tela; confira a pasta antes de enviar de novo.") from erro
-            incerto()  # depois da guarda, logo antes do clique: guarda estourada não deixa o registro incerto
+                incerto()
+                if situacao == "aberto":
+                    _sair_para_a_pasta(page)  # melhor esforço: não deixa o Replace armado na aba
+                    raise RotinaErro(f"{erro} O diálogo Replace/Keep both continuou na tela; confira a pasta antes de enviar de novo.") from erro
+                raise RotinaErro(
+                    f"{erro} O diálogo Replace/Keep both sumiu antes do meu clique; o Dashboard pode ter sido substituído. "
+                    "Confira a pasta antes de enviar de novo."
+                ) from erro
+            incerto()  # depois da guarda, logo antes do clique: guarda estourada com o diálogo fechado não deixa o registro incerto
+            estado["replace"] = True
             substituir.first.click()
             substituiu = True
             inicio = time.time()  # o prazo de conclusão conta a partir do Replace

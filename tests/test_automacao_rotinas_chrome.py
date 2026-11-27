@@ -2668,11 +2668,11 @@ class EnviarDashboardTests(unittest.TestCase):
             self._enviar(page, concluido=False, marcar_incerto=marcar)
         marcar.assert_not_called()
 
-    def _dialogo_que_fecha(self, page, fecha: bool):
-        """Diálogo Replace/Keep both visível; o Escape fecha (``fecha``) ou não."""
+    def _dialogo_que_fecha(self, page, fecha: bool, visivel_antes: bool = True):
+        """Diálogo Replace/Keep both visível antes do Escape (``visivel_antes``); o Escape fecha (``fecha``) ou não."""
         page.locators.setdefault("substituir", MagicMock())
         botoes = page.locators["substituir"].or_.return_value.filter.return_value
-        botoes.count.side_effect = lambda: 0 if fecha and page.keyboard.press.called else 1
+        botoes.count.side_effect = lambda: (0 if fecha else 1) if page.keyboard.press.called else int(visivel_antes)
 
     def test_guard_exhausted_before_replace_fails_without_marking_uncertain(self):
         page = self._pagina({"substituir"})
@@ -2690,16 +2690,17 @@ class EnviarDashboardTests(unittest.TestCase):
     def test_cancel_before_the_dialog_renders_leaves_the_folder_by_goto_and_fails(self):
         # Cancelado logo depois de escolher o arquivo, sem diálogo ainda: o goto descarta o upload pendente e um Replace futuro.
         page = self._pagina({"substituir"})
-        self._dialogo_que_fecha(page, fecha=True)
+        self._dialogo_que_fecha(page, fecha=True, visivel_antes=False)
         marcar = MagicMock()
         with self.assertRaises(automacao.RotinaCancelada):
             self._enviar(page, concluido=False, dialogo=False, marcar_incerto=marcar, cancelar=lambda: page.expect_file_chooser.called)
-        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_PASTA_MS)
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_CANCELAMENTO_MS)
+        page.keyboard.press.assert_not_called()  # nada na tela para fechar
         marcar.assert_not_called()
 
     def test_cancel_before_the_dialog_renders_and_goto_fails_marks_uncertain(self):
         page = self._pagina({"substituir"})
-        self._dialogo_que_fecha(page, fecha=True)
+        self._dialogo_que_fecha(page, fecha=True, visivel_antes=False)
         page.goto.side_effect = RuntimeError("a aba não respondeu")
         marcar = MagicMock()
         with self.assertRaises(automacao.RotinaCancelada):
@@ -2718,6 +2719,22 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertIn("continuou na tela", str(erro.exception))
         marcar.assert_called_once()
         page.locators["substituir"].filter.return_value.first.click.assert_not_called()
+        # melhor esforço: sai da pasta para não deixar o Replace armado
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_CANCELAMENTO_MS)
+
+    def test_guard_exhausted_with_the_dialog_gone_by_itself_marks_uncertain(self):
+        # A guarda estourou porque o diálogo sumiu (alguém clicou Replace no Chrome de automação?): nada a fechar, envio incerto.
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True, visivel_antes=False)
+        marcar = MagicMock()
+        guarda = automacao.RotinaErro("Substituir o Dashboard no SharePoint: o estado mudou antes do clique; não cliquei.")
+        with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
+                self.assertRaises(automacao.RotinaErro) as erro:
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        self.assertNotIsInstance(erro.exception, automacao.EnvioNaoIniciado)
+        self.assertIn("sumiu antes do meu clique", str(erro.exception))
+        marcar.assert_called_once()
+        page.keyboard.press.assert_not_called()
 
     def test_cancel_with_the_replace_dialog_open_fails_only_if_escape_closes_it(self):
         for fecha, incerto in ((True, False), (False, True)):
@@ -2731,6 +2748,21 @@ class EnviarDashboardTests(unittest.TestCase):
                 self.assertEqual(marcar.called, incerto)
                 page.keyboard.press.assert_called_with("Escape")
                 page.locators["substituir"].filter.return_value.first.click.assert_not_called()
+                # fechou: goto descarta o upload pendente; continuou: goto de melhor esforço (o registro já está incerto)
+                page.goto.assert_called_once_with(
+                    automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_CANCELAMENTO_MS,
+                )
+
+    def test_cancel_after_the_dialog_was_seen_and_vanished_by_itself_marks_uncertain(self):
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True, visivel_antes=False)
+        marcar = MagicMock()
+        with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=automacao.RotinaCancelada()), \
+                self.assertRaises(automacao.RotinaCancelada):
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        marcar.assert_called_once()
+        page.keyboard.press.assert_not_called()
+        page.goto.assert_called_once()  # melhor esforço
 
     def test_unexpected_failure_after_choosing_the_file_marks_uncertain(self):
         page = self._pagina({"substituir"})
@@ -2751,7 +2783,7 @@ class EnviarDashboardTests(unittest.TestCase):
     # Rotina enviar inteira com o estado real do registro; só o navegador e o acompanhamento do upload são simulados.
 
     def _rodar_com_dashboard_aberto(self, *, aba=lambda: False, acompanhar=("ok",), cancelar=lambda: False, baixados=None, envio_preparado=False,
-                                    duplicar_falha=None, dialogo_fecha=True, goto_falha=None):
+                                    duplicar_falha=None):
         """``acompanhar``: por escolha do arquivo, "bloqueado" (toast antes do Replace) ou "ok" (Replace e concluído).
 
         Devolve (código ou exceção, registro, mocks)."""
@@ -2763,9 +2795,6 @@ class EnviarDashboardTests(unittest.TestCase):
         fila = list(baixados or [b"sharepoint"] * 5)
         page = MagicMock()
         roteiro = list(acompanhar)
-        botoes = page.get_by_role.return_value.or_.return_value.filter.return_value  # diálogo Replace/Keep both depois do Escape
-        botoes.count.return_value = 0 if dialogo_fecha else 1
-        page.goto.side_effect = goto_falha
 
         def baixar(_page):
             destino = raiz / f"baixado{len(fila)}.xlsx"
@@ -2779,6 +2808,9 @@ class EnviarDashboardTests(unittest.TestCase):
             if passo == "guarda":
                 raise automacao.EnvioNaoIniciado("a guarda estourou antes do Replace")
             if passo == "cancelado":
+                raise automacao.RotinaCancelada()
+            if passo == "cancelado_incerto":  # o diálogo continuou na tela ou sumiu sozinho
+                incerto()
                 raise automacao.RotinaCancelada()
             incerto()
             if passo == "erro":
@@ -2844,7 +2876,7 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertIsInstance(resultado, automacao.RotinaCancelada)
         self.assertEqual(registro["status"], "falhou")
         mocks["acompanhar"].assert_called_once()
-        mocks["page"].goto.assert_not_called()
+        mocks["page"].goto.assert_called_once()  # o goto vem antes de conferir o cancelamento: o aviso com "Retry" não fica na tela
         self._espera_fechada()
         mocks["registrar"].assert_not_called()  # depois de escolher o arquivo, nenhuma captura (LGPD)
 
@@ -2885,11 +2917,28 @@ class EnviarDashboardTests(unittest.TestCase):
         self._espera_fechada()
 
     def test_cancel_with_the_replace_dialog_open_in_the_routine(self):
-        for fecha, goto_falha, status in ((True, None, "falhou"), (False, None, "incerto"), (True, RuntimeError("aba presa"), "incerto")):
-            with self.subTest(fecha=fecha, goto_falha=goto_falha):
-                resultado, registro, _ = self._rodar_com_dashboard_aberto(acompanhar=("cancelado",), dialogo_fecha=fecha, goto_falha=goto_falha)
+        for passo, status in (("cancelado", "falhou"), ("cancelado_incerto", "incerto")):
+            with self.subTest(passo=passo):
+                resultado, registro, _ = self._rodar_com_dashboard_aberto(acompanhar=(passo,))
                 self.assertIsInstance(resultado, automacao.RotinaCancelada)
                 self.assertEqual(registro["status"], status)
+
+    def test_end_of_wait_line_is_neutral_when_something_may_have_been_uploaded(self):
+        # A espera abriu (aba do Excel) e o envio terminou incerto: a linha de fim não afirma que nada foi substituído.
+        sondas = []
+
+        def aba():  # aberta nas 2 primeiras sondas depois da Duplicata
+            if not self.duplicar.called:
+                return False
+            sondas.append(1)
+            return len(sondas) <= 2
+
+        resultado, registro, _ = self._rodar_com_dashboard_aberto(aba=aba, acompanhar=("erro",))
+        self.assertIsInstance(resultado, RuntimeError)
+        self.assertEqual(registro["status"], "incerto")
+        self.assertEqual(self.logs_rotina.count(automacao.MSG_DASHBOARD_ESPERA_ENCERRADA), 1)
+        self.assertEqual(automacao.MSG_DASHBOARD_ESPERA_ENCERRADA, "Dashboard liberado da espera.")
+        self._espera_fechada()
 
     def test_guard_exhausted_before_replace_leaves_the_send_failed(self):
         resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("guarda",))

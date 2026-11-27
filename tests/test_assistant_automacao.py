@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from domains.assistant_api import _MOTIVOS, MOTIVOS_AUTOMACAO, SimpressApi, _motivo_codigo
 from domains.assistant_tools import TOOLS, grupos_da_mensagem
+from scripts.automacao_rotinas_chrome import MSG_BLOQUEIO_DEPOIS_DO_REPLACE
 from tests.test_assistant import FakeModel, abrir, call, calls, make_conversation, text
 
 # Synthetic sensitive data: none of these pieces may reach the model.
@@ -240,6 +241,7 @@ class LogTests(unittest.TestCase):
             "como cópia pendente; escolha na tela qual valor manter e envie de novo.": "dashboard_sharepoint_conflito",
             "Não vi o aviso de envio concluído em 90 s; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.":
                 "envio_sharepoint_nao_confirmado",
+            MSG_BLOQUEIO_DEPOIS_DO_REPLACE: "envio_sharepoint_nao_confirmado",  # incerto depois do Replace: nunca "em uso"
             "O upload não começou: em 60 s não vi o diálogo Replace/Keep both nem o andamento do envio; não escolhi o arquivo de novo.":
                 "envio_sharepoint_nao_comecou",
             "O SharePoint não recebeu o Dashboard: baixei o arquivo de novo, duas vezes, e ele ainda tem os valores de antes do envio. "
