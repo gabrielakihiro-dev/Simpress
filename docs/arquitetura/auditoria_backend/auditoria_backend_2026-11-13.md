@@ -157,7 +157,8 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 **12. `domains/assistant_api.py` concentrado numa classe.** Média, confirmado.
 - Evidência: `domains/assistant_api.py` tinha 3.022 linhas, ~2.140 delas na classe `SimpressApi`.
 - Andamento (27/11/2026, PARCIAL, 1ª etapa): transporte e validadores saíram para `domains/assistant_transporte.py` e `domains/assistant_validacao.py`; o arquivo caiu para 2.729 linhas e segue reexportando esses nomes (fachada). O teste `tests/test_assistant_contrato_modelo.py` fixa a lista de ferramentas (hash), os schemas, o `SYSTEM_PROMPT`, `montar_prompt` e as assinaturas públicas de `SimpressApi`.
-- Falta: dividir `SimpressApi` em mixins por tema (Sebrae/F5; histórico e comparação; representantes, cobertura e backups; automação e escrita), mantendo a fachada.
+- Andamento (27/11/2026, PARCIAL, 2ª etapa): as 16 ferramentas do Sebrae/F5 (`chamados_novos_sebrae` a `editar_descricao_chamado_sebrae`, `resumo_sebrae`, `historico_sebrae`) saíram para o mixin `SebraeMixin` em `domains/assistant_api_sebrae.py`, e os auxiliares usados pelo mixin e pela classe para `domains/assistant_api_comum.py` (módulo folha, reexportado). `SimpressApi(SebraeMixin)` em `domains/assistant_api.py` caiu para ~1.700 linhas (arquivo com 2.117); nenhum nome se repete entre o mixin e a classe, e os hashes de `tests/test_assistant_contrato_modelo.py` não mudaram.
+- Falta: os mixins de histórico e comparação; representantes, cobertura e backups; automação e escrita, mantendo a fachada.
 
 ### 5.2 Melhorias (sem falha)
 
