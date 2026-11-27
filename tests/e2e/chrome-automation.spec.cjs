@@ -61,7 +61,7 @@ test("Automação deixa as últimas execuções visíveis ao abrir a aba", async
 test("Automação starts a routine, shows the login warning and the live log, then cancels", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
   const status = panel.locator("#automacao-estado");
-  const cancel = panel.getByRole("button", { name: "Cancelar execução", exact: true });
+  const cancel = panel.locator("#btn-automacao-cancelar");
   const detalhe = panel.locator("#automacao-estado-detalhe");
   await expect(status).toContainText("Livre");
   await expect(detalhe).toContainText("Última execução: Inventários, Concluído");

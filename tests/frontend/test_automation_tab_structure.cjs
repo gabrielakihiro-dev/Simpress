@@ -409,7 +409,7 @@ test("o TSX desenha as quatro rotinas na ordem, com ícone, rótulo acessível, 
   assert.match(componentes, /id="btn-automacao-cancelar"/);
   assert.match(componentes, /<h2 id="automacao-aviso-dashboard-titulo" className="ck-secao-titulo">Dashboard aberto no Excel<\/h2>/);
   assert.ok(componentes.includes("O Dashboard está aberto no Excel, por você ou por outra pessoa. Feche-o: a rotina continua sozinha quando ele for liberado. Se não for você, use Cancelar execução."));
-  assert.match(componentes, /id="btn-automacao-cancelar-dashboard" data-on-click="cancelarRotinaAutomacao"[^>]*disabled=\{!e\.emAndamento \|\| e\.ocupado\}><Icone nome="i-stop" classe="ck-ico ck-ico--xs" \/>Cancelar execução<\/button>/);
+  assert.match(componentes, /id="btn-automacao-cancelar-dashboard" aria-describedby="automacao-aviso-dashboard-texto" data-on-click="cancelarRotinaAutomacao"[^>]*disabled=\{!e\.emAndamento \|\| e\.ocupado\}><Icone nome="i-stop" classe="ck-ico ck-ico--xs" \/>Cancelar execução<\/button>/);
   assert.match(componentes, /esperandoDashboard\);\s*useLayoutEffect\(\(\) => \{ host\.hidden = !esperando/);
   assert.match(componentes, /data-on-click="cancelarRotinaAutomacao"/);
   const ids = [
