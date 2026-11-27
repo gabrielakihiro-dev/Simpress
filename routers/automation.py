@@ -6,7 +6,7 @@ imported through the local inbox folders, never uploaded through HTTP.
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Callable, Literal
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -33,6 +33,116 @@ class AgendamentoDashboardPayload(BaseModel):
 
     ativo: bool
     intervalo_minutos: Literal[30, 60, 90, 120] | None = None
+
+
+# Formato das respostas. Rotas que devolvem dict (start, cancel, ux-apelidos) usam response_model_exclude_unset e filtram:
+# por isso só tem tipo concreto o que o domínio garante; o resto é Any. As que devolvem JSONResponse passam direto e o
+# modelo só alimenta OpenAPI e os tipos do front. ``extra="allow"`` mantém campo novo do domínio.
+class _Saida(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+# Os modelos alcançados pelas rotas POST (que filtram) têm padrão em todo campo: chave ausente continua ausente
+# (exclude_unset) e nunca vira 500 depois de o Chrome já ter sido iniciado. Bool e int do estado são Any para a
+# validação não converter (0 -> False, 10.0 -> 10).
+class LoteAutomacao(_Saida):
+    id: str = ""
+    status: str = ""
+
+
+class CapturaAutomacao(_Saida):
+    nome: str = ""
+    url: str = ""
+
+
+class ExecucaoAutomacao(_Saida):
+    id: str = ""
+    rotina: str = ""
+    origem: Any = None
+    inicio: Any = None
+    fim: Any = None
+    status: str = ""
+    codigo: Any = None
+    mensagem: str = ""
+    lotes: List[LoteAutomacao] = []
+    capturas: List[CapturaAutomacao] = []
+    log: str = ""
+
+
+class LogParcialAutomacao(_Saida):
+    arquivo: str = ""
+    offset: Any = None
+    linhas: List[str] = []
+    reiniciado: Any = None
+
+
+class EstadoAutomacao(_Saida):
+    estado: str = "livre"
+    rotina: Any = None
+    inicio: Any = None
+    origem: Any = None
+    pid: Any = None
+    cancelamento_pedido: Any = None
+    aguardando_login: Any = None
+    login_origem: str = ""
+    log: Optional[LogParcialAutomacao] = None
+    ultima: Optional[ExecucaoAutomacao] = None
+
+
+class CancelamentoAutomacao(_Saida):
+    metodo: str = ""
+    mensagem: str = ""
+    estado: Optional[EstadoAutomacao] = None
+
+
+class HistoricoAutomacao(_Saida):
+    execucoes: List[ExecucaoAutomacao]
+    total: int
+    pagina: int
+    paginas: int
+    limite: int
+
+
+class UltimasAutomacao(_Saida):
+    ultimas: Dict[str, Optional[ExecucaoAutomacao]]
+
+
+class LogExecucaoAutomacao(_Saida):
+    execucao: ExecucaoAutomacao
+    arquivo: str
+    linhas: List[str]
+    limitado: bool
+
+
+class AgendamentoSebraeInfo(_Saida):
+    ativo: bool
+    pronta: Any
+    horario: str
+    fuso: str
+    proxima_execucao: Optional[str]
+    ultimo_disparo: Optional[Dict[str, Any]]
+    aviso: str
+
+
+class PendenciaSebrae(_Saida):
+    numero: str
+    motivo: str
+
+
+class ResumoSebrae(_Saida):
+    agendamento: AgendamentoSebraeInfo
+    ultima_execucao: Optional[Dict[str, Any]]
+    pendencias: List[PendenciaSebrae]
+    login_necessario: bool
+
+
+class AgendamentoDashboardResumo(_Saida):
+    bloqueio: Any
+    ativo: bool
+    intervalo_minutos: int
+    proxima_execucao: Any
+    ultimo_disparo: Any
+    aviso: str
 
 
 # Rotinas que gravam em sistema externo: "enviar" sobrescreve o Dashboard no SharePoint e só começa com confirmado: true
@@ -69,7 +179,7 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     # Each start opens or drives Chrome; a stuck client must not loop on it.
     limite_execucoes = LimiteTaxa(10)
 
-    @router.post("/api/automacao/ux-apelidos", status_code=202)
+    @router.post("/api/automacao/ux-apelidos", status_code=202, response_model=EstadoAutomacao, response_model_exclude_unset=True)
     async def atualizar_apelidos_ux(request: Request):
         """F7: mantém os bytes/nome do download e inicia a escrita explicitamente solicitada no UX."""
         form = await request.form(max_files=1, max_fields=1)
@@ -84,18 +194,18 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
         finally:
             await form.close()
 
-    @router.post("/api/automacao/executar", status_code=202)
+    @router.post("/api/automacao/executar", status_code=202, response_model=EstadoAutomacao, response_model_exclude_unset=True)
     def executar_automacao(payload: RotinaPayload):
         """Inicia uma rotina; 409 quando já há uma execução (do site ou do .bat)."""
         limite_execucoes.exigir()
         return services.runner().start(payload.rotina)
 
-    @router.post("/api/automacao/cancelar", status_code=202)
+    @router.post("/api/automacao/cancelar", status_code=202, response_model=CancelamentoAutomacao, response_model_exclude_unset=True)
     def cancelar_automacao():
         """Pede o cancelamento pelo --cancelar do script ou encerra só o processo filho."""
         return services.runner().cancel()
 
-    @router.get("/api/automacao/estado")
+    @router.get("/api/automacao/estado", response_model=EstadoAutomacao)
     def estado_automacao(
         offset: int = Query(0, ge=0),
         arquivo: str = Query("", max_length=200),
@@ -103,7 +213,7 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
         """Estado atual e as linhas do log a partir de ``offset`` (polling incremental)."""
         return JSONResponse(services.runner().state(offset, arquivo), headers={"Cache-Control": "no-store"})
 
-    @router.get("/api/automacao/historico")
+    @router.get("/api/automacao/historico", response_model=HistoricoAutomacao)
     def historico_automacao(
         limite: int = Query(15, ge=1, le=50), pagina: int = Query(1, ge=1),
         data_inicio: date | None = None, data_fim: date | None = None,
@@ -114,33 +224,33 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
         result = services.runner().history_page(limite, pagina, start=data_inicio, end=data_fim, routine=rotina, status=status)
         return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
-    @router.get("/api/automacao/historico/ultimas")
+    @router.get("/api/automacao/historico/ultimas", response_model=UltimasAutomacao)
     def ultimas_por_rotina(rotina: list[RotinaNome | Literal["ux_apelidos"]] = Query(..., max_length=11)):
         """Última execução de cada rotina pedida (null quando não houver), numa só leitura do histórico."""
         return JSONResponse({"ultimas": services.runner().latest_by_routine(rotina)}, headers={"Cache-Control": "no-store"})
 
-    @router.get("/api/automacao/execucoes/{execucao_id}/log")
+    @router.get("/api/automacao/execucoes/{execucao_id}/log", response_model=LogExecucaoAutomacao)
     def log_execucao_automacao(execucao_id: str, linhas: int = Query(200, ge=1, le=500)):
         result = services.runner().execution_log(execucao_id, linhas)
         return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
-    @router.get("/api/automacao/sebrae/resumo")
+    @router.get("/api/automacao/sebrae/resumo", response_model=ResumoSebrae)
     def resumo_sebrae():
         """Agendamento, última e próxima execução, contadores e pendências da sincronização Sebrae."""
         return JSONResponse(services.sebrae().resumo(), headers={"Cache-Control": "no-store"})
 
-    @router.put("/api/automacao/sebrae/agendamento")
+    @router.put("/api/automacao/sebrae/agendamento", response_model=ResumoSebrae)
     def agendamento_sebrae(payload: AgendamentoPayload):
         """Ativa ou pausa o agendamento de segunda a sexta; 409 ao ativar antes de a rotina estar completa."""
         return JSONResponse(services.sebrae().definir_ativo(payload.ativo), headers={"Cache-Control": "no-store"})
 
-    @router.get("/api/automacao/dashboard/agendamento")
+    @router.get("/api/automacao/dashboard/agendamento", response_model=AgendamentoDashboardResumo)
     def resumo_dashboard() -> JSONResponse:
         if services.dashboard is None:
             raise DomainError("Agendamento indisponível.", status_code=503)
         return JSONResponse(services.dashboard().resumo(), headers={"Cache-Control": "no-store"})
 
-    @router.put("/api/automacao/dashboard/agendamento")
+    @router.put("/api/automacao/dashboard/agendamento", response_model=AgendamentoDashboardResumo)
     def agendamento_dashboard(payload: AgendamentoDashboardPayload) -> JSONResponse:
         if services.dashboard is None:
             raise DomainError("Agendamento indisponível.", status_code=503)

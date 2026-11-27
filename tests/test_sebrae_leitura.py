@@ -302,6 +302,40 @@ class LeituraTest(unittest.TestCase):
         with self.assertRaisesRegex(Rotinas.RotinaErro, "Login não concluído"):
             sebrae_leitura.executar_antigos(None, self.rotinas, state_dir=self.dir, modulo=mod)
 
+    def mod_relogin_falha(self, itens, numeros):
+        """1º lido; o 2º cai na sessão e o relogin esgota (``RotinaErro`` puro, como ``aguardar_login``); o 3º não pode ser tentado."""
+        leituras = {numeros[0]: ChamadoSoftExpert(numeros[0]), numeros[1]: SessaoExpirada("login"),
+                    numeros[2]: ChamadoSoftExpert(numeros[2])}
+        mod = modulo(itens, leituras, self.aba)
+
+        def garantir_login(pagina, permitir_sso=False):
+            raise Rotinas.RotinaErro("Login não concluído em 5 minutos.")
+
+        mod.garantir_login = garantir_login
+        self.aba.goto = lambda *a, **k: None
+        return mod
+
+    def test_antigos_relogin_nao_concluido_para_a_rotina_e_guarda_o_ja_lido(self):
+        numeros = ("UTIC-2026-0010", "UTIC-2026-0011", "UTIC-2026-0012")
+        self.preparar_antigos(*numeros)
+        mod = self.mod_relogin_falha([], numeros)
+        with self.assertRaisesRegex(Rotinas.RotinaErro, f"^{sebrae_leitura.MARCA_LOGIN_NAO_CONCLUIDO}"):
+            sebrae_leitura.executar_antigos(None, self.rotinas, state_dir=self.dir, modulo=mod)
+        self.assertNotIn("UTIC-2026-0012", mod.chamadas)
+        self.assertEqual(set(self.antigos()), {"UTIC-2026-0010"})
+        self.assertFalse(sebrae_novos.ler_resultado_antigos(self.caminhos)["concluido"])
+        self.assertTrue(self.aba.fechada)
+
+    def test_novos_relogin_nao_concluido_para_a_rotina_e_guarda_o_ja_lido(self):
+        numeros = ("UTIC-2026-0002", "UTIC-2026-0003", "UTIC-2026-0004")
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")
+        mod = self.mod_relogin_falha([item(n, "x") for n in numeros], numeros)
+        with self.assertRaisesRegex(Rotinas.RotinaErro, f"^{sebrae_leitura.MARCA_LOGIN_NAO_CONCLUIDO}"):
+            sebrae_leitura.executar(None, self.rotinas, state_dir=self.dir, modulo=mod)
+        self.assertNotIn("UTIC-2026-0004", mod.chamadas)
+        self.assertEqual([c.numero for c in sebrae_novos.ler_novos(self.caminhos.novos)["chamados"]], ["UTIC-2026-0002"])
+        self.assertTrue(self.aba.fechada)
+
 
 if __name__ == "__main__":
     unittest.main()

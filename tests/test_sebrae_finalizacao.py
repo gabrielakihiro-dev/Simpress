@@ -512,7 +512,7 @@ class PendenteTest(unittest.TestCase):
             {k: aviso[k] for k in ("falhou", "motivo", "copia_local", "copia_sharepoint")},
             {"falhou": True, "motivo": "sem login", "copia_local": str(pendente), "copia_sharepoint": False},
         )
-        self.assertEqual(len(aviso["sugestoes"]), 3)
+        self.assertEqual(len(aviso["sugestoes"]), 2)
         fin.marcar_copia_sharepoint(pendente)
         self.assertTrue(fin.aviso_do_pendente(self.dir)["copia_sharepoint"])
 
@@ -602,6 +602,12 @@ class PendenteTest(unittest.TestCase):
         fin.descartar_pendentes(self.dir)
         self.assertIsNone(fin.pendente_mais_recente(self.dir))
         self.assertEqual([p for p in fin.pasta_pendente(self.dir).glob("*") if p.suffix in (".xlsx", ".json")], [])
+
+    def test_sugestoes_nao_mandam_arrastar_a_copia_pendente(self):
+        # Texto aprovado em 26/11/2026: a cópia pendente é a crua do site (sem linhas de fora nem aba Laudos); arrastá-la apaga dados.
+        sugestoes = fin.aviso_sharepoint(True)["sugestoes"]
+        self.assertEqual(len(sugestoes), 2)
+        self.assertFalse([s for s in sugestoes if "arraste" in s or "renomeie" in s])
 
     def test_aviso_sem_falha_nao_traz_sugestoes_e_hash_enviado_volta(self):
         self.assertEqual(fin.aviso_sharepoint(False)["sugestoes"], [])

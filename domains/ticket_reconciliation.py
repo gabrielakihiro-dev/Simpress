@@ -113,7 +113,7 @@ def _simpress_date_text(value: Any) -> str:
     return parsed.strftime("%d/%m/%Y") if parsed else text
 
 
-def _serial_key(value: Any) -> str:
+def serial_key(value: Any) -> str:
     normalized = unicodedata.normalize("NFKD", _text(value)).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^A-Z0-9]+", "", normalized.upper())
 
@@ -307,11 +307,11 @@ def _source_table(
             if not any(value is not None and str(value).strip() for value in values):
                 continue
             raw_serial = _text(values[columns["serie"]] if columns["serie"] < len(values) else None)
-            serial_key = _serial_key(raw_serial)
-            if not serial_key:
+            key = serial_key(raw_serial)
+            if not key:
                 rows_without_serial += 1
                 continue
-            record: Dict[str, Any] = {"serie": raw_serial, "serie_chave": serial_key}
+            record: Dict[str, Any] = {"serie": raw_serial, "serie_chave": key}
             for field, index in columns.items():
                 if field == "serie":
                     continue

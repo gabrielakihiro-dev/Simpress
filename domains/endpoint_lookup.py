@@ -1,5 +1,6 @@
 """Read-only, serial-scoped Endpoint lookup in a private Chrome tab."""
 import json
+import logging
 import re
 import threading
 import unicodedata
@@ -11,6 +12,8 @@ from importlib import import_module
 from core.config import local_setting
 from domains.effective_alias import mac_endpoint_serial_key
 from domains.inventory_comparison import normalize_reference_value
+
+logger = logging.getLogger(__name__)
 
 # The legacy scripts remain outside the application's gradual typing boundary.
 automation = import_module("scripts.automacao_rotinas_chrome")
@@ -31,7 +34,8 @@ def _registrar_sessao(aba: Any) -> None:
         cdp = aba.context.new_cdp_session(aba)
         alvo = str(cdp.send("Target.getTargetInfo")["targetInfo"]["targetId"])
         cdp.detach()
-    except Exception:
+    except Exception as erro:
+        logger.debug("Não foi possível registrar a aba de consulta do Endpoint (%s).", type(erro).__name__)
         return  # best effort: an unregistered tab only loses the idle-close protection
     with _abas_de_sessao_trava:
         _abas_de_sessao.add(alvo)
@@ -40,7 +44,8 @@ def _registrar_sessao(aba: Any) -> None:
 def _abas(page: Any) -> list[Any]:
     try:
         return list(page.context.pages)
-    except Exception:
+    except Exception as erro:
+        logger.debug("Não foi possível listar as abas do Chrome (%s).", type(erro).__name__)
         return []
 
 
@@ -107,7 +112,8 @@ def _e_aba_da_consulta(aba: Any) -> bool:
         return False
     try:
         return aba.evaluate("window.name") == NOME_ABA_CONSULTA
-    except Exception:
+    except Exception as erro:
+        logger.debug("Não foi possível identificar a aba de consulta do Endpoint (%s).", type(erro).__name__)
         return False
 
 
@@ -240,7 +246,8 @@ def _conectar_controle_remoto(page: Any, abrir_menu: Any, mesmo_contexto: Any, a
     def _pronto() -> bool:
         try:
             return bool(conectar.count()) and motivo.input_value(timeout=2000) == MOTIVO_CONTROLE_REMOTO and mesmo_contexto()
-        except Exception:
+        except Exception as erro:
+            logger.debug("Não foi possível confirmar o formulário de conexão remota do Endpoint (%s).", type(erro).__name__)
             return False
 
     automation.aguardar_estabilidade_pre_clique(_pronto, "Conectar o controle remoto")
@@ -344,7 +351,8 @@ def _linhas_do_filtro(page: Any) -> list[tuple[str, bool, str]]:
         href = ancora.get_attribute("href", timeout=2000) or ""
         try:
             alt = linha.locator(".resource-action--button img").first.get_attribute("alt", timeout=2000) or ""
-        except Exception:
+        except Exception as erro:
+            logger.debug("Não foi possível ler o ícone de ação da linha do Endpoint (%s).", type(erro).__name__)
             alt = ""
         saida.append((nome, alt == "Ao vivo", href))
     return saida
@@ -362,7 +370,8 @@ def _escolher_host(page: Any, hostname: str) -> dict[str, Any]:
 def _texto_da_aba(aba: Any) -> str:
     try:
         return aba.evaluate("document.body ? document.body.innerText : ''") or ""
-    except Exception:
+    except Exception as erro:
+        logger.debug("Não foi possível ler o texto da aba do Endpoint (%s).", type(erro).__name__)
         return ""
 
 
@@ -412,7 +421,8 @@ def _preparar_terminal(aba: Any, modo: str, usuario: str | None) -> tuple[str | 
                 return None, erro
             if _esperar_texto(aba, (f"Atualmente conectado como {escolhido}",)):
                 return escolhido, None
-        except Exception:
+        except Exception as erro:
+            logger.debug("Falha ao consultar um usuário candidato no Endpoint (%s).", type(erro).__name__)
             continue
     return None, None
 
@@ -420,7 +430,8 @@ def _preparar_terminal(aba: Any, modo: str, usuario: str | None) -> tuple[str | 
 def _fechar_aba(aba: Any) -> None:
     try:
         aba.close()
-    except Exception:
+    except Exception as erro:
+        logger.debug("Falha ao fechar a aba de consulta do Endpoint (%s).", type(erro).__name__)
         pass
 
 
@@ -481,7 +492,8 @@ def _abrir_powershell_na_grade(page: Any, hostname: str, modo: str, comando: str
         campo = aba.locator(_CAMPO_POWERSHELL).first
         campo.fill(comando, timeout=10000)  # só insere; nunca Enter
         confirmado = campo.input_value() == comando
-    except Exception:
+    except Exception as erro:
+        logger.warning("Não foi possível inserir o comando no campo do Endpoint (%s).", type(erro).__name__)
         confirmado = False
     if not confirmado:
         _fechar_aba(aba)

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes.wintypes
+import http.client
 import importlib.util
 import json
 import os
@@ -488,7 +489,7 @@ def cdp_ativo() -> bool:
     try:
         with urllib.request.urlopen(f"{CDP_URL}/json/version", timeout=2) as resposta:
             return resposta.status == 200
-    except OSError:
+    except (OSError, http.client.HTTPException):
         return False
 
 
@@ -682,7 +683,9 @@ def nova_aba(context: "BrowserContext", url: str, origem: str) -> "Page":
     verificar_cancelamento()
     page = context.new_page()
     log(origem, f"Abrindo {url}")
-    page.goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+    status = getattr(page.goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS), "status", None)
+    if isinstance(status, int) and status >= 500:  # servidor fora do ar: falha já, sem reload
+        raise RotinaErro(f"{url} respondeu HTTP {status}; tente de novo em alguns minutos.")
     garantir_tela_minima(page, origem)
     return page
 
@@ -2327,23 +2330,50 @@ def cabecalho_sessao_simpress() -> dict[str, str]:
     return {"Cookie": sessao_local.cabecalho_cookie(porta, segredo)} if segredo else {}
 
 
+def _detalhe_do_erro_http(erro: urllib.error.HTTPError) -> str:
+    """``detail`` da resposta de erro; o 422 leva só ``campo`` (``main.py``) ou ``loc`` (Pydantic cru) e ``msg``, nunca ``input`` (LGPD)."""
+    try:
+        detalhe = json.load(erro).get("detail")
+    except Exception:
+        return ""
+    if isinstance(detalhe, list):
+        return "; ".join(
+            f"{item.get('campo') or '.'.join(str(parte) for parte in item.get('loc') or ())}: {item.get('msg') or ''}"
+            for item in detalhe if isinstance(item, dict)
+        )
+    return str(detalhe or "")
+
+
 def importar_dashboard_no_site(arquivo: Path) -> dict:
     corpo, tipo = montar_multipart(arquivo.name, arquivo.read_bytes())
     url = f"http://127.0.0.1:{int(os.environ.get('SIMPRESS_PORT', '8000'))}/api/sebrae/dashboard?automatico=true"
     pedido = urllib.request.Request(
         url, data=corpo, method="POST", headers={"Content-Type": tipo, **cabecalho_sessao_simpress()}
     )
-    try:
-        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(pedido, timeout=120) as resposta:
-            return json.load(resposta)
-    except urllib.error.HTTPError as erro:
+    repetiu = False
+    while True:
         try:
-            detalhe = str(json.load(erro).get("detail") or "")
-        except Exception:
-            detalhe = ""
-        raise RotinaErro(f"O site recusou o Dashboard (HTTP {erro.code}): {detalhe}".rstrip(": ")) from erro
-    except (urllib.error.URLError, OSError) as erro:
-        raise RotinaErro(f"O servidor Simpress não respondeu em {url}: {erro}") from erro
+            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(pedido, timeout=120) as resposta:
+                return json.load(resposta)
+        except urllib.error.HTTPError as erro:
+            # 409/503 com Retry-After: o servidor recusou antes de importar (ocupado); só aí repete, uma vez
+            espera = erro.headers.get("Retry-After") if erro.code in (409, 503) and erro.headers is not None else None
+            if espera is not None and not repetiu:
+                repetiu = True
+                erro.close()
+                try:
+                    time.sleep(min(max(float(espera), 0.0), 5.0))
+                except ValueError:
+                    time.sleep(2)
+                continue
+            raise RotinaErro(f"O site recusou o Dashboard (HTTP {erro.code}): {_detalhe_do_erro_http(erro)}".rstrip(": ")) from erro
+        except (http.client.HTTPException, ValueError) as erro:  # ValueError: JSON inválido ou bytes fora do UTF-8
+            # resposta cortada ou ilegível: a importação pode ter sido aplicada, então nunca repete
+            raise RotinaErro(
+                f"O servidor Simpress respondeu de forma incompleta ({type(erro).__name__}); confira a importação no site antes de repetir."
+            ) from erro
+        except (urllib.error.URLError, OSError) as erro:
+            raise RotinaErro(f"O servidor Simpress não respondeu em {url}: {erro}") from erro
 
 
 def rodar_rotina_dashboard(context: "BrowserContext") -> int:
@@ -2511,22 +2541,67 @@ MSG_SEM_PRESERVAR = (
 )
 
 
+def _preservou(gerado: bytes, resultado: bytes, baixado: bytes, removidas: "dict[str, list[str]]") -> bool:
+    """Confere, célula a célula e por UTIC, se o ``resultado`` tem as alterações do ``gerado`` sem perder nada do ``baixado``.
+
+    Célula preenchida no gerado: igual no resultado. Vazia: o valor do baixado (ou E vazia, se for uma OS removida pelo usuário).
+    Linha do baixado cujo UTIC não está no gerado (ex.: chamado novo do envio anterior): idêntica. UTIC repetido ou ausente:
+    comparação antiga, linha inteira."""
+    from collections import Counter
+
+    from domains.sebrae_chamados import extrair_numeros
+    from domains.sebrae_dashboard_gravacao import COLUNAS_DE_DADO, valores_dos_chamados
+    from domains.sebrae_vinculos import _os_chave
+
+    c, e = COLUNAS_DE_DADO.index("C"), COLUNAS_DE_DADO.index("E")
+
+    def separar(conteudo: bytes) -> "tuple[dict, Counter]":
+        linhas = list(valores_dos_chamados(conteudo).values())
+        utics = [achados[0] if len(achados := extrair_numeros(linha[c])) == 1 else "" for linha in linhas]
+        contagem = Counter(utics)
+        unicas = {u: linha for u, linha in zip(utics, linhas) if u and contagem[u] == 1}
+        return unicas, Counter(linha for u, linha in zip(utics, linhas) if u not in unicas)
+
+    (g, g_resto), (r, r_resto), (s, _) = separar(gerado), separar(resultado), separar(baixado)
+    if g_resto != r_resto or set(r) != set(g) | set(s):
+        return False
+    for utic, linha in r.items():
+        no_site, no_sharepoint = g.get(utic), s.get(utic, ("",) * len(linha))
+        if no_site is None:
+            if linha != no_sharepoint:
+                return False
+            continue
+        for i, (valor, site, sp) in enumerate(zip(linha, no_site, no_sharepoint)):
+            if site != "" and valor != site:
+                return False
+            removida = i == e and valor == "" and _os_chave(sp) in {_os_chave(os_) for os_ in removidas.get(utic, ())}
+            if site == "" and valor != sp and not removida:
+                return False
+    return True
+
+
 def montar_sobre_o_sharepoint(baixado: Path, gerado: bytes, referencia: bytes) -> bytes:
     """O arquivo a enviar parte do Dashboard baixado agora: só as células da CHAMADOS que o site mudou em relação a ``referencia``.
 
     A CHAMADOS do SharePoint tem os valores de ``referencia`` (``conferir_dashboard_do_sharepoint``), mas as outras abas (ex.: Laudos
-    editada à mão) podem ter mudado: ``reaplicar`` regrava só a aba CHAMADOS e copia as demais partes do zip byte a byte. O resultado
-    tem de ter na CHAMADOS as mesmas linhas do ``gerado`` (a ordem pode ser a do SharePoint); senão para sem enviar.
+    editada à mão) podem ter mudado: ``reaplicar`` regrava só a aba CHAMADOS e copia as demais partes do zip byte a byte. A
+    ``referencia`` pode ser a cópia do último envio, com chamados e E que o ``gerado`` (montado da importação) não tem: o resultado
+    é conferido por célula (``_preservou``) e a E só se apaga com Remover registrado; senão para sem enviar.
     """
-    from domains import sebrae_finalizacao
+    from domains import sebrae_finalizacao, sebrae_os_recusadas
     from domains.sebrae_dashboard import DashboardInvalido
-    from domains.sebrae_dashboard_gravacao import reaplicar, valores_dos_chamados
+    from domains.sebrae_dashboard_gravacao import reaplicar
 
+    state_dir = DASHBOARD_SAIDA_DIR.parent
     try:
-        resultado = reaplicar(referencia, gerado, baixado.read_bytes(), escolhas=sebrae_finalizacao.escolhas_dos_conflitos(DASHBOARD_SAIDA_DIR.parent))
-        certo = resultado.conteudo is not None and not resultado.conflitos and (
-            sorted(valores_dos_chamados(resultado.conteudo).values()) == sorted(valores_dos_chamados(gerado).values())
-        )
+        removidas = sebrae_os_recusadas.removidas(state_dir)
+    except sebrae_os_recusadas.DomainBusyError as erro:
+        removidas = {}  # registro ilegível ou ocupado: nenhuma E de chamado com UTIC é apagada (o Remover não chega ao SharePoint)
+        log("Dashboard", f"Registro de OS removidas indisponível ({type(erro).__name__}); nenhuma OS removida será apagada da coluna E neste envio.")
+    sharepoint = baixado.read_bytes()
+    try:
+        resultado = reaplicar(referencia, gerado, sharepoint, escolhas=sebrae_finalizacao.escolhas_dos_conflitos(state_dir), removidas=removidas)
+        certo = resultado.conteudo is not None and not resultado.conflitos and _preservou(gerado, resultado.conteudo, sharepoint, removidas)
     except DashboardInvalido as erro:
         raise RotinaErro(f"{MSG_SEM_PRESERVAR} ({erro})") from erro
     if not certo or resultado.conteudo is None:
@@ -2571,7 +2646,7 @@ def mesclar_dashboard_com_sharepoint(baixado: Path, gerado: bytes, base_origem: 
             )
         except (OSError, RuntimeError) as erro:  # RuntimeError: FileBusyError da trava de arquivo
             raise RotinaErro("O SharePoint e o site alteraram as mesmas células, mas não consegui guardar os conflitos; nada foi enviado.") from erro
-        colunas = ", ".join(sorted({str(conflito["coluna"]) for conflito in resultado.conflitos}))
+        colunas = ", ".join(sorted({letra for conflito in resultado.conflitos for letra in str(conflito["coluna"]).split(",")}))  # linha_apagada: "D,R"
         raise DashboardEmConflito(
             f"Conflito de edição: {len(resultado.conflitos)} célula(s) do Dashboard foram alteradas no SharePoint e no site (colunas {colunas}). "
             "Nada foi enviado nem guardado como cópia pendente; escolha na tela qual valor manter e envie de novo."
@@ -2904,7 +2979,14 @@ def abrir_para_login(context: "BrowserContext") -> int:
         ("UX Simpress", UX_LOGIN_URL, ux_logado, ux_entrar, EMAIL_DASHBOARD, 45, True),
         ("Oracle", ORACLE_URL, oracle_logado, None, EMAIL_DASHBOARD, 45, True),
     )
-    abas = [(site, nova_aba(context, site[1], site[0])) for site in sites]
+    abas = []
+    for site in sites:
+        try:
+            abas.append((site, nova_aba(context, site[1], site[0])))
+        except RotinaEncerrada:
+            raise
+        except RotinaErro as erro:  # ex.: site com HTTP 5xx; as outras abas seguem (RotinaCancelada é BaseException e passa)
+            log(site[0], f"Não foi possível abrir a página ({descrever_erro(erro)}).")
 
     def tentar(site, page, recarregar: bool = False) -> bool:
         nome, url, logado, entrar, email, apos, _compartilha = site
