@@ -13,6 +13,8 @@ import json
 import logging
 import os
 import re
+import shutil
+import sys
 import tempfile
 import threading
 import unittest
@@ -27,8 +29,9 @@ from openpyxl import Workbook
 import core.config
 from core.config import BASE_DIR, MAX_UPLOAD_BYTES, STATE_DIR
 from core.integrity import AtomicFileTransaction
-from domains import inventory_inbox, pacote_local, ticket_inbox
-from domains.pacote_local import ALLOWLIST, FORA, PacoteLocalServices
+from domains import inventory_inbox, pacote_local, sebrae_finalizacao, ticket_inbox
+from domains.history_annotations import build_history_annotation_record, history_annotation_record_path
+from domains.pacote_local import ALLOWLIST, FORA, PASTAS, PacoteLocalServices
 from routers.pacote_local import create_pacote_local_router
 
 SEGREDO = "conteudo-sigiloso-omega"
@@ -37,6 +40,16 @@ LEMBRETES = "data/state/lembretes.json"
 OBSERVACOES = "data/state/os_observacoes.json"
 CHAMADOS = "data/state/historico_chamados.json"
 NOME = "pacote-local-20260101-000000.zip"
+ANEXOS = "data/state/sebrae_anexos"
+ANEXO = f"{ANEXOS}/UTIC-2026-1/{'a' * 32}/teste.pdf"
+NOTA_PASTA = "data/state/anotacoes_historico_pendentes"
+_NOTA = {"event_id": "evento-sintetico", "item_id": "linha-1", "revision_id": "c" * 32}
+NOTA = f"{NOTA_PASTA}/{history_annotation_record_path(Path('.'), *_NOTA.values()).name}"
+NOTA_BYTES = json.dumps(build_history_annotation_record(
+    **_NOTA, event_time="2026-01-01T00:00:00+00:00", serie="SINT001", computador="PC-SINT", motivo="teste",
+    anotacao="nota sintética", updated_at="2026-01-01T00:00:00+00:00",
+), ensure_ascii=False).encode("utf-8")
+PDF = b"%PDF-1.4 sintetico\n%%EOF"
 
 
 def cliente_rel() -> str:
@@ -115,6 +128,8 @@ class PacoteLocalBase(unittest.TestCase):
             ],
             transacao_pendente=lambda: False,
             estado_vazio=lambda: self.estado_vazio,
+            # A regra real sobre arquivos sintéticos da base temporária (Dashboard importado, novos e finalização).
+            chamados_sebrae_abertos=lambda: sebrae_finalizacao.abertos_nao_finalizados(self.base / "data" / "state"),
         )
         self.montar()
         self.pasta = self.base / "data" / "pacotes_locais"
@@ -155,7 +170,7 @@ class AllowlistTests(unittest.TestCase):
             if not (valor.is_relative_to(STATE_DIR) or valor.is_relative_to(config_dir)) or valor == STATE_DIR:
                 continue
             rel = valor.relative_to(BASE_DIR).as_posix()
-            if rel not in ALLOWLIST and rel not in FORA:
+            if rel not in ALLOWLIST and rel not in FORA and rel not in PASTAS:
                 faltando.append(nome)
         self.assertEqual(faltando, [])
 
@@ -184,6 +199,9 @@ class AllowlistTests(unittest.TestCase):
         for sensivel in (".env", "data/state/config_backups", "data/state/sebrae_credenciais.json", "config/pacote_local.json"):
             self.assertIn(sensivel, FORA)
         self.assertIn(CHAMADOS, ALLOWLIST)
+        self.assertEqual(PASTAS, (ANEXOS, "data/state/anotacoes_historico_pendentes"))
+        self.assertEqual([pasta for pasta in PASTAS if pasta in FORA or pasta in ALLOWLIST], [])
+        self.assertIn("anotacoes_historico", FORA)  # a pasta compartilhada (OneDrive) nunca entra
 
 
 class ExportarTests(PacoteLocalBase):
@@ -495,9 +513,9 @@ class RestaurarTests(PacoteLocalBase):
         gravar_original = pacote_local._gravar_pacote
         vistos = []
 
-        def espiar(services, pasta, tipo):
+        def espiar(services, pasta, tipo, *resto):
             vistos.append((tipo, (self.base / LEMBRETES).read_bytes()))
-            return gravar_original(services, pasta, tipo)
+            return gravar_original(services, pasta, tipo, *resto)
 
         with mock.patch.object(pacote_local, "_gravar_pacote", side_effect=espiar):
             self.assertEqual(self.restaurar(nome, token).status_code, 200)
@@ -680,6 +698,281 @@ class RestaurarTests(PacoteLocalBase):
         self.assertEqual(self.registro().get("desfazer_conhecidos", []), [])  # o registro volta junto
 
 
+class PastasDoPacoteTests(PacoteLocalBase):
+    """Pastas inteiras (anexos do Sebrae e anotações pendentes): só nomes sintéticos."""
+
+    def setUp(self):
+        super().setUp()
+        self.abrir(["UTIC-2026-1", "UTIC-2026-2", "UTIC-2026-3", "UTIC-2026-9"])
+
+    def abrir(self, antigos, novos=(), outros_no_dashboard=()) -> None:
+        """Dashboard importado com ``antigos`` EM ABERTO e a última busca do SoftExpert com ``novos``."""
+        self.gravar("data/state/sebrae_dashboard_existentes.json", {
+            "numeros": [*antigos, *outros_no_dashboard], "abertos": [{"numero": numero} for numero in antigos],
+        })
+        self.gravar("data/state/sebrae_novos.json", {"chamados": [{"numero": numero} for numero in novos]})
+
+    def exportar(self):
+        resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        with zipfile.ZipFile(self.pasta / resposta.json()["arquivo"]) as pacote:
+            manifesto = json.loads(pacote.read("manifesto.json"))
+            return resposta.json()["arquivo"], set(pacote.namelist()) - {"manifesto.json"}, manifesto
+
+    def acoes(self, nome: str) -> dict:
+        resposta = self.previa(nome)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        return {item["caminho"]: item["acao"] for item in resposta.json()["itens"]}
+
+    def juncao(self, alvo: Path, link: Path) -> None:
+        if sys.platform == "win32":
+            import _winapi
+
+            _winapi.CreateJunction(str(alvo), str(link))
+            self.assertTrue(link.is_junction())
+        else:
+            link.symlink_to(alvo, target_is_directory=True)
+
+    def test_exporta_anexo_e_anotacao_sem_lock_nem_oculto(self):
+        self.gravar(ANEXO, PDF)
+        self.gravar(NOTA, NOTA_BYTES)
+        pasta_anexo = (self.base / ANEXO).parent
+        (pasta_anexo / ".teste.pdf.lock").write_bytes(b"\0")
+        (pasta_anexo / ".oculto").write_bytes(b"x")
+        (pasta_anexo / "leia.txt").write_bytes(b"x")  # fora da extensão da pasta
+        self.gravar(f"{ANEXOS}/.oculta/escondido.pdf", PDF)
+        (self.base / NOTA).with_name(f".{Path(NOTA).name}.lock").write_bytes(b"\0")
+        primeiro, nomes, manifesto = self.exportar()
+        self.assertEqual(nomes, {ANEXO, NOTA})
+        self.assertEqual({item["caminho"] for item in manifesto["arquivos"]}, {ANEXO, NOTA})
+        self.assertEqual([rel for rel in manifesto["ausentes"] if rel.startswith(PASTAS)], [])
+        segundo, nomes, _ = self.exportar()
+        self.assertNotEqual(primeiro, segundo)
+        self.assertEqual(nomes, {ANEXO, NOTA})
+
+    def test_link_e_juncao_dentro_da_pasta_ignorados(self):
+        self.gravar(ANEXO, PDF)
+        fora = self.base.parent / "fora"
+        (fora / "sub").mkdir(parents=True)
+        (fora / "segredo.pdf").write_bytes(PDF)
+        (fora / "sub" / "outro.pdf").write_bytes(PDF)
+        raiz = self.base / ANEXOS
+        (raiz / "link.pdf").symlink_to(fora / "segredo.pdf")
+        (raiz / "UTIC-2026-2").symlink_to(fora / "sub", target_is_directory=True)
+        self.juncao(fora / "sub", raiz / "UTIC-2026-3")
+        _, nomes, _ = self.exportar()
+        self.assertEqual(nomes, {ANEXO})
+
+    def test_raiz_da_pasta_como_link_recusada(self):
+        fora = self.base.parent / "fora"
+        fora.mkdir()
+        (fora / "Pessoa Sintetica.pdf").write_bytes(PDF)
+        (self.base / ANEXOS).symlink_to(fora, target_is_directory=True)
+        resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]), (422, "Arquivo do app é um atalho: anexo do Sebrae"))
+        self.assertFalse(self.pasta.exists() and any(self.pasta.iterdir()))
+
+    def test_juncao_no_caminho_do_pacote_recusada_na_previa(self):
+        fora = self.base.parent / "fora"
+        fora.mkdir()
+        (self.base / ANEXOS).mkdir(parents=True)
+        self.juncao(fora, self.base / ANEXOS / "UTIC-2026-3")
+        nome = self.colocar(montar_zip({f"{ANEXOS}/UTIC-2026-3/x.pdf": PDF}))
+        resposta = self.previa(nome)
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]), (422, "Arquivo do app é um atalho: anexo do Sebrae"))
+        self.assertEqual(list(fora.iterdir()), [])
+
+    def test_restaura_o_que_falta_com_os_mesmos_bytes(self):
+        self.gravar(ANEXO, PDF)
+        self.gravar(NOTA, NOTA_BYTES)
+        nome, _, _ = self.exportar()
+        shutil.rmtree(self.base / ANEXOS)
+        (self.base / NOTA).unlink()
+        acoes = self.acoes(nome)
+        self.assertEqual((acoes[ANEXO], acoes[NOTA]), ("criar", "criar"))
+        with self.assertLogs("domains.pacote_local", level=logging.INFO) as logs:
+            resposta = self.restaurar(nome, self.previa(nome).json()["preview_token"])
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["criados"], 2)
+        self.assertEqual(((self.base / ANEXO).read_bytes(), (self.base / NOTA).read_bytes()), (PDF, NOTA_BYTES))
+        for nome_de_arquivo in ("teste.pdf", "UTIC", Path(NOTA).stem):  # LGPD: o log nunca leva nome nem caminho
+            self.assertNotIn(nome_de_arquivo, "\n".join(logs.output))
+
+    def test_ida_e_volta_com_desfazer_nunca_troca_nem_apaga_na_pasta(self):
+        novo = f"{ANEXOS}/UTIC-2026-9/{'d' * 32}/outro.pdf"
+        self.gravar(ANEXO, PDF)
+        self.gravar(NOTA, NOTA_BYTES)
+        self.gravar(LEMBRETES, {"lembretes": ["atual"]})
+        lembretes = (self.base / LEMBRETES).read_bytes()
+        nome = self.colocar(montar_zip({ANEXO: PDF + b" outra versao", novo: PDF, LEMBRETES: b'{"lembretes": []}'}))
+        acoes = self.acoes(nome)
+        self.assertEqual((acoes[ANEXO], acoes[novo], acoes[LEMBRETES]), ("manter", "criar", "substituir"))
+        self.assertNotIn(NOTA, acoes)  # arquivo de pasta fora do pacote não aparece
+        resposta = self.restaurar(nome, self.previa(nome).json()["preview_token"])
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(((self.base / ANEXO).read_bytes(), (self.base / novo).read_bytes()), (PDF, PDF))
+
+        desfazer = resposta.json()["pacote_desfazer"]
+        with zipfile.ZipFile(self.pasta / desfazer) as pacote:
+            self.assertEqual([rel for rel in pacote.namelist() if rel.startswith(PASTAS)], [])
+        acoes = self.acoes(desfazer)
+        self.assertEqual([rel for rel in acoes if rel.startswith(PASTAS)], [])
+        resposta = self.restaurar(desfazer, self.previa(desfazer).json()["preview_token"])
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual((self.base / LEMBRETES).read_bytes(), lembretes)
+        self.assertEqual(
+            ((self.base / ANEXO).read_bytes(), (self.base / NOTA).read_bytes(), (self.base / novo).read_bytes()),
+            (PDF, NOTA_BYTES, PDF),
+        )
+
+    def test_arquivo_novo_fora_do_pacote_nao_muda_o_token(self):
+        self.gravar(LEMBRETES, {"lembretes": ["atual"]})
+        nome = self.colocar(montar_zip({LEMBRETES: b'{"lembretes": []}'}))
+        token = self.previa(nome).json()["preview_token"]
+        self.gravar(ANEXO, PDF)  # chegou depois da prévia, fora do pacote
+        resposta = self.restaurar(nome, token)
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual((self.base / ANEXO).read_bytes(), PDF)
+
+    def test_arquivo_que_aparece_no_caminho_a_criar_recusa(self):
+        nome = self.colocar(montar_zip({ANEXO: PDF}))
+        token = self.previa(nome).json()["preview_token"]
+        self.gravar(ANEXO, PDF + b" baixado agora")
+        resposta = self.restaurar(nome, token)
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]),
+                         (409, "Restauração recusada: o estado mudou desde a prévia; abra a prévia de novo"))
+        self.assertEqual((self.base / ANEXO).read_bytes(), PDF + b" baixado agora")
+        self.assertEqual([p.name for p in self.pasta.iterdir()], [nome])
+
+    def test_caminho_de_pasta_em_ausentes_recusado(self):
+        fora = "Pacote recusado: arquivo fora da lista permitida"
+        resposta = self.previa(self.colocar(montar_zip({LEMBRETES: b"{}"}, ausentes=[ANEXO])))
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]), (422, fora))
+        forjado = montar_zip({LEMBRETES: b"{}"}, tipo="desfazer", ausentes=[NOTA])
+        self.gravar("config/pacote_local.json", {"pasta": "", "desfazer_conhecidos": [hashlib.sha256(forjado).hexdigest()]})
+        resposta = self.previa(self.colocar(forjado, "desfazer-20260101-000000.zip"))
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]), (422, fora))
+
+    def test_entradas_de_pasta_invalidas(self):
+        casos = {
+            f"{ANEXOS}/../x.pdf": "caminho inválido no pacote",
+            f"{ANEXOS}/./x.pdf": "caminho inválido no pacote",
+            f"{ANEXOS}/.oculta/x.pdf": "arquivo fora da lista permitida",
+            f"{ANEXOS}/.x.pdf.lock": "arquivo fora da lista permitida",
+            f"{ANEXOS}/x.txt": "arquivo fora da lista permitida",
+            "data/state/anotacoes_historico_pendentes/x.pdf": "arquivo fora da lista permitida",
+            ANEXOS: "arquivo fora da lista permitida",
+            "data/state/SEBRAE_ANEXOS/x.pdf": "arquivo fora da lista permitida",
+            "data/state/sebrae_anexos_outra/x.pdf": "arquivo fora da lista permitida",
+        }
+        for indice, (rel, motivo) in enumerate(casos.items()):
+            with self.subTest(rel=rel):
+                resposta = self.previa(self.colocar(montar_zip({rel: PDF}), f"pacote-local-2026010{indice + 1}-000000.zip"))
+                self.assertEqual((resposta.status_code, resposta.json()["detail"]), (422, f"Pacote recusado: {motivo}"))
+
+    def test_conteudo_de_pasta_validado_com_rotulo(self):
+        self.assertEqual(self.acoes(self.colocar(montar_zip({ANEXO: PDF, NOTA: NOTA_BYTES}))), {ANEXO: "criar", NOTA: "criar"})
+        registro = json.loads(NOTA_BYTES)
+        casos = (
+            ({ANEXO: b"nao e pdf"}, "anexo do Sebrae"),
+            ({ANEXO: b""}, "anexo do Sebrae"),
+            ({f"{ANEXOS}/UTIC-2026-1/Fulano + Sintetico.pdf": PDF}, "anexo do Sebrae"),  # nome que o app não gera
+            ({NOTA: b"nao json"}, "anotação do histórico"),
+            ({NOTA: json.dumps({**registro, "versao": 3}).encode()}, "anotação do histórico"),
+        )
+        for indice, (arquivos, rotulo) in enumerate(casos):
+            with self.subTest(indice=indice):
+                resposta = self.previa(self.colocar(montar_zip(arquivos), f"pacote-local-2026020{indice + 1}-000000.zip"))
+                self.assertEqual((resposta.status_code, resposta.json()["detail"]),
+                                 (422, f"Pacote recusado: conteúdo inválido em {rotulo}"))
+                self.assertNotIn("Fulano", resposta.text)
+        self.gravar(f"{ANEXOS}/UTIC-2026-1/Fulano Sintetico.pdf", b"nao e pdf")  # arquivo atual inválido bloqueia exportar
+        antes = set(self.pasta.iterdir())
+        resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]),
+                         (422, "Pacote recusado: conteúdo inválido em anexo do Sebrae"))
+        self.assertEqual(set(self.pasta.iterdir()), antes)
+
+    def test_pdf_que_some_no_meio_da_exportacao_e_pulado(self):
+        sumido = f"{ANEXOS}/UTIC-2026-2/sumido.pdf"
+        self.gravar(ANEXO, PDF)
+        self.gravar(sumido, PDF)
+        ler = Path.read_bytes
+
+        def ler_sumindo(caminho):
+            if caminho.name == "sumido.pdf":
+                raise FileNotFoundError(2, "sumiu", str(caminho))
+            return ler(caminho)
+
+        with mock.patch.object(Path, "read_bytes", ler_sumindo):
+            resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        with zipfile.ZipFile(self.pasta / resposta.json()["arquivo"]) as pacote:
+            self.assertEqual({rel for rel in pacote.namelist() if rel.startswith(PASTAS)}, {ANEXO})
+            self.assertNotIn(sumido, json.loads(pacote.read("manifesto.json"))["ausentes"])
+
+    def test_nomes_iguais_em_nfc_exporta_um_so(self):
+        pasta = self.base / NOTA_PASTA
+        pasta.mkdir(parents=True)
+        (pasta / "café.json").write_bytes(NOTA_BYTES)
+        (pasta / "café.json").write_bytes(NOTA_BYTES)
+        if len(list(pasta.iterdir())) != 2:
+            self.skipTest("o sistema de arquivos normaliza os nomes")
+        _, nomes, _ = self.exportar()
+        self.assertEqual(len([rel for rel in nomes if rel.startswith(NOTA_PASTA)]), 1)
+
+    def anexos_exportados(self) -> set:
+        _, nomes, _ = self.exportar()
+        return {rel.split("/")[3] for rel in nomes if rel.startswith(ANEXOS + "/")}
+
+    def test_so_anexos_de_chamado_aberto_e_nao_finalizado(self):
+        self.abrir(["UTIC-2026-1", "UTIC-2026-5", "UTIC-2026-6"], novos=["UTIC-2026-2"], outros_no_dashboard=["UTIC-2026-7"])
+        for pasta in ("UTIC-2026-1", "UTIC-2026-2", "UTIC-2026-5", "UTIC-2026-6", "UTIC-2026-7", "UTIC-2026-8",
+                      "pasta-invalida", "UTIC-2026-1-copia"):
+            self.gravar(f"{ANEXOS}/{pasta}/{'e' * 32}/teste.pdf", PDF)
+        self.gravar(f"{ANEXOS}/teste.pdf", PDF)  # fora de pasta de chamado
+        # Sem sebrae_finalizacao.json: nenhum chamado conta como finalizado.
+        self.assertEqual(self.anexos_exportados(), {"UTIC-2026-1", "UTIC-2026-2", "UTIC-2026-5", "UTIC-2026-6"})
+        self.gravar("data/state/sebrae_finalizacao.json", {
+            "UTIC-2026-5": {"finalizacao": {"status": "ok"}},
+            "UTIC-2026-6": {"finalizacao": {"status": "finalizado_outro_tecnico"}},
+            "UTIC-2026-1": {"finalizacao": {"status": "incerto"}},  # não confirmado: segue aberto
+        })
+        self.assertEqual(self.anexos_exportados(), {"UTIC-2026-1", "UTIC-2026-2"})
+        (self.base / "data" / "state" / "sebrae_dashboard_existentes.json").unlink()  # sem Dashboard importado
+        self.assertEqual(self.anexos_exportados(), set())
+
+    def test_historico_de_finalizacao_ilegivel_deixa_so_os_anexos_fora(self):
+        self.gravar(ANEXO, PDF)
+        self.gravar(NOTA, NOTA_BYTES)
+        self.gravar(LEMBRETES, {"lembretes": []})
+        self.gravar("data/state/sebrae_finalizacao.json", b'{"UTIC-2026-1": ')
+        with self.assertLogs("domains.pacote_local", level=logging.WARNING) as logs:
+            resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(set(resposta.json()), {"arquivo", "tamanho_bytes", "arquivos", "ausentes", "criado_em"})
+        with zipfile.ZipFile(self.pasta / resposta.json()["arquivo"]) as pacote:
+            self.assertEqual(set(pacote.namelist()), {"manifesto.json", NOTA, LEMBRETES})
+        self.assertIn("pacote_local: anexos do Sebrae fora (histórico de finalização ilegível)", "\n".join(logs.output))
+        self.assertNotIn("UTIC", "\n".join(logs.output))
+
+    def test_anexo_grande_demais_sem_o_nome_na_mensagem(self):
+        self.gravar(f"{ANEXOS}/UTIC-2026-1/Fulano Sintetico.pdf", PDF)
+        self.montar(max_upload_bytes=10)
+        resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual(resposta.status_code, 422)
+        self.assertEqual(resposta.json()["detail"], "anexo do Sebrae passa do limite de 10 bytes.")
+        self.assertNotIn("Fulano", resposta.text)
+        self.assertNotIn("UTIC", resposta.text)
+
+    def test_arquivos_demais_recusados_sem_nome(self):
+        self.gravar(ANEXO, PDF)
+        with mock.patch.object(pacote_local, "LIMITE_ENTRADAS", len(ALLOWLIST) + 1):
+            resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]),
+                         (422, f"Arquivos demais para o pacote (limite {len(ALLOWLIST) + 1})."))
+
+
 class PastaTests(PacoteLocalBase):
     def salvar(self, texto: str):
         return self.client.put("/api/pacote-local/pasta", json={"pasta": texto})
@@ -807,3 +1100,4 @@ class AcessoTests(PacoteLocalBase):
 
 if __name__ == "__main__":
     unittest.main()
+

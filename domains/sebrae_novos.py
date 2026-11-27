@@ -17,7 +17,7 @@ import tempfile
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from core.errors import DomainBusyError
 from core.integrity import atomic_write_json, lock_paths
@@ -291,6 +291,19 @@ def ler_novos(caminho: Path, ja_lancados: Iterable[str] = ()) -> Optional[Dict[s
     pendentes = [p for p in dados.get("pendentes") or [] if isinstance(p, dict) and p.get("numero") not in lancados]
     return {"lidos_em": str(dados.get("lidos_em") or ""), "ignorados": int(dados.get("ignorados") or 0),
             "pendentes": pendentes, "erros": dados.get("erros") or {}, "chamados": chamados}
+
+
+def chamados_em_aberto(caminhos: Caminhos) -> Optional[FrozenSet[str]]:
+    """Números que ainda podem ser finalizados: antigo EM ABERTO/sem status do Dashboard importado ou novo da última
+    busca (ainda fora do Dashboard). ``None``: Dashboard nunca importado."""
+    importado = ler_existentes(caminhos.existentes)
+    if importado is None:
+        return None
+    novos = ler_novos(caminhos.novos, importado["numeros"])
+    return frozenset({
+        *(str(a.get("numero")) for a in importado["abertos"]),
+        *(c.numero for c in (novos["chamados"] if novos is not None else [])),
+    })
 
 
 def ler_antigos(caminho: Path, estrito: bool = False) -> Dict[str, Dict[str, str]]:

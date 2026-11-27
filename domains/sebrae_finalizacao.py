@@ -18,7 +18,7 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from core.errors import DomainBusyError, DomainConflictError, DomainValidationError
@@ -485,10 +485,22 @@ def congelar_os_vinculada(state_dir: Path, numero: str, vinculo: Optional[Mappin
     return _alterar(state_dir, numero, mudar)
 
 
-def ja_finalizado(state_dir: Path, numero: str) -> bool:
-    fin = ler_estado(state_dir).get(numero, {}).get("finalizacao")
+def _finalizado(item: Mapping[str, Any]) -> bool:
+    fin = item.get("finalizacao")
     # nao_encontrado, ja_finalizado antigos e incerto não bloqueiam (incerto: a rotina só confere a central, sem clicar)
     return isinstance(fin, dict) and fin.get("status") in STATUS_FINALIZADOS
+
+
+def ja_finalizado(state_dir: Path, numero: str) -> bool:
+    return _finalizado(ler_estado(state_dir).get(numero, {}))
+
+
+def abertos_nao_finalizados(state_dir: Path) -> FrozenSet[str]:
+    """Chamados em aberto (``sebrae_novos.chamados_em_aberto``) que este site ainda não finalizou; sem Dashboard
+    importado, nenhum. Lê o histórico uma vez; ilegível levanta ``DomainBusyError`` (de ``ler_estado``)."""
+    abertos = sebrae_novos.chamados_em_aberto(sebrae_novos.caminhos_padrao(state_dir)) or frozenset()
+    estado = ler_estado(state_dir)
+    return frozenset(numero for numero in abertos if not _finalizado(estado.get(numero, {})))
 
 
 def encerramentos_registrados(state_dir: Path) -> Dict[str, str]:

@@ -1,8 +1,10 @@
 """Pacote local: exporta e restaura, num .zip nesta máquina, configurações, históricos e planilhas atuais.
 
-Só entram os arquivos de ``ALLOWLIST`` (``FORA`` diz o que fica de fora e por quê). O destino de cada arquivo vem da
-allowlist, nunca do nome dentro do zip. Restaurar só por clique (``confirmado: true``) e sempre cria antes um pacote de
-desfazer do estado atual. O log leva só ação, contagens, sha256 do pacote e o tipo do erro: nunca conteúdo nem pasta.
+Só entram os arquivos de ``ALLOWLIST`` e os de dentro de ``PASTAS`` (``FORA`` diz o que fica de fora e por quê). O
+destino de cada arquivo é a base mais um caminho conferido contra a allowlist ou o prefixo de uma das pastas. Nas pastas,
+restaurar só cria o que falta: nunca substitui nem apaga (outros estados apontam para esses arquivos). Restaurar só por
+clique (``confirmado: true``) e sempre cria antes um pacote de desfazer do estado atual. O log leva só ação, contagens,
+sha256 do pacote e o tipo do erro: nunca conteúdo nem pasta.
 """
 
 from __future__ import annotations
@@ -29,15 +31,17 @@ from urllib.parse import urlsplit
 
 from core import config
 from core.config import BASE_DIR, STATE_DIR, format_size_limit
-from core.errors import DomainError
+from core.errors import DomainBusyError, DomainError
 from core.integrity import (
     FileBusyError, TransactionConflictError, WorkbookSafetyError, _fsync_directory, atomic_write_bytes, lock_paths,
 )
 from core.local_paths import is_link_or_junction
 from core.xlsx_safety import validate_xlsx_archive
 from domains.configuracao_local import _CONTRATO, CONTAS, LINKS, validar_valor
+from domains.history_annotations import _validated_annotation_record
 from domains.history_restore import sha256_file
 from domains.local_setup import cnpj_valido
+from domains.sebrae_finalizacao import validar_numero, validar_pdf
 from domains.user_holds import holds_file
 
 logger = logging.getLogger(__name__)
@@ -86,6 +90,13 @@ ALLOWLIST: tuple[str, ...] = tuple(_rel(path) for path in (
     STATE_DIR / "sebrae_chamados_encerrados.json",
 ))
 
+_ANEXOS = _rel(STATE_DIR / "sebrae_anexos")  # PDFs dos chamados; sebrae_finalizacao.json aponta para eles
+_ANOTACOES = _rel(config.LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR)  # anotações ainda não publicadas
+# Pastas que entram inteiras (recursivo): rótulo usado em erro no lugar do nome do arquivo (LGPD) e extensão aceita.
+_ROTULOS_PASTA: Dict[str, str] = {_ANEXOS: "anexo do Sebrae", _ANOTACOES: "anotação do histórico"}
+_EXTENSAO_PASTA: Dict[str, str] = {_ANEXOS: ".pdf", _ANOTACOES: ".json"}
+PASTAS: tuple[str, ...] = tuple(_ROTULOS_PASTA)
+
 FORA: tuple[str, ...] = (
     ".env",  # chaves de IA
     "config/pacote_local.json",  # aponta a pasta do próprio pacote
@@ -117,7 +128,7 @@ FORA: tuple[str, ...] = (
     "data/state/sebrae_antigos_softexpert.json",
     "data/state/sebrae_backups",
     "data/state/inventory_update_idempotency.json",  # controle interno contra importação repetida
-    "data/state/assinatura_tecnico.svg",  # o pacote leva só .json e .xlsx
+    "data/state/assinatura_tecnico.svg",  # a allowlist leva só .json e .xlsx
     # Travas: pertencem ao processo que as criou.
     "data/state/automacao_chrome.lock",
     "data/state/automacao_chrome.cancelar",
@@ -128,18 +139,17 @@ FORA: tuple[str, ...] = (
     _rel(config.AUTOMATIC_TICKET_INBOX_DIR) if config.AUTOMATIC_TICKET_INBOX_DIR.is_relative_to(BASE_DIR)
     else "data/state/entrada_chamados",
     _rel(config.ENTRA_INBOX_DIR),
-    "data/state/sebrae_anexos",  # anexos baixados dos chamados
     "data/state/assistente_conversas.json",  # conversas do Assistente
     _rel(config.UPLOAD_BACKUPS_DIR),  # cópias de cada importação (grandes)
     _rel(config.MONTHLY_REPORTS_DIR),  # relatórios gerados de novo a pedido
     "anotacoes_historico",  # pasta compartilhada (OneDrive) das anotações
-    _rel(config.LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR),  # anotações ainda não publicadas
 )
 
 NOME_PACOTE = re.compile(r"^(pacote-local|desfazer)-(\d{8}-\d{6})\.zip$")
 LIMITE_TOTAL = 300 * 1024 * 1024
 LIMITE_ZIP = 300 * 1024 * 1024
 LIMITE_MANIFESTO = 1024 * 1024
+LIMITE_ENTRADAS = 5000
 _BLOCO = 1024 * 1024
 _PAPEIS = {_rel(config.DETAILS_UPLOAD_FILE): "detalhes", _rel(config.ENDPOINT_UPLOAD_FILE): "endpoint"}
 _LINKS_E_CONTAS = {
@@ -201,6 +211,9 @@ class PacoteLocalServices:
     transacao_pendente: Callable[[], bool]
     # Estado publicado quando a restauração deixa o app sem cadastro (o mesmo de um app recém-aberto sem planilhas).
     estado_vazio: Callable[[], Any]
+    # Chamados do Sebrae em aberto e não finalizados (só os PDFs deles vão para a exportação); DomainBusyError se o
+    # histórico de finalização estiver ilegível.
+    chamados_sebrae_abertos: Callable[[], FrozenSet[str]]
 
 
 def _recusa(motivo: str) -> DomainError:
@@ -211,8 +224,19 @@ def _recusa_restauracao(motivo: str) -> DomainError:
     return DomainError(f"Restauração recusada: {motivo}", status_code=409)
 
 
+def _pasta_de(rel: str) -> Optional[str]:
+    return next((pasta for pasta in PASTAS if rel.startswith(pasta + "/")), None)
+
+
+def _rotulo(rel: str) -> str:
+    """O caminho para item da allowlist; para pasta ou arquivo dela, só o rótulo (o nome pode trazer nome de pessoa)."""
+    pasta = _pasta_de(rel) or (rel if rel in PASTAS else None)
+    return _ROTULOS_PASTA[pasta] if pasta else rel
+
+
 def _conteudo_invalido(rel: str) -> DomainError:
-    return _recusa(f"conteúdo inválido em {PurePosixPath(rel).name}")  # só o nome, nunca o caminho
+    nome = _rotulo(rel) if _pasta_de(rel) else PurePosixPath(rel).name  # só o nome, nunca o caminho
+    return _recusa(f"conteúdo inválido em {nome}")
 
 
 def _grande_demais(limite: int) -> DomainError:
@@ -413,21 +437,95 @@ def salvar_pasta(services: PacoteLocalServices, texto: str) -> Dict[str, Any]:
 
 # --- Exportação -----------------------------------------------------------------------------------------------------
 
-def _alvo(base: Path, rel: str) -> Path:
-    """Destino do item da allowlist; recusa atalho (link/junção) nele ou numa pasta entre ele e a base."""
+def _sem_atalho(base: Path, rel: str) -> Path:
+    """``base / rel``; recusa atalho (link/junção) nele ou numa pasta entre ele e a base."""
     atual = base
     for parte in PurePosixPath(rel).parts:
         atual = atual / parte
         if is_link_or_junction(atual):
-            raise DomainError(f"Arquivo do app é um atalho: {rel}", status_code=422)
-    if atual.exists() and not atual.is_file():
-        raise DomainError(f"Arquivo do app não é um arquivo comum: {rel}", status_code=422)
+            raise DomainError(f"Arquivo do app é um atalho: {_rotulo(rel)}", status_code=422)
     return atual
 
 
-def _hashes_atuais(base: Path) -> Dict[str, Optional[str]]:
+def _alvo(base: Path, rel: str) -> Path:
+    """Destino do item da allowlist ou de pasta; recusa atalho e o que não for arquivo comum."""
+    atual = _sem_atalho(base, rel)
+    if atual.exists() and not atual.is_file():
+        raise DomainError(f"Arquivo do app não é um arquivo comum: {_rotulo(rel)}", status_code=422)
+    return atual
+
+
+def _permitido(rel: str) -> bool:
+    """Item da allowlist, ou arquivo dentro de uma das PASTAS (prefixo exato) com a extensão dela, nome seguro e sem
+    parte oculta."""
+    if rel in ALLOWLIST:
+        return True
+    pasta = _pasta_de(rel)
+    return (
+        pasta is not None and rel.casefold().endswith(_EXTENSAO_PASTA[pasta]) and _nome_seguro(rel)
+        and not any(parte.startswith(".") for parte in rel.split("/"))
+    )
+
+
+def _arquivos_das_pastas(base: Path) -> List[str]:
+    """Arquivos atuais das PASTAS (rel POSIX, ordenados). Ignora link/junção, nome oculto (o ``.x.lock`` de lock_paths),
+    nome que a validação do zip recusaria e o segundo nome igual em NFC sem maiúsculas; pasta inexistente = nenhum."""
+    achados: List[str] = []
+    vistos = set()
+    for pasta in PASTAS:
+        raiz = _sem_atalho(base, pasta)
+        pendentes = [raiz]
+        while pendentes:
+            try:
+                with os.scandir(pendentes.pop()) as entradas:
+                    for entrada in entradas:
+                        caminho = Path(entrada.path)
+                        if entrada.name.startswith(".") or is_link_or_junction(caminho):
+                            continue
+                        if entrada.is_dir(follow_symlinks=False):
+                            pendentes.append(caminho)
+                        elif entrada.is_file(follow_symlinks=False):
+                            rel = f"{pasta}/{caminho.relative_to(raiz).as_posix()}"
+                            chave = unicodedata.normalize("NFC", rel).casefold()  # a validação do zip recusaria o par
+                            if _permitido(rel) and chave not in vistos:
+                                vistos.add(chave)
+                                achados.append(rel)
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            except OSError:
+                raise DomainError(MSG_OCUPADOS, status_code=409) from None
+    return sorted(achados)
+
+
+def _sem_anexos_fechados(services: PacoteLocalServices, rels: List[str]) -> List[str]:
+    """Na exportação, ``sebrae_anexos`` só leva PDF de chamado em aberto e não finalizado (``<numero>/...``). Histórico
+    de finalização ilegível: nenhum anexo vai, e o resto do pacote segue."""
+    try:
+        abertos = services.chamados_sebrae_abertos()
+    except DomainBusyError:
+        logger.warning("pacote_local: anexos do Sebrae fora (histórico de finalização ilegível)")
+        abertos = frozenset()
+
+    def entra(rel: str) -> bool:
+        if _pasta_de(rel) != _ANEXOS:
+            return True
+        try:
+            return validar_numero(rel[len(_ANEXOS) + 1:].split("/")[0]) in abertos
+        except DomainError:
+            return False
+
+    return [rel for rel in rels if entra(rel)]
+
+
+def _rels_do_pacote(manifesto: Dict[str, Any]) -> List[str]:
+    """ALLOWLIST mais os caminhos de pasta que o pacote traz: prévia e restauração olham só eles (arquivo de pasta fora do
+    pacote nunca muda, não aparece na prévia nem mexe no token)."""
+    return [*ALLOWLIST, *(item["caminho"] for item in manifesto["arquivos"] if _pasta_de(item["caminho"]))]
+
+
+def _hashes_atuais(base: Path, rels: List[str]) -> Dict[str, Optional[str]]:
     hashes: Dict[str, Optional[str]] = {}
-    for rel in ALLOWLIST:
+    for rel in rels:
         alvo = _alvo(base, rel)
         try:
             hashes[rel] = sha256_file(alvo) if alvo.is_file() else None
@@ -436,8 +534,11 @@ def _hashes_atuais(base: Path) -> Dict[str, Optional[str]]:
     return hashes
 
 
-def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dict[str, Any]:
-    """Grava o zip do estado atual; quem chama segura as travas de todos os itens da allowlist."""
+def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str, rels: List[str]) -> Dict[str, Any]:
+    """Grava o zip do estado atual de ``rels``; quem chama segura as travas da allowlist. Arquivo de pasta é lido sem
+    trava (cada versão é imutável) e, se sumir entre listar e ler, só fica de fora."""
+    if len(rels) + 1 > LIMITE_ENTRADAS:
+        raise DomainError(f"Arquivos demais para o pacote (limite {LIMITE_ENTRADAS}).", status_code=422)
     base = services.base_dir()
     prefixo = "pacote-local" if tipo == "exportacao" else "desfazer"
     agora = datetime.now().astimezone()
@@ -450,17 +551,23 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
     invalidos: List[str] = []
     conteudo: Dict[str, bytes] = {}
     total = 0
-    for rel in ALLOWLIST:
+    for rel in rels:
         alvo = _alvo(base, rel)
+        de_pasta = _pasta_de(rel) is not None
         if not alvo.is_file():
-            ausentes.append(rel)
+            if not de_pasta:  # arquivo de pasta ausente nunca vai para ausentes
+                ausentes.append(rel)
             continue
-        if alvo.stat().st_size > services.max_upload_bytes:
-            raise DomainError(
-                f"{rel} passa do limite de {format_size_limit(services.max_upload_bytes)}.", status_code=422,
-            )
         try:
+            if alvo.stat().st_size > services.max_upload_bytes:
+                raise DomainError(
+                    f"{_rotulo(rel)} passa do limite de {format_size_limit(services.max_upload_bytes)}.", status_code=422,
+                )
             dados = alvo.read_bytes()
+        except (FileNotFoundError, NotADirectoryError):
+            if de_pasta:  # removido entre listar e ler
+                continue
+            raise DomainError(MSG_OCUPADOS, status_code=409) from None
         except OSError:
             raise DomainError(MSG_OCUPADOS, status_code=409) from None
         total += len(dados)
@@ -522,10 +629,13 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
 def exportar(services: PacoteLocalServices) -> Dict[str, Any]:
     pasta = _pasta_em_uso(services)
     base = services.base_dir()
+    rels = [*ALLOWLIST, *_sem_anexos_fechados(services, _arquivos_das_pastas(base))]
     try:
-        with lock_paths([base / rel for rel in ALLOWLIST]):  # leitura coerente; uma chamada só
-            resultado = _gravar_pacote(services, pasta, "exportacao")
-    except FileBusyError:
+        # Trava só a allowlist (leitura coerente; uma chamada só): travar os arquivos de pasta recriaria pasta de versão
+        # apagada e seguraria o arquivo contra a remoção do PDF.
+        with lock_paths([base / rel for rel in ALLOWLIST]):
+            resultado = _gravar_pacote(services, pasta, "exportacao", rels)
+    except (FileBusyError, OSError):
         raise DomainError(MSG_OCUPADOS, status_code=409) from None
     try:  # o pacote só fica na pasta se a prévia e a restauração o aceitarem
         _validar_bytes(services, resultado["dados"], resultado["arquivo"])
@@ -630,6 +740,11 @@ def _json_valido(rel: str, valor: Any) -> bool:
 
 def _conteudo_valido(services: PacoteLocalServices, rel: str, dados: bytes) -> bool:
     try:
+        if _pasta_de(rel) == _ANEXOS:  # mesma conferência do PDF anexado ao chamado (nome que o app geraria)
+            nome = PurePosixPath(rel).name
+            return validar_pdf(nome, dados) == nome
+        if _pasta_de(rel) == _ANOTACOES:  # mesmo registro que a sincronização publica
+            return _validated_annotation_record(json.loads(dados.decode("utf-8"))) is not None
         if rel.endswith(".json"):
             return _json_valido(rel, json.loads(dados.decode("utf-8-sig")))
         with zipfile.ZipFile(io.BytesIO(dados)) as planilha:
@@ -690,7 +805,7 @@ def _validar_entradas(
     services: PacoteLocalServices, pacote: zipfile.ZipFile, conhecido: bool,
 ) -> tuple[Dict[str, Any], Dict[str, bytes]]:
     infos = pacote.infolist()
-    if len(infos) > len(ALLOWLIST) + 1:
+    if len(infos) > LIMITE_ENTRADAS:
         raise _recusa(MOTIVO_FORA)
     vistos = set()
     for info in infos:
@@ -721,7 +836,10 @@ def _validar_entradas(
         raise _recusa(MOTIVO_VERSAO)
 
     declarados = {item["caminho"]: item for item in manifesto["arquivos"]}
-    if any(rel not in ALLOWLIST for rel in (*por_nome, *declarados, *manifesto["ausentes"])):
+    if (
+        any(not _permitido(rel) for rel in (*por_nome, *declarados))
+        or any(rel not in ALLOWLIST for rel in manifesto["ausentes"])  # pasta nunca tem ausentes
+    ):
         raise _recusa(MOTIVO_FORA)
     invalidos = set(manifesto["invalidos"])
     if invalidos and not conhecido:  # desfazer forjado não pula a validação de conteúdo
@@ -758,12 +876,19 @@ def _caminho_pacote(pasta: Path, arquivo: str) -> Path:
 
 
 def _acoes(manifesto: Dict[str, Any], atuais: Dict[str, Optional[str]]) -> List[tuple[str, str]]:
+    """``atuais`` vem de ``_hashes_atuais(base, _rels_do_pacote(manifesto))``: allowlist e caminhos de pasta do pacote."""
     no_pacote = {item["caminho"]: item["sha256"] for item in manifesto["arquivos"]}
     apagar = set(manifesto["ausentes"]) if manifesto["tipo"] == "desfazer" else set()
     acoes = []
-    for rel in ALLOWLIST:
-        atual = atuais[rel]
-        if rel in no_pacote:
+    for rel, atual in atuais.items():
+        if _pasta_de(rel):
+            # Pasta: só cria o que falta; o atual vence e nunca é apagado (sebrae_finalizacao.json aponta os anexos).
+            if atual is None:
+                if rel in no_pacote:
+                    acoes.append((rel, "criar"))
+            else:
+                acoes.append((rel, "igual" if no_pacote.get(rel) == atual else "manter"))
+        elif rel in no_pacote:
             acoes.append((rel, "criar" if atual is None else "igual" if atual == no_pacote[rel] else "substituir"))
         elif atual is not None:
             acoes.append((rel, "apagar" if rel in apagar else "manter"))
@@ -835,7 +960,8 @@ def _links_alterados(base: Path, conteudo: Dict[str, bytes], acoes: List[tuple[s
 def previa(services: PacoteLocalServices, arquivo: str) -> Dict[str, Any]:
     caminho = _caminho_pacote(_pasta_em_uso(services), arquivo)
     pacote = validar_pacote(services, caminho)
-    atuais = _hashes_atuais(services.base_dir())
+    base = services.base_dir()
+    atuais = _hashes_atuais(base, _rels_do_pacote(pacote["manifesto"]))
     acoes = _acoes(pacote["manifesto"], atuais)
     return {
         "arquivo": arquivo,
@@ -881,7 +1007,8 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
             raise _recusa_restauracao("há uma gravação pendente para conferir em .transactions")
 
         pacote = validar_pacote(services, caminho)
-        atuais = _hashes_atuais(base)
+        rels = _rels_do_pacote(pacote["manifesto"])
+        atuais = _hashes_atuais(base, rels)
         if not hmac.compare_digest(preview_token, _token(pacote["sha256"], atuais)):
             raise _recusa_restauracao("o estado mudou desde a prévia; abra a prévia de novo")
         acoes = _acoes(pacote["manifesto"], atuais)
@@ -893,12 +1020,14 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
         gravado = False
         desfazer: Optional[Dict[str, Any]] = None
         try:
-            alvos = [*(base / rel for rel in ALLOWLIST), services.arquivo_config()]
+            criar_em_pasta = [base / rel for rel, acao in acoes if acao == "criar" and _pasta_de(rel)]
+            alvos = [*(base / rel for rel in ALLOWLIST), *criar_em_pasta, services.arquivo_config()]
             with services.inventory_state_transaction(alvos) as transacao:
                 try:
-                    if _hashes_atuais(base) != atuais:
+                    if _hashes_atuais(base, rels) != atuais:
                         raise _recusa_restauracao("o estado mudou desde a prévia; abra a prévia de novo")
-                    desfazer = _gravar_pacote(services, pasta, "desfazer")
+                    # Só a allowlist: nada de pasta é trocado nem apagado, então o desfazer não precisa dela.
+                    desfazer = _gravar_pacote(services, pasta, "desfazer", list(ALLOWLIST))
                     try:
                         sha_desfazer = hashlib.sha256(desfazer["dados"]).hexdigest()
                         _validar_bytes(services, desfazer["dados"], desfazer["arquivo"], frozenset({sha_desfazer}))
@@ -981,3 +1110,4 @@ def _sem_recuperacao() -> DomainError:
         "Falha ao restaurar e a recuperação automática não terminou; confira a pasta .transactions antes de usar o app.",
         status_code=500,
     )
+
