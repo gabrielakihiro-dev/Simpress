@@ -166,7 +166,7 @@ painéis React, com os mesmos IDs, ARIA, classes e textos. Código em `frontend/
 `frontend/src/paineis/entra-users/`; `frontend/src/aplicacao/ux-chamados.ts` e a entrada `entraUsers` de `frontend/src/aplicacao/pontes.ts` são pontes
 que repassam as ações ao React. Na seção do Entra, só o corpo do `<form>` é React: o cabeçalho, com a dica
 que cita o domínio das contas, fica em `frontend/partials/modais.html`, porque o código React não pode conter
-domínio de e-mail (`tests/test_maintenance_contracts.py`). O envio real continua só com `enviar: true` e `confirmado: true`, depois de
+domínio de e-mail (`tests/test_maintenance_contracts.py`). Desde o Bloco 4c (27/11/2026) o resto do modal de importação também é React (`frontend/src/paineis/importacao-planilhas/dialogos.tsx`); a seção `#esc-inv-entra` inteira continua no partial e o React a move, ao montar, para o fim do corpo `[data-so-etapa="arquivos"]`, a mesma posição de antes. O envio real continua só com `enviar: true` e `confirmado: true`, depois de
 **Enviar solicitação**; falha de rede no envio real nunca reenvia e pede conferência no UX. Testes:
 `tests/e2e/react-g4.spec.cjs` (invariante do envio, telas nos temas claro e escuro) e `tests/e2e/ux-chamados.spec.cjs`.
 
