@@ -6,6 +6,7 @@
 import { baixarDaApi } from "../../comum/baixar-api.ts";
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
 import { criarLojaLeitura } from "./leitura-loja.ts";
+import { criarLojaAvisos, criarLojaRascunho, type ItemRascunho } from "./lojas.ts";
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
@@ -35,6 +36,9 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   };
   // Chips da última leitura dos antigos: o DOM nasce em leitura.tsx a partir desta loja.
   const leitura = context.lojaLeitura ?? criarLojaLeitura();
+  // Avisos dos novos e rascunho: o DOM nasce em avisos-rascunho.tsx a partir destas lojas.
+  const avisos = context.lojaAvisos ?? criarLojaAvisos();
+  const rascunhoTela = context.lojaRascunho ?? criarLojaRascunho();
 
   if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
     if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
@@ -2522,34 +2526,15 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   }
 
   /** `situacao` vai para `data-estado` do bloco (o CSS pinta a bolinha): "ok" = salvo agora; vazio = restaurado/descartado. */
-  function mostrarRascunho(texto: string, situacao = "", detalhes: (string | Registro)[] = []) {
-    definirTexto("sebrae-rascunho-status", texto);
-    const bloco = el("sebrae-rascunho");
-    if (!bloco) return;
-    bloco.hidden = !texto;
-    bloco.dataset.estado = situacao;
-    const caixa = el("sebrae-rascunho-detalhes");
-    if (!caixa) return;
-    // Lista recolhida: o aviso fica em uma linha e cada chamado ganha a sua. Recarregar recolhe de novo.
-    caixa.hidden = !detalhes.length;
-    caixa.open = false;
-    definirTexto("sebrae-rascunho-resumo", `Ver detalhes (${detalhes.length})`);
-    el("sebrae-rascunho-itens")?.replaceChildren(...detalhes.map(item => {
-      const linha = document.createElement("li");
-      if (typeof item === "string") {
-        linha.textContent = item;
-        return linha;
-      }
-      linha.appendChild(dom.createTextElement("b", "", item.numero));
-      item.campos.forEach(([letra, valor]: [string, string]) => linha.appendChild(dom.createTextElement("span", "", `${letra} ${valor}`)));
-      return linha;
-    }));
+  function mostrarRascunho(texto: string, situacao = "", detalhes: ItemRascunho[] = []) {
+    // O bloco some sem texto; cada chamada recolhe a lista "Ver detalhes" de novo (avisos-rascunho.tsx).
+    rascunhoTela.atualizar({ texto, situacao, detalhes, versao: rascunhoTela.ler().versao + 1 });
   }
 
   /** Linhas do detalhe do rascunho: um chamado por linha, com as seleções (A, B, D, J, R, S) lado a lado. */
   function detalhesRascunho(pendentes: [string, Registro][], conflitos: string[]) {
     return [
-      ...pendentes.map(([numero, campos]) => ({ numero, campos: Object.entries(campos).map(([letra, valor]) => [letra, String(valor)]) })),
+      ...pendentes.map(([numero, campos]) => ({ numero, campos: Object.entries(campos).map(([letra, valor]) => [letra, String(valor)] as [string, string]) })),
       ...conflitos,
     ];
   }
@@ -2593,20 +2578,10 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   }
 
   function renderizarAvisos(novos?: Registro | null) {
-    const host = el("sebrae-novos-avisos");
-    if (!host) return;
-    const itens = [
+    avisos.atualizar({ itens: [
       ...(novos?.pendentes || []).map((p: Registro) => `${p.numero}: pendente. ${p.motivo}`),
       ...Object.entries(novos?.erros || {}).map(([numero, motivo]) => `${numero}: não foi lido. ${motivo}`),
-    ];
-    if (!itens.length) {
-      host.replaceChildren();
-      return;
-    }
-    const lista = document.createElement("ul");
-    lista.className = "sebrae-avisos";
-    itens.forEach(texto => lista.appendChild(dom.createTextElement("li", "ck-cartao__meta", texto)));
-    host.replaceChildren(dom.createTextElement("p", "ck-campo__ajuda", "Sem formulário (veja os motivos):"), lista);
+    ] });
   }
 
   function renderizar(dados: Registro, versaoDestaque = estado.destaqueVersao) {

@@ -1,6 +1,7 @@
 // Chips da última leitura dos chamados antigos (#sebrae-leitura, topo do F5): estado lido por leitura.tsx
 // (useSyncExternalStore) e escrito por renderizarAntigos e abrirFalhas em estado.ts.
 // Só sintaxe apagável: os testes carregam estado.ts direto no Node.
+import { criarLoja } from "./lojas.ts";
 import type { Registro } from "./tipos";
 
 export interface EstadoLeitura {
@@ -9,18 +10,9 @@ export interface EstadoLeitura {
   /** Popover do chip "N falhas" aberto. */
   falhasAbertas: boolean;
 }
+// O estado inicial repete o partial (frontend/partials/cockpit-tool-panels.html): grupo oculto e popover fechado.
+export const criarLojaLeitura = () => criarLoja<EstadoLeitura>({ resultado: null, falhasAbertas: false });
 export type LojaLeitura = ReturnType<typeof criarLojaLeitura>;
-
-export function criarLojaLeitura() {
-  // O estado inicial repete o partial (frontend/partials/cockpit-tool-panels.html): grupo oculto e popover fechado.
-  let estado: EstadoLeitura = { resultado: null, falhasAbertas: false };
-  const ouvintes = new Set<() => void>();
-  return {
-    assinar(ouvinte: () => void) { ouvintes.add(ouvinte); return () => { ouvintes.delete(ouvinte); }; },
-    ler: () => estado,
-    atualizar(parte: Partial<EstadoLeitura>) { estado = { ...estado, ...parte }; ouvintes.forEach(ouvinte => ouvinte()); },
-  };
-}
 
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
