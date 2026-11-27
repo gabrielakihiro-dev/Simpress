@@ -171,6 +171,36 @@ class SchedulerTests(unittest.TestCase):
         self.now = sp(2026, 10, 21, 9, 45)
         self.assertEqual(agendador.verificar(), "erro ao iniciar")
 
+    def test_slot_is_saved_before_starting_and_a_failed_save_never_starts_twice(self):
+        from core.integrity import FileBusyError
+
+        agendador = self.scheduler()
+        agendador.definir_ativo(True)
+        with patch.object(AgendadorSebrae, "_salvar", side_effect=FileBusyError("OneDrive")):
+            self.assertIsNone(agendador.verificar())
+            self.now += timedelta(minutes=1)
+            self.assertIsNone(agendador.verificar())
+        self.assertEqual(self.started, [])  # sem gravar o slot, nada inicia
+        self.assertEqual(agendador.verificar(), "iniciada")
+        self.assertEqual(self.started, [agenda.ROTINA])
+
+        outro = self.scheduler()
+        self.now = sp(2026, 10, 21, 9, 45)
+        salvos = []
+        original = AgendadorSebrae._salvar
+
+        def salvar(selfie, configuracao):
+            salvos.append((configuracao["ultimo_slot_disparado"], len(self.started)))
+            if len(salvos) > 1:
+                raise FileBusyError("OneDrive")  # o 2º save (resultado) falha depois do início
+            original(selfie, configuracao)
+
+        with patch.object(AgendadorSebrae, "_salvar", salvar):
+            self.assertEqual(outro.verificar(), "iniciada")
+        self.assertEqual(salvos[0], ("2026-10-21T09:45:00-03:00", 1))  # 1º save antes do início (já havia 1 início)
+        self.assertIsNone(outro.verificar())  # mesmo slot: sem novo disparo
+        self.assertEqual(len(self.started), 2)
+
     def test_settings_persist_across_instances(self):
         self.scheduler().definir_ativo(True)
         retomado = self.scheduler()

@@ -572,6 +572,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def _importar_bloqueado(conteudo: bytes, numeros: Any, nome: str, automatico: bool):
         with lock_paths([_base_guard()]):
             ativa = _rotina_em_andamento()
+            if ativa is None and services.runner is not None and (orfaos := fin.descartar_job_orfao(_pasta_estado())) is not None:  # mesma regra de ``_exigir_rotina_livre``
+                logger.warning("Pedido de finalização órfão descartado (%s chamado(s)).", orfaos)
             if fin.job_pendente(_pasta_estado()) or (ativa is not None and ativa.get("rotina") in ("fechar", "enviar")):
                 raise DomainConflictError("Aguarde a finalização em andamento antes de reimportar o Dashboard.")
             substituida = False
@@ -580,7 +582,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 if situacao == "igual_base":
                     raise DomainConflictError("Há um Dashboard atualizado aguardando envio e o Dashboard do SharePoint não mudou desde a importação. Clique em Enviar ao SharePoint; a importação automática foi impedida para não perder alterações.")
                 substituida = situacao == "divergente"
-            anteriores = sebrae_novos.ler_existentes(services.caminhos().existentes)
+            # tudo o que a resposta e as gravações leem, ANTES de gravar: arquivo ilegível dá 503 sem gravar nada (``_estado`` roda no fim)
+            anteriores = sebrae_novos.ler_existentes(services.caminhos().existentes, estrito=True)
+            obs.ler_observacoes(_pasta_estado())
+            fin.ler_estado(_pasta_estado())
             arquivo_marcas = marcas.caminho_marcas(_pasta_estado())
             marcas.validar_legivel(arquivo_marcas)  # marks unreadable: stop before anything of this import is written
             mapa = _arquivar_encerrados(conteudo, anteriores)
@@ -1006,13 +1011,17 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     def _exigir_rotina_livre(pasta) -> None:
         """409 quando há pedido de finalização esperando ou uma rotina rodando; um runner sem estado legível deixa o ``start`` decidir."""
-        if fin.job_pendente(pasta):
-            raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.")
         try:
             ativa = _rotina_em_andamento()
         except Exception as erro:  # noqa: BLE001
             logger.warning("Não foi possível ler o estado da rotina antes da finalização (%s).", type(erro).__name__)
+            if fin.job_pendente(pasta):
+                raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.") from None
             return
+        if ativa is None and services.runner is not None and (orfaos := fin.descartar_job_orfao(pasta)) is not None:  # nenhuma rotina rodando e o pedido nunca foi consumido
+            logger.warning("Pedido de finalização órfão descartado (%s chamado(s)).", orfaos)
+        if fin.job_pendente(pasta):
+            raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.")
         if ativa is not None:
             raise DomainConflictError("Já há uma rotina em execução. Aguarde terminar.")
 
