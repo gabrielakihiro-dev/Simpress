@@ -326,3 +326,7 @@ Nota: a tupla `FORA` existe para documentar. A inclusão no pacote é decidida s
 - `domains/ux_ticket_browser.py`, `scripts/sebrae_softexpert.py` e, em `scripts/automacao_rotinas_chrome.py`, `EMAIL_DASHBOARD`, `EMAIL_SOFTEXPERT` e `DASHBOARD_PASTA_URL` ainda leem as contas ao importar o módulo: nas rotinas que rodam dentro do servidor, a conta nova vale depois de reiniciar o Simpress. O usuário do Endpoint já não entra aqui. O link do Endpoint (`endpoint_url`) também é lido ao importar: a rotina usa o novo na próxima execução; a consulta ao vivo da Home, depois de reiniciar o Simpress.
 - Salvar a seção Links envia também o estado das caixas `Usar também no Outlook`; com a conta em branco, uma caixa desmarcada passa a valer nesse salvamento.
 - Conta em branco no formulário mantém o valor atual; para limpar, edite o arquivo.
+
+## Ver também
+
+- Saúde local (espaço em disco, arquivos de estado, limpeza de temporários e pacote de diagnóstico), outro item da mesma Prontidão: `docs/cockpit-prompts/20-saude-local.md`.

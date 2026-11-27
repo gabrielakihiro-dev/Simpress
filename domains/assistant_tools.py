@@ -750,6 +750,14 @@ QUERY_TOOLS: List[Tool] = [
         lambda c, a: c.obter_prontidao(),
     ),
     _read(
+        "obter_saude_local",
+        "Saúde local deste computador (Prontidão da base > Saúde local): espaço livre no disco da pasta data, espaço por área "
+        "(backups das planilhas, logs, lotes processados, pacotes locais, quarentena), situação dos arquivos de estado JSON "
+        "(integro, invalido, vazio, ilegivel, grande_demais) e transações pendentes. Só leitura: o Assistente não faz a prévia "
+        "nem a limpeza de temporários; oriente o usuário a usar \"Ver prévia\" e \"Limpar temporários\" na tela.",
+        lambda c, a: c.obter_saude_local(),
+    ),
+    _read(
         "listar_pendencias_operacionais",
         "Pendências operacionais da última atualização de inventário.",
         lambda c, a: c.listar_pendencias_operacionais(),
@@ -1608,7 +1616,7 @@ def tool_schemas(busca_web: bool = False) -> List[Dict[str, Any]]:
 # a write never enters through another group's words. No group recognised -> every tool (safe fallback).
 
 NUCLEO_FERRAMENTAS: Tuple[str, ...] = (
-    "consultar_equipamento", "pesquisar_catalogo", "obter_totais_inventario", "obter_painel", "obter_prontidao", "listar_pendencias_operacionais",
+    "consultar_equipamento", "pesquisar_catalogo", "obter_totais_inventario", "obter_painel", "obter_prontidao", "obter_saude_local", "listar_pendencias_operacionais",
     "listar_lembretes", "criar_lembrete", "concluir_lembrete", "apagar_lembrete", "ler_anexo", "gerar_relatorio", "montar_rascunho", "buscar_web",
 )
 

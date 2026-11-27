@@ -87,6 +87,7 @@ jobs:
           - shard: 1
             specs: >-
               assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs cursor.spec.cjs
+              saude-local.spec.cjs
               pacote-local.spec.cjs
           - shard: 2
             specs: >-

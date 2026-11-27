@@ -224,6 +224,7 @@ from domains.equipment_search import (
 from routers.equipment import EquipmentRouteServices, create_equipment_router
 from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
 from routers.system import SystemRouteServices, create_system_router
+from routers.saude_local import SaudeLocalRouteServices, create_saude_local_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from routers.endpoint_removals import create_endpoint_removals_router
@@ -248,7 +249,7 @@ from routers.automation import AutomationRouteServices, create_automation_router
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos, sebrae_finalizacao, sebrae_os_recusadas, os_marcas_finalizacao
 from domains import sebrae_arquivo
-from domains.chrome_automation import ChromeAutomationRunner, default_contract
+from domains.chrome_automation import ChromeAutomationRunner, default_contract, live_lock_owner
 from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
 from domains.dashboard_agendamento import AgendadorDashboard
 from domains import endpoint_removals
@@ -1848,6 +1849,14 @@ system_router, _system_exports = create_system_router(SystemRouteServices(
 get_readiness_status = _system_exports.get_readiness_status
 get_transfer_form_defaults = _system_exports.get_transfer_form_defaults
 app.include_router(system_router)
+app.include_router(create_saude_local_router(SaudeLocalRouteServices(
+    base_dir=lambda: BASE_DIR,
+    entradas=lambda: (AUTOMATIC_INVENTORY_INBOX_DIR, AUTOMATIC_TICKET_INBOX_DIR, ENTRA_INBOX_DIR),
+    # Looked up on each call (defined further down); never creates the runner, which writes records on creation.
+    chrome_ocupado=lambda: _chrome_automation_busy(),
+    prontidao=lambda: get_startup_readiness(),
+    versao_app=lambda: app.version,
+)))
 
 units_router, _units_exports = create_units_router(UnitRouteServices(
     format_cep=format_cep,
@@ -2411,6 +2420,15 @@ def get_chrome_automation_runner() -> ChromeAutomationRunner:
                 default_contract(BASE_DIR, STATE_DIR, LOG_DIR), bloqueado=pacote_local_domain.RESTAURANDO.is_set,
             )
         return _chrome_automation_runner
+
+
+def _chrome_automation_busy() -> bool:
+    """Read-only: asks the runner only when it already exists; otherwise reads just the lock file."""
+    with _chrome_automation_runner_lock:
+        runner = _chrome_automation_runner
+    if runner is not None:
+        return runner.ocupado()
+    return live_lock_owner(default_contract(BASE_DIR, STATE_DIR, LOG_DIR).lock_file) is not None
 
 
 def _warm_automation_history() -> None:
