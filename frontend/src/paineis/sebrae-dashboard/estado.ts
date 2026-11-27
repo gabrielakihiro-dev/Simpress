@@ -6,7 +6,7 @@
 import { baixarDaApi } from "../../comum/baixar-api.ts";
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
 import { criarLojaLeitura } from "./leitura-loja.ts";
-import { criarLojaAvisos, criarLojaRascunho, type ItemRascunho } from "./lojas.ts";
+import { criarLojaAbas, criarLojaAvisos, criarLojaRascunho, type ItemRascunho } from "./lojas.ts";
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
@@ -39,6 +39,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   // Avisos dos novos e rascunho: o DOM nasce em avisos-rascunho.tsx a partir destas lojas.
   const avisos = context.lojaAvisos ?? criarLojaAvisos();
   const rascunhoTela = context.lojaRascunho ?? criarLojaRascunho();
+  // Contagens das sub-abas e resultado do filtro: o DOM nasce em abas.tsx a partir desta loja.
+  const abasTela = context.lojaAbas ?? criarLojaAbas();
 
   if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
     if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
@@ -1511,17 +1513,15 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       }
     });
     const outraAba = ABAS.find(aba => contagens[aba] > 0);
+    const abas: Record<string, { n: number; rotulo: string }> = {};
     ABAS.forEach(aba => {
       const n = contagens[aba];
-      definirTexto(`sebrae-${aba}-contagem`, String(n));
+      abas[aba] = { n, rotulo: `${ROTULO_ABA[aba]}: ${n} ${n === 1 ? "chamado" : "chamados"}${termo ? (n === 1 ? " encontrado" : " encontrados") : ""}` };
       const botao = el(`sebrae-aba-${aba}`);
       if (botao) {
         const selecionada = aba === visao.aba;
         botao.setAttribute("aria-selected", String(selecionada));
         botao.tabIndex = selecionada ? 0 : -1;
-        botao.setAttribute("aria-label", `${ROTULO_ABA[aba]}: ${n} ${n === 1 ? "chamado" : "chamados"}${termo ? (n === 1 ? " encontrado" : " encontrados") : ""}`);
-        if (n) botao.removeAttribute("data-zero");
-        else botao.setAttribute("data-zero", "");
       }
       const vazio = el(`sebrae-${aba}`)?.querySelector<ElementoSebrae>("[data-sebrae-vazio-filtro]");
       if (!vazio) return;
@@ -1535,13 +1535,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         ir.dataset.sebraeIr = ir.hidden ? "" : outraAba;
       }
     });
-    // selo âmbar segue o número exibido na aba (com filtro, o que bateu), como no artefato aprovado
-    const contagemDestaques = el("sebrae-destaques-contagem");
-    if (contagemDestaques) {
-      if (contagens.destaques > 0) contagemDestaques.setAttribute("data-status", "alerta");
-      else contagemDestaques.removeAttribute("data-status");
-    }
-    definirTexto("sebrae-filtro-resultado", termo ? `${encontrados.size} chamado(s) encontrado(s)` : "");
+    // número, aria-label e data-zero de cada aba, selo de Destaques e resultado do filtro: abas.tsx
+    abasTela.atualizar({ abas, resultado: termo ? `${encontrados.size} chamado(s) encontrado(s)` : "" });
     atualizarMestre();
   }
 
