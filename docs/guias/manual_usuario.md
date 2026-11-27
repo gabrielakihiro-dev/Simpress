@@ -252,7 +252,7 @@ Antes de cada atualização (seção 4) o sistema guarda uma cópia dos dois inv
 
 **Onde fica:** no painel **Prontidão da base**, cartão **Configuração local**, botão **Configurar**. A seção **Pacote local** fica no fim desse modal.
 
-**Onde os arquivos ficam:** por padrão, na pasta `data/pacotes_locais/` dentro do Simpress. Você pode escolher outra pasta no campo **Pasta do pacote**, desde que ela seja **deste computador**. Não vale OneDrive, pasta de rede ou pen drive. Deixe o campo vazio para voltar ao padrão.
+**Onde os arquivos ficam:** por padrão, na pasta `data/pacotes_locais/` dentro do Simpress. Você pode escolher outra pasta no campo **Pasta do pacote**, desde que ela seja **deste computador**. Não vale OneDrive, pasta de rede, pen drive, HD externo USB nem cartão de memória (decisão do usuário em 27/11/2026). Deixe o campo vazio para voltar ao padrão.
 
 **Como exportar:**
 
@@ -262,13 +262,15 @@ Antes de cada atualização (seção 4) o sistema guarda uma cópia dos dois inv
 **Como restaurar:**
 
 1. Na lista, clique em **Restaurar…** no pacote que você quer usar.
-2. Leia a **Prévia da restauração**: ela mostra o que será substituído, criado, mantido ou apagado. Se houver **Atenção: este pacote muda links e contas das automações**, confira antes de continuar.
+2. Leia a **Prévia da restauração**: ela mostra o que será substituído, criado, mantido ou apagado. Se houver **Atenção: este pacote muda links e contas das automações**, confira a lista logo abaixo: cada link mostra só o endereço do site antes e depois (por exemplo, `antigo.exemplo.com → novo.exemplo.com`), e contas, dados do cliente, representantes e instruções do Assistente aparecem só como "alterado", sem o valor.
 3. Clique em **Confirmar restauração**. Antes de gravar, o Simpress cria sozinho um pacote de desfazer do estado atual.
 4. Quando aparecer `Restauração concluída. Pacote de desfazer: <nome>`, clique em **Recarregar página**.
 
 Se aparecer **Restauração recusada** com "uma automação está em execução" ou "uma importação está em andamento", espere terminar e tente de novo. Nada foi gravado.
 
 **Como desfazer:** cada restauração cria um pacote com o nome **desfazer-...**, que aparece na lista com o tipo **Desfazer**. Para voltar atrás, escolha esse pacote, faça a prévia e confirme a restauração, como no passo acima.
+
+O Simpress nunca apaga esses pacotes sozinho. Para liberar espaço, apague os antigos pelo Explorer, na pasta de pacotes.
 
 **Como levar para outra máquina:**
 
@@ -282,7 +284,8 @@ O Simpress não envia o pacote para lugar nenhum: a cópia é feita por você.
 **Cuidados:**
 
 - O Pacote local inteiro (lista, exportar, prévia e restaurar) só funciona neste computador. Pelo celular ou pela rede aparece "Disponível só neste computador.".
-- Se ao exportar aparecer "Pacote recusado: conteúdo inválido em <arquivo>", algum arquivo atual está com problema (por exemplo, um CNPJ inválido em `config/cliente.json`). Corrija esse dado na tela de origem e exporte de novo. Enquanto isso, a restauração também é recusada, porque o pacote de desfazer do estado atual não passaria na conferência.
+- Se ao exportar aparecer "Pacote recusado: conteúdo inválido em <arquivo>" (por exemplo, `cliente.json` com um CNPJ inválido), algum arquivo atual está com problema. Corrija esse dado na tela de origem e exporte de novo.
+- Restaurar funciona mesmo com um arquivo atual inválido: o pacote de desfazer guarda esse arquivo exatamente como está. Na prévia desse desfazer aparece "Voltam exatamente como estavam, mesmo com conteúdo inválido: <arquivos>".
 - O Assistente (F9) explica o Pacote local, mas não exporta, não lista e não restaura. Essas ações são só suas, por clique.
 - Depois de restaurar, o que ficou de fora (envios, finalizações, marcas de OS) continua como está hoje. Confira o Sebrae e as OS antes de agir.
 - Se a restauração falhar com "Falha ao restaurar. Os arquivos anteriores foram recuperados.", o Simpress voltou ao estado de antes. Se aparecer "confira a pasta .transactions antes de usar o app", não use o app e peça ajuda.

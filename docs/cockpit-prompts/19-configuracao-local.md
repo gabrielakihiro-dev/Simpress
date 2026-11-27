@@ -178,9 +178,9 @@ Exporta e restaura, num arquivo `.zip` deste computador, configurações, histó
 ### Pasta do pacote
 
 - Padrão: `data/pacotes_locais/` (criada se faltar). Fora do Git (`/data/pacotes_locais/` no `.gitignore`; `pacote-local-*.zip`, `desfazer-*.zip` e `.pacote-local-*.tmp` também, em qualquer pasta).
-- A pasta escolhida fica em `config/pacote_local.json` (`{"pasta": "<caminho absoluto>"}`; vazio ou ausente = padrão). Fora do Git (`/config/pacote_local.json`). Esse arquivo **nunca** entra no pacote e nunca é restaurado.
+- A pasta escolhida fica em `config/pacote_local.json` (`{"pasta": "<caminho absoluto>", "desfazer_conhecidos": [<SHA-256>]}`; pasta vazia ou ausente = padrão; `desfazer_conhecidos` é o registro dos `desfazer-*.zip` criados por este app, ver "Arquivo atual inválido"; salvar a pasta preserva o registro e vice-versa; chave ausente = lista vazia). Fora do Git (`/config/pacote_local.json`). Esse arquivo **nunca** entra no pacote e nunca é restaurado.
 - Validação ao salvar **e** ao usar a pasta: sem caractere de controle; absoluta, existente, pasta de verdade, gravável (cria e apaga um arquivo temporário); nem ela nem nenhum pai é link ou junção; dentro do repositório só a pasta padrão (fora dela o zip, com dado pessoal, poderia ir ao Git; isso já exclui `static/` e `.transactions/`). Nuvem, rede e repositório são conferidos no caminho resolvido, então `..` não contorna.
-- Recusa rede e unidade removível: caminhos `\\` ou `//` (também depois de resolver, o que pega unidade de rede mapeada); no Windows, só unidade fixa (`DRIVE_FIXED`). Em outros sistemas essa checagem é pulada.
+- Recusa rede e unidade removível: caminhos `\\` ou `//` (também depois de resolver, o que pega unidade de rede mapeada); no Windows, só unidade fixa (`DRIVE_FIXED`) **e** fora de HD externo ou cartão (decisão do usuário em 27/11/2026): o Windows informa HD USB como fixo, então o barramento do volume é consultado (`IOCTL_STORAGE_QUERY_PROPERTY`, `BusType`) e USB, 1394, SD e MMC são recusados com a mesma mensagem; se a consulta falhar, a pasta também é recusada. Em outros sistemas essa checagem é pulada. Testado só com dublês (sem Windows real aqui).
 - Recusa pastas sincronizadas: dentro das variáveis `OneDrive`, `OneDriveCommercial` ou `OneDriveConsumer` (raiz também resolvida), dentro de um ponto de sincronização do OneDrive/SharePoint registrado no Windows (`HKCU\Software\SyncEngines\Providers\OneDrive\*\MountPoint`; sem a chave, nada muda), ou com um componente de caminho que contenha `onedrive`, `dropbox`, `google drive` ou `icloud` (sem diferenciar maiúsculas).
 - Mensagens de erro (textos exatos; a tela mostra a do servidor em `role="alert"`):
   - `A pasta não existe ou não aceita escrita.` (inexistente ou sem escrita)
@@ -212,7 +212,7 @@ Exporta e restaura, num arquivo `.zip` deste computador, configurações, histó
 ### Exportar
 
 1. `POST /api/pacote-local/exportar`, sem corpo. Lê todos os itens da allowlist numa só trava (`lock_paths`), então a cópia é coerente.
-2. Grava `pacote-local-AAAAMMDD-HHMMSS.zip` com um `manifesto.json` (formato 1, tipo, versão do app, data, lista de arquivos com tamanho e SHA-256, lista de ausentes). Grava num temporário `.pacote-local-*.tmp` com fsync, reserva o nome (criação exclusiva), troca com `os.replace` e faz fsync da pasta.
+2. Confere o conteúdo de cada arquivo atual (a mesma validação da prévia). Se um estiver inválido, para com 422 `Pacote recusado: conteúdo inválido em <nome do arquivo>`, só o nome (ex.: `cliente.json`), nunca o caminho, e nada é gravado. Senão, grava `pacote-local-AAAAMMDD-HHMMSS.zip` com um `manifesto.json` (formato 1, tipo, versão do app, data, lista de arquivos com tamanho e SHA-256, lista de ausentes e `invalidos`, sempre vazia na exportação). Grava num temporário `.pacote-local-*.tmp` com fsync, reserva o nome (criação exclusiva), troca com `os.replace` e faz fsync da pasta.
 3. Reabre o zip e o confere com a mesma validação da prévia. Se não passar (por exemplo, um arquivo atual inválido), apaga o zip e responde 422 `Pacote recusado: <motivo>`.
 4. Nunca sobrescreve: se o nome já existe, espera um segundo e tenta outro; se mesmo assim colidir, 409.
 5. Limites: 60 MB por arquivo (o `MAX_UPLOAD_BYTES` do app) e 300 MB no total. Acima disso, 422.
@@ -224,8 +224,8 @@ Exporta e restaura, num arquivo `.zip` deste computador, configurações, histó
 3. Valida o zip inteiro (ver "Validação" abaixo) sem gravar nada.
 4. Recalcula o `preview_token` (SHA-256 do zip e dos hashes atuais dos itens da allowlist, comparados com `hmac.compare_digest`). Se mudou: 409 `o estado mudou desde a prévia; abra a prévia de novo`. Se nada muda: 409 `Este pacote já corresponde ao estado atual.`
 5. Abre a transação `inventory_state_transaction` sobre a allowlist (nível 1 e 2 numa chamada só). Dentro dela, reconfere os hashes.
-6. **Antes de gravar**, cria o pacote de desfazer `desfazer-AAAAMMDD-HHMMSS.zip` na mesma pasta com o estado atual, reabre e valida. Se falhar, apaga o desfazer e para com 409 `o pacote de desfazer do estado atual não passou na conferência (...)`. Nada é gravado.
-7. Prepara cada arquivo `criar` ou `substituir` (com a conferência dos bytes) e apaga só o que o desfazer manda apagar. Confere de novo a automação (uma rotina iniciada fora do site): se houver, 409 e nada é gravado. Aplica, carrega o banco para provar que o conjunto abre (se o cadastro deixou de existir, publica o estado vazio, como um app sem planilhas), faz commit e publica o estado.
+6. **Antes de gravar**, cria o pacote de desfazer `desfazer-AAAAMMDD-HHMMSS.zip` na mesma pasta com o estado atual, como está (arquivo atual inválido vai com os bytes brutos e entra em `invalidos`), reabre e valida. Se falhar, apaga o desfazer e para com 409 `o pacote de desfazer do estado atual não passou na conferência (...)`. Nada é gravado. O SHA-256 do desfazer entra em `desfazer_conhecidos` de `config/pacote_local.json` **na mesma transação** (o arquivo também é alvo da transação), então, se a restauração voltar atrás, o registro volta junto.
+7. Prepara cada arquivo `criar` ou `substituir` (com a conferência dos bytes) e apaga só o que o desfazer manda apagar. Confere de novo a automação (uma rotina iniciada fora do site): se houver, 409 e nada é gravado. Aplica, carrega o banco para provar que o conjunto abre, faz commit e publica o estado. Se o banco não carregar: sem cadastro, ou com um desfazer que tem `invalidos` (devolve um estado que já estava inválido antes), publica o estado vazio, como um app sem planilhas; fora isso, volta atrás.
 8. Falha: rollback pela transação, e o desfazer criado no passo 6 é apagado (o estado não mudou). Se a gravação já tinha sido feita e só o recarregamento falhou: 500 `A restauração foi gravada, mas o site não recarregou os dados; reinicie o app.`
 9. Log: só ação, contagens, SHA-256 do pacote e o tipo do erro. Nunca conteúdo, valores ou nomes de pessoas.
 
@@ -234,12 +234,19 @@ Regra da restauração: arquivo da allowlist que existe hoje e não está no pac
 ### Como desfazer
 
 - Cada restauração cria um pacote `desfazer-*.zip` com o estado de antes. Ele aparece na lista com o tipo `Desfazer`.
+- Retenção (decisão do usuário em 27/11/2026): o app **nunca** apaga um `desfazer-*.zip` sozinho, salvo o desfazer de uma restauração que voltou atrás. Para liberar espaço, o usuário apaga os antigos pelo Explorer.
 - Para desfazer, escolha esse pacote, abra a prévia e confirme. O desfazer também cria o seu próprio desfazer antes de gravar, então a volta pode ser refeita.
 - Ida e volta testada: exportar, alterar, restaurar e desfazer volta ao estado exato, inclusive apagando o que não existia antes.
 
+### Arquivo atual inválido (decisões do usuário em 27/11/2026)
+
+- **Exportar** continua bloqueado: 422 `Pacote recusado: conteúdo inválido em <nome do arquivo>` (só o nome, também na prévia).
+- **Restaurar** é permitido: o desfazer guarda o arquivo inválido com os bytes exatos e o lista em `invalidos` do manifesto. A prévia mostra esses nomes em `invalidos`, e restaurar o desfazer devolve os bytes brutos (a conferência de bytes continua).
+- Brecha fechada: um arquivo em `invalidos` só passa sem validar o conteúdo se o SHA-256 do zip inteiro estiver em `desfazer_conhecidos` (desfazer criado por este app). Desfazer de fora com `invalidos` não vazio: 422 `manifesto ausente ou inválido`. Exportação com `invalidos` não vazio, item de `invalidos` fora de `arquivos` ou fora da allowlist: também 422.
+
 ### Validação do zip (prévia, restauração e conferência do desfazer)
 
-Qualquer falha é 422 `Pacote recusado: <motivo>`, sem gravar nada. Motivos: `manifesto ausente ou inválido`; `arquivo fora da lista permitida`; `arquivo não confere com o manifesto`; `caminho inválido no pacote`; `pacote grande demais (limite <N> MB)`; `pacote de uma versão mais nova do app`; `conteúdo inválido em <caminho>`.
+Qualquer falha é 422 `Pacote recusado: <motivo>`, sem gravar nada. Motivos: `manifesto ausente ou inválido`; `arquivo fora da lista permitida`; `arquivo não confere com o manifesto`; `caminho inválido no pacote`; `pacote grande demais (limite <N> MB)`; `pacote de uma versão mais nova do app`; `conteúdo inválido em <nome do arquivo>` (só o nome, nunca o caminho).
 
 - Zip sem cifra, sem pasta, sem link, sem caminho absoluto, sem `..`, sem letra de unidade, sem `\`, sem caractere de controle, sem nome reservado do Windows, sem duplicado (sem diferenciar maiúsculas).
 - Manifesto de esquema estrito; entradas iguais ao manifesto; cada caminho igual a um item da allowlist. **O destino vem da allowlist, nunca do nome dentro do zip.**
@@ -247,6 +254,13 @@ Qualquer falha é 422 `Pacote recusado: <motivo>`, sem gravar nada. Motivos: `ma
 - O tipo do manifesto bate com o nome (`pacote-local-` = exportação, `desfazer-` = desfazer); senão, `manifesto ausente ou inválido`.
 - `.json` precisa ser JSON válido; `.xlsx` passa pelo validador de arquivo seguro e não pode ter macro (`vbaProject`); as duas planilhas de entrada passam pelo validador de upload. `config/contas_automacao.json` e `config/cliente.json` têm os valores revalidados (e-mail, usuário, link, contrato e CNPJ). `historico_chamados.json` precisa ter a lista `chamados`.
 - Pacote de versão mais nova que o app é recusado. Versão igual ou mais antiga entra.
+- Manifesto: a chave `invalidos` é obrigatória (lista de caminhos já presentes em `arquivos`; vazia em exportação). Pacotes da primeira versão, sem essa chave, são recusados com `manifesto ausente ou inválido`.
+
+### Hosts dos links na prévia (decisão do usuário em 27/11/2026)
+
+- A prévia devolve `links_alterados: [{rotulo, antes, depois}]` (vazia quando nada muda), só para contas, cliente, representantes e instruções do Assistente que seriam criados ou substituídos.
+- Links de `config/contas_automacao.json` (rótulos de `LINKS`): `antes` e `depois` são só o domínio (`urlsplit(...).hostname`, sem esquema, porta, caminho, query, usuário ou token); vazio ou inválido = `null`. Contas (rótulos de `CONTAS`), campos do cliente (`Contrato`, `CNPJ de faturamento`, `Séries dos notebooks do próprio cliente`), `Representantes regionais`, `Representantes regionais (padrão)` e `Instruções do Assistente`: só o rótulo, com `antes` e `depois` `null`. Nada disso vai para log.
+- Tela (texto proposto): lista abaixo do aviso aprovado; link `<rótulo>: <antes ou (vazio)> → <depois ou (vazio)>`; demais `<rótulo>: alterado`. Com `invalidos`: `Voltam exatamente como estavam, mesmo com conteúdo inválido: <nomes>.`
 
 ### Só neste computador
 

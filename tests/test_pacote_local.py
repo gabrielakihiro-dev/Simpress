@@ -52,7 +52,8 @@ def planilha() -> bytes:
     return saida.getvalue()
 
 
-def montar_zip(arquivos: dict, manifesto=None, extras=(), versao="1.3.0", tipo="exportacao", ausentes=()) -> bytes:
+def montar_zip(arquivos: dict, manifesto=None, extras=(), versao="1.3.0", tipo="exportacao", ausentes=(),
+               invalidos=()) -> bytes:
     """Zip de teste; ``manifesto`` None monta um coerente, False omite, dict usa o dado."""
     if manifesto is None:
         manifesto = {
@@ -62,6 +63,7 @@ def montar_zip(arquivos: dict, manifesto=None, extras=(), versao="1.3.0", tipo="
                 for nome, dados in arquivos.items()
             ],
             "ausentes": list(ausentes),
+            "invalidos": list(invalidos),
         }
     saida = io.BytesIO()
     with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as pacote:
@@ -224,7 +226,7 @@ class ExportarTests(PacoteLocalBase):
         self.gravar(cliente_rel(), {"contrato": "123", "cnpj_faturamento": "11.111.111/1111-11"})
         resposta = self.client.post("/api/pacote-local/exportar")
         self.assertEqual((resposta.status_code, resposta.json()["detail"]),
-                         (422, f"Pacote recusado: conteúdo inválido em {cliente_rel()}"))
+                         (422, f"Pacote recusado: conteúdo inválido em {Path(cliente_rel()).name}"))
         self.assertEqual(list(self.pasta.iterdir()), [])
 
     def test_nunca_sobrescreve_pacote_com_o_mesmo_nome(self):
@@ -281,10 +283,10 @@ class ValidacaoTests(PacoteLocalBase):
 
     def test_conteudo_invalido(self):
         self.recusa(montar_zip({cliente_rel(): b'{"cnpj_faturamento": "11.111.111/1111-11"}'}),
-                    f"conteúdo inválido em {cliente_rel()}")
-        self.recusa(montar_zip({CHAMADOS: b'{"chamados": {}}'}), f"conteúdo inválido em {CHAMADOS}")
+                    f"conteúdo inválido em {Path(cliente_rel()).name}")  # só o nome, nunca o caminho
+        self.recusa(montar_zip({CHAMADOS: b'{"chamados": {}}'}), "conteúdo inválido em historico_chamados.json")
         self.recusa(montar_zip({"data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx": b"PK nada"}),
-                    "conteúdo inválido em data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx")
+                    "conteúdo inválido em EquipamentosDetalhes_atual.xlsx")
 
     def test_entradas_estruturais_recusadas(self):
         cifrada = remendar(montar_zip({LEMBRETES: b"{}"}), LEMBRETES, (6, 8), (1).to_bytes(2, "little"))
@@ -316,7 +318,7 @@ class ValidacaoTests(PacoteLocalBase):
         with zipfile.ZipFile(livro, "a") as arquivo:
             arquivo.writestr("xl/vbaProject.bin", b"macro")
         self.recusa(montar_zip({"data/planilhas_entrada/_modelos/transferencia.xlsx": livro.getvalue()}),
-                    "conteúdo inválido em data/planilhas_entrada/_modelos/transferencia.xlsx")
+                    "conteúdo inválido em transferencia.xlsx")
 
     def test_404_para_nome_fora_do_padrao(self):
         self.colocar(montar_zip({LEMBRETES: b"{}"}), "outro.zip")
@@ -510,16 +512,95 @@ class RestaurarTests(PacoteLocalBase):
         self.assertEqual(resposta.status_code, 422)
         self.assertEqual(self.estado(), self.alterado)
 
-    def test_estado_atual_invalido_barra_o_desfazer_sem_gravar(self):
+    def registro(self) -> dict:
+        arquivo = self.base / "config" / "pacote_local.json"
+        return json.loads(arquivo.read_text(encoding="utf-8")) if arquivo.exists() else {}
+
+    def test_estado_atual_invalido_restaura_e_o_desfazer_devolve_os_bytes_brutos(self):
         nome = self.preparar()
-        self.gravar(cliente_rel(), {"contrato": "123", "cnpj_faturamento": "11.111.111/1111-11"})
+        bruto = b'{"contrato": "123",   "cnpj_faturamento": "11.111.111/1111-11"}\n'  # CNPJ inválido, formato próprio
+        self.gravar(cliente_rel(), bruto)
         self.alterado = self.estado()
         resposta = self.restaurar(nome, self.previa(nome).json()["preview_token"])
-        self.assertEqual(resposta.status_code, 409)
-        self.assertTrue(resposta.json()["detail"].startswith(
-            "Restauração recusada: o pacote de desfazer do estado atual não passou na conferência"))
-        self.assertEqual([p.name for p in self.pasta.iterdir()], [nome])
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        desfazer = resposta.json()["pacote_desfazer"]
+        with zipfile.ZipFile(self.pasta / desfazer) as pacote:
+            self.assertEqual(json.loads(pacote.read("manifesto.json"))["invalidos"], [cliente_rel()])
+            self.assertEqual(pacote.read(cliente_rel()), bruto)
+        sha = hashlib.sha256((self.pasta / desfazer).read_bytes()).hexdigest()
+        self.assertEqual(self.registro(), {"pasta": "", "desfazer_conhecidos": [sha]})
+
+        previa = self.previa(desfazer).json()
+        self.assertEqual(previa["invalidos"], [Path(cliente_rel()).name])
+        resposta = self.restaurar(desfazer, previa["preview_token"])
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual((self.base / cliente_rel()).read_bytes(), bruto)
         self.assertEqual(self.estado(), self.alterado)
+
+    def test_desfazer_com_cadastro_invalido_publica_estado_vazio(self):
+        detalhes = "data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx"
+        nome = self.preparar()
+        self.gravar(detalhes, b"PK planilha corrompida")
+        resposta = self.restaurar(nome, self.previa(nome).json()["preview_token"])
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        desfazer = resposta.json()["pacote_desfazer"]
+        self.carregar.return_value = False  # o cadastro devolvido não carrega
+        resposta = self.restaurar(desfazer, self.previa(desfazer).json()["preview_token"])
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual((self.base / detalhes).read_bytes(), b"PK planilha corrompida")
+        self.assertIs(self.publicados[-1], self.estado_vazio)
+
+    def test_invalidos_so_em_desfazer_criado_por_este_app(self):
+        ruim = b'{"cnpj_faturamento": "11.111.111/1111-11"}'
+        forjado = montar_zip({cliente_rel(): ruim}, tipo="desfazer", invalidos=[cliente_rel()])
+        nome = self.colocar(forjado, "desfazer-20260101-000000.zip")
+        self.assertEqual(self.previa(nome).json()["detail"], "Pacote recusado: manifesto ausente ou inválido")
+        self.gravar("config/pacote_local.json", {"pasta": "", "desfazer_conhecidos": [hashlib.sha256(forjado).hexdigest()]})
+        self.assertEqual(self.previa(nome).status_code, 200)  # o registro local é a única chave
+        casos = (
+            montar_zip({LEMBRETES: b"{}"}, invalidos=[LEMBRETES]),  # exportação nunca tem invalidos
+            montar_zip({LEMBRETES: b"{}"}, tipo="desfazer", invalidos=[".env"]),  # fora dos arquivos
+            montar_zip({".env": b"X=1"}, tipo="desfazer", invalidos=[".env"]),  # fora da allowlist
+        )
+        for indice, dados in enumerate(casos):
+            with self.subTest(indice=indice):
+                nome = self.colocar(dados, f"{'pacote-local' if indice == 0 else 'desfazer'}-2026010{indice + 2}-000000.zip")
+                resposta = self.previa(nome)
+                self.assertEqual(resposta.status_code, 422)
+                self.assertIn(resposta.json()["detail"], ("Pacote recusado: manifesto ausente ou inválido",
+                                                          "Pacote recusado: arquivo fora da lista permitida"))
+
+    def test_links_alterados_sem_valor_pessoal(self):
+        contas = "config/contas_automacao.json"
+        self.gravar(contas, {"dashboard_pasta_url": "https://antigo.example.com/sites/a", "dashboard_email": "velho@exemplo.com"})
+        self.gravar(cliente_rel(), {"contrato": "123", "cnpj_faturamento": ""})
+        novo_contas = json.dumps({
+            "dashboard_pasta_url": "https://usuario:segredo@novo.example.com:8443/sites/b?token=xyz",
+            "endpoint_url": "https://endpoint.example.com/webclient",
+            "dashboard_email": "pessoa@exemplo.com",
+        }).encode()
+        nome = self.colocar(montar_zip({
+            contas: novo_contas,
+            cliente_rel(): b'{"contrato": "456", "cnpj_faturamento": ""}',
+            "config/representantes_regionais.json": b"{}",
+            "data/state/assistente_instrucoes.json": b"{}",
+            LEMBRETES: b"{}",
+        }))
+        resposta = self.previa(nome)
+        rotulos = {link["chave"]: link["rotulo"] for link in pacote_local.LINKS}
+        conta = next(item["rotulo"] for item in pacote_local.CONTAS if item["id"] == "conta_simpress")
+        self.assertEqual(resposta.json()["links_alterados"], [
+            {"rotulo": "Contrato", "antes": None, "depois": None},
+            {"rotulo": rotulos["dashboard_pasta_url"], "antes": "antigo.example.com", "depois": "novo.example.com"},
+            {"rotulo": rotulos["endpoint_url"], "antes": None, "depois": "endpoint.example.com"},
+            {"rotulo": conta, "antes": None, "depois": None},
+            {"rotulo": "Representantes regionais", "antes": None, "depois": None},
+            {"rotulo": "Instruções do Assistente", "antes": None, "depois": None},
+        ])
+        for valor in ("segredo", "token", "xyz", "8443", "pessoa@", "velho@", "456", "/sites"):
+            self.assertNotIn(valor, json.dumps(resposta.json()["links_alterados"]))
+        self.assertEqual(self.previa(self.colocar(montar_zip({LEMBRETES: b"{}"}), "pacote-local-20260102-000000.zip"))
+                         .json()["links_alterados"], [])
 
     def test_falha_depois_de_gravar_volta_os_arquivos(self):
         nome = self.preparar()
@@ -530,6 +611,7 @@ class RestaurarTests(PacoteLocalBase):
         self.assertEqual(self.estado(), self.alterado)
         self.assertEqual(self.publicados, [])
         self.assertEqual([p.name for p in self.pasta.iterdir()], [nome])  # o desfazer sem uso foi apagado
+        self.assertEqual(self.registro().get("desfazer_conhecidos", []), [])  # o registro volta junto
 
 
 class PastaTests(PacoteLocalBase):
@@ -589,6 +671,31 @@ class PastaTests(PacoteLocalBase):
         arquivo = self.client.post("/api/pacote-local/exportar").json()["arquivo"]
         self.assertTrue((escolhida / arquivo).is_file())
         self.assertTrue(self.salvar("").json()["pasta_padrao"])
+
+    def test_salvar_pasta_preserva_o_registro_de_desfazer(self):
+        conhecidos = ["a" * 64, "b" * 64]
+        self.gravar("config/pacote_local.json", {"pasta": "", "desfazer_conhecidos": conhecidos})
+        escolhida = self.base.parent / "pacotes"
+        escolhida.mkdir()
+        self.assertEqual(self.salvar(str(escolhida)).status_code, 200)
+        gravado = json.loads((self.base / "config" / "pacote_local.json").read_text(encoding="utf-8"))
+        self.assertEqual(gravado, {"pasta": str(escolhida), "desfazer_conhecidos": conhecidos})
+
+    def test_hd_usb_e_cartao_recusados_no_windows(self):
+        escolhida = self.base.parent / "pacotes"
+        escolhida.mkdir()
+        rede = "Use uma pasta deste computador (sem OneDrive, rede ou unidade removível)."
+        casos = ((3, 7, 422), (3, 4, 422), (3, 12, 422), (3, 13, 422), (3, None, 422), (2, 11, 422),
+                 (3, 11, 200), (3, 17, 200))  # USB, 1394, SD, MMC, consulta falhou, removível; SATA e NVMe passam
+        for unidade, barramento, status in casos:
+            with self.subTest(unidade=unidade, barramento=barramento), \
+                    mock.patch.object(pacote_local, "_WINDOWS", True), \
+                    mock.patch.object(pacote_local, "_tipo_de_unidade", return_value=unidade), \
+                    mock.patch.object(pacote_local, "_tipo_de_barramento", return_value=barramento):
+                resposta = self.salvar(str(escolhida))
+                self.assertEqual(resposta.status_code, status, resposta.text)
+                if status == 422:
+                    self.assertEqual(resposta.json()["detail"], rede)
 
     def test_pasta_configurada_que_sumiu(self):
         self.gravar("config/pacote_local.json", {"pasta": str(self.base / "sumiu")})

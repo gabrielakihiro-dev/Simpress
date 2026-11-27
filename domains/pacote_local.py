@@ -24,13 +24,14 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, FrozenSet, List, Optional
+from urllib.parse import urlsplit
 
 from core import config
 from core.config import BASE_DIR, STATE_DIR, format_size_limit
 from core.errors import DomainError
 from core.integrity import (
-    FileBusyError, TransactionConflictError, WorkbookSafetyError, _fsync_directory, atomic_write_json, lock_paths,
+    FileBusyError, TransactionConflictError, WorkbookSafetyError, _fsync_directory, atomic_write_bytes, lock_paths,
 )
 from core.local_paths import is_link_or_junction
 from core.xlsx_safety import validate_xlsx_archive
@@ -146,11 +147,27 @@ _LINKS_E_CONTAS = {
     _rel(config.REGIONAL_REPRESENTATIVES_FILE), _rel(config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE),
     _rel(config.ASSISTANT_INSTRUCTIONS_FILE),
 }
-_CHAVES_MANIFESTO = {"formato", "tipo", "versao_app", "criado_em", "arquivos", "ausentes"}
+_CHAVES_MANIFESTO = {"formato", "tipo", "versao_app", "criado_em", "arquivos", "ausentes", "invalidos"}
 _CHAVES_ARQUIVO = {"caminho", "tamanho_bytes", "sha256"}
 _RESERVADOS = {"con", "prn", "aux", "nul", *(f"com{n}" for n in range(1, 10)), *(f"lpt{n}" for n in range(1, 10))}
 _SINCRONIZADAS_ENV = ("OneDrive", "OneDriveCommercial", "OneDriveConsumer")
 _SINCRONIZADAS_NOMES = ("onedrive", "dropbox", "google drive", "icloud")
+_WINDOWS = sys.platform == "win32"
+_DRIVE_FIXO = 3
+# STORAGE_BUS_TYPE de HD externo e cartão: 1394, USB, SD e MMC (o Windows informa HD USB como unidade fixa).
+_BARRAMENTOS_REMOVIVEIS = {4, 7, 12, 13}
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+# Rótulos da prévia (``links_alterados``): só o nome do campo; host só para links, nunca login, e-mail ou valor.
+_ROTULOS_ARQUIVO = {
+    _rel(config.REGIONAL_REPRESENTATIVES_FILE): "Representantes regionais",
+    _rel(config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE): "Representantes regionais (padrão)",
+    _rel(config.ASSISTANT_INSTRUCTIONS_FILE): "Instruções do Assistente",
+}
+# Mesmos rótulos da tela de Dados do cliente (routers/local_setup.py e corpo.tsx).
+_ROTULOS_CLIENTE = (
+    ("contrato", "Contrato"), ("cnpj_faturamento", "CNPJ de faturamento"),
+    ("series_sebrae_fora", "Séries dos notebooks do próprio cliente"),
+)
 
 MSG_PASTA_INEXISTENTE = "A pasta não existe ou não aceita escrita."
 MSG_PASTA_REDE = "Use uma pasta deste computador (sem OneDrive, rede ou unidade removível)."
@@ -193,6 +210,10 @@ def _recusa_restauracao(motivo: str) -> DomainError:
     return DomainError(f"Restauração recusada: {motivo}", status_code=409)
 
 
+def _conteudo_invalido(rel: str) -> DomainError:
+    return _recusa(f"conteúdo inválido em {PurePosixPath(rel).name}")  # só o nome, nunca o caminho
+
+
 def _grande_demais(limite: int) -> DomainError:
     return _recusa(f"pacote grande demais (limite {format_size_limit(limite)})")
 
@@ -218,12 +239,60 @@ def _raizes_sincronizadas() -> List[Path]:
     return [Path(raiz).resolve() for raiz in raizes if raiz and "\0" not in raiz]
 
 
+def _tipo_de_unidade(anchor: str) -> int:
+    import ctypes
+
+    return int(ctypes.windll.kernel32.GetDriveTypeW(anchor))
+
+
+def _tipo_de_barramento(anchor: str) -> Optional[int]:
+    """STORAGE_BUS_TYPE do volume (IOCTL_STORAGE_QUERY_PROPERTY, StorageDeviceProperty); None se a consulta falhar."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.CreateFileW.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    kernel32.DeviceIoControl.argtypes = [
+        wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p,
+    ]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    # Acesso 0 basta para consultar propriedades; compartilha leitura e escrita; OPEN_EXISTING.
+    handle = kernel32.CreateFileW("\\\\.\\" + anchor.rstrip("\\/"), 0, 3, None, 3, 0, None)
+    if handle in (None, ctypes.c_void_p(-1).value):
+        return None
+    try:
+        consulta = (wintypes.DWORD * 3)(0, 0, 0)  # PropertyId=StorageDeviceProperty, QueryType=Standard
+        saida = ctypes.create_string_buffer(1024)
+        lidos = wintypes.DWORD()
+        if not kernel32.DeviceIoControl(
+            handle, 0x002D1400, ctypes.byref(consulta), ctypes.sizeof(consulta), saida, ctypes.sizeof(saida),
+            ctypes.byref(lidos), None,
+        ) or lidos.value < 32:
+            return None
+        return int.from_bytes(saida.raw[28:32], "little")  # STORAGE_DEVICE_DESCRIPTOR.BusType
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _unidade_removivel(anchor: str) -> bool:
+    """Windows: rede, unidade removível ou volume em USB/1394/SD/MMC; consulta que falha conta como removível."""
+    if _tipo_de_unidade(anchor) != _DRIVE_FIXO:
+        return True
+    barramento = _tipo_de_barramento(anchor)
+    return barramento is None or barramento in _BARRAMENTOS_REMOVIVEIS
+
+
 def validar_pasta(base: Path, texto: str) -> Path:
     """A pasta resolvida, ou DomainError 422 com uma das três mensagens de pasta."""
     erro = lambda mensagem: DomainError(mensagem, status_code=422)  # noqa: E731
     if any(ord(caractere) < 0x20 for caractere in texto):
         raise erro(MSG_PASTA_PROIBIDA)
-    if texto.startswith(("\\", "//")):
+    if texto.startswith(("\\\\", "//")):
         raise erro(MSG_PASTA_REDE)
     try:
         pasta = Path(texto)
@@ -238,7 +307,7 @@ def validar_pasta(base: Path, texto: str) -> Path:
             raise erro(MSG_PASTA_INEXISTENTE)
         # Nuvem, rede e repositório conferidos no caminho resolvido: ``..`` não contorna.
         resolvida = pasta.resolve()
-        if str(resolvida).startswith(("\\", "//")):
+        if str(resolvida).startswith(("\\\\", "//")):
             raise erro(MSG_PASTA_REDE)
         if any(nome in parte.casefold() for parte in resolvida.parts for nome in _SINCRONIZADAS_NOMES):
             raise erro(MSG_PASTA_REDE)
@@ -248,12 +317,8 @@ def validar_pasta(base: Path, texto: str) -> Path:
         base = base.resolve()
         if (resolvida == base or base in resolvida.parents) and resolvida != (base / "data" / "pacotes_locais"):
             raise erro(MSG_PASTA_PROIBIDA)
-        if sys.platform == "win32":
-            import ctypes
-
-            drive_fixo = 3
-            if ctypes.windll.kernel32.GetDriveTypeW(resolvida.anchor) != drive_fixo:
-                raise erro(MSG_PASTA_REDE)
+        if _WINDOWS and _unidade_removivel(resolvida.anchor):
+            raise erro(MSG_PASTA_REDE)
         descritor, teste = tempfile.mkstemp(prefix=".pacote-local-teste-", suffix=".tmp", dir=resolvida)
         os.close(descritor)
         os.unlink(teste)
@@ -262,13 +327,30 @@ def validar_pasta(base: Path, texto: str) -> Path:
     return resolvida
 
 
-def _pasta_configurada(services: PacoteLocalServices) -> tuple[str, bool]:
-    """(texto da pasta, é a padrão). Arquivo ausente, ilegível ou vazio = padrão."""
+def _ler_config(services: PacoteLocalServices) -> Dict[str, Any]:
+    """``config/pacote_local.json``: ``pasta`` e ``desfazer_conhecidos``. Ausente ou ilegível = vazio."""
     try:
         dado = json.loads(services.arquivo_config().read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
-        dado = {}
-    texto = dado.get("pasta") if isinstance(dado, dict) else None
+        return {}
+    return dado if isinstance(dado, dict) else {}
+
+
+def _desfazer_conhecidos(dado: Dict[str, Any]) -> List[str]:
+    """SHA-256 dos desfazer-*.zip criados por este app; só eles podem trazer arquivo ``invalidos``."""
+    lista = dado.get("desfazer_conhecidos")
+    return [item for item in lista if isinstance(item, str) and _SHA256.fullmatch(item)] if isinstance(lista, list) else []
+
+
+def _config_bytes(pasta: Any, conhecidos: List[str]) -> bytes:
+    return json.dumps(
+        {"pasta": pasta if isinstance(pasta, str) else "", "desfazer_conhecidos": conhecidos}, ensure_ascii=False, indent=2,
+    ).encode("utf-8")
+
+
+def _pasta_configurada(services: PacoteLocalServices) -> tuple[str, bool]:
+    """(texto da pasta, é a padrão). Arquivo ausente, ilegível ou vazio = padrão."""
+    texto = _ler_config(services).get("pasta")
     if isinstance(texto, str) and texto.strip():
         return texto.strip(), False
     return str(services.base_dir() / "data" / "pacotes_locais"), True
@@ -318,8 +400,8 @@ def salvar_pasta(services: PacoteLocalServices, texto: str) -> Dict[str, Any]:
     arquivo = services.arquivo_config()
     try:
         arquivo.parent.mkdir(parents=True, exist_ok=True)
-        with lock_paths([arquivo]):
-            atomic_write_json(arquivo, {"pasta": valor})
+        with lock_paths([arquivo]):  # preserva o registro de desfazer
+            atomic_write_bytes(arquivo, _config_bytes(valor, _desfazer_conhecidos(_ler_config(services))))
     except FileBusyError:
         raise DomainError(MSG_OCUPADOS, status_code=409) from None
     except OSError:
@@ -364,6 +446,7 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
     nome = f"{prefixo}-{agora:%Y%m%d-%H%M%S}.zip"
     arquivos: List[Dict[str, Any]] = []
     ausentes: List[str] = []
+    invalidos: List[str] = []
     conteudo: Dict[str, bytes] = {}
     total = 0
     for rel in ALLOWLIST:
@@ -384,9 +467,14 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
             raise DomainError(f"Os arquivos passam do limite de {format_size_limit(LIMITE_TOTAL)}.", status_code=422)
         arquivos.append({"caminho": rel, "tamanho_bytes": len(dados), "sha256": hashlib.sha256(dados).hexdigest()})
         conteudo[rel] = dados
+        if not _conteudo_valido(services, rel, dados):
+            if tipo == "exportacao":  # exportar segue bloqueado; o desfazer guarda o arquivo como está
+                raise _conteudo_invalido(rel)
+            invalidos.append(rel)
     manifesto = {
         "formato": 1, "tipo": tipo, "versao_app": services.app_version,
         "criado_em": agora.isoformat(timespec="seconds"), "arquivos": arquivos, "ausentes": ausentes,
+        "invalidos": invalidos,
     }
     final = pasta / nome
     try:
@@ -422,7 +510,7 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
             pass
     return {
         "arquivo": nome, "tamanho_bytes": final.stat().st_size, "arquivos": len(arquivos),
-        "ausentes": len(ausentes), "criado_em": manifesto["criado_em"],
+        "ausentes": len(ausentes), "criado_em": manifesto["criado_em"], "sha256": sha256_file(final),
     }
 
 
@@ -440,7 +528,7 @@ def exportar(services: PacoteLocalServices) -> Dict[str, Any]:
         (pasta / resultado["arquivo"]).unlink(missing_ok=True)
         raise
     logger.info("pacote_local: exportado (arquivos=%d, ausentes=%d)", resultado["arquivos"], resultado["ausentes"])
-    return resultado
+    return {chave: valor for chave, valor in resultado.items() if chave != "sha256"}
 
 
 # --- Validação do zip (prévia, restauração e conferência do desfazer) -----------------------------------------------
@@ -469,6 +557,8 @@ def _manifesto_valido(dados: bytes) -> Optional[Dict[str, Any]]:
             or not isinstance(criado_em, str) or datetime.fromisoformat(criado_em).tzinfo is None
             or not isinstance(arquivos, list) or not isinstance(ausentes, list)
             or any(not isinstance(item, str) for item in ausentes)
+            or not isinstance(manifesto["invalidos"], list) or any(not isinstance(item, str) for item in manifesto["invalidos"])
+            or (manifesto["tipo"] == "exportacao" and manifesto["invalidos"])
         ):
             return None
         for item in arquivos:
@@ -481,7 +571,10 @@ def _manifesto_valido(dados: bytes) -> Optional[Dict[str, Any]]:
     except (UnicodeError, ValueError, TypeError):
         return None
     caminhos = [item["caminho"] for item in arquivos]
+    invalidos = manifesto["invalidos"]
     if len(set(caminhos)) != len(caminhos) or len(set(ausentes)) != len(ausentes) or set(caminhos) & set(ausentes):
+        return None
+    if len(set(invalidos)) != len(invalidos) or not set(invalidos) <= set(caminhos):
         return None
     return manifesto
 
@@ -545,8 +638,13 @@ def _conteudo_valido(services: PacoteLocalServices, rel: str, dados: bytes) -> b
         return False
 
 
-def validar_pacote(services: PacoteLocalServices, caminho: Path) -> Dict[str, Any]:
+def validar_pacote(
+    services: PacoteLocalServices, caminho: Path, confiaveis: FrozenSet[str] = frozenset(),
+) -> Dict[str, Any]:
     """Confere o zip inteiro sem gravar nada: {"manifesto", "conteudo": {rel: bytes}, "sha256"}.
+
+    Arquivo listado em ``invalidos`` só passa sem validar o conteúdo se o SHA-256 do zip estiver no registro de
+    desfazer criados por este app (ou em ``confiaveis``, o desfazer recém-gravado); senão o manifesto é recusado.
 
     shortcut: o conteúdo fica em memória (até 300 MB); trocar por releitura do zip se os pacotes crescerem.
     """
@@ -570,15 +668,18 @@ def validar_pacote(services: PacoteLocalServices, caminho: Path) -> Dict[str, An
             pacote = zipfile.ZipFile(entrada)
         except (zipfile.BadZipFile, OSError, ValueError):
             raise _recusa(MOTIVO_MANIFESTO) from None
+        conhecido = resumo.hexdigest() in {*_desfazer_conhecidos(_ler_config(services)), *confiaveis}
         with pacote:
-            manifesto, conteudo = _validar_entradas(services, pacote)
+            manifesto, conteudo = _validar_entradas(services, pacote, conhecido)
     achado = NOME_PACOTE.fullmatch(caminho.name)
     if achado and (achado.group(1) == "desfazer") != (manifesto["tipo"] == "desfazer"):
         raise _recusa(MOTIVO_MANIFESTO)  # o tipo do manifesto precisa bater com o prefixo do nome
     return {"manifesto": manifesto, "conteudo": conteudo, "sha256": resumo.hexdigest()}
 
 
-def _validar_entradas(services: PacoteLocalServices, pacote: zipfile.ZipFile) -> tuple[Dict[str, Any], Dict[str, bytes]]:
+def _validar_entradas(
+    services: PacoteLocalServices, pacote: zipfile.ZipFile, conhecido: bool,
+) -> tuple[Dict[str, Any], Dict[str, bytes]]:
     infos = pacote.infolist()
     if len(infos) > len(ALLOWLIST) + 1:
         raise _recusa(MOTIVO_FORA)
@@ -613,6 +714,9 @@ def _validar_entradas(services: PacoteLocalServices, pacote: zipfile.ZipFile) ->
     declarados = {item["caminho"]: item for item in manifesto["arquivos"]}
     if any(rel not in ALLOWLIST for rel in (*por_nome, *declarados, *manifesto["ausentes"])):
         raise _recusa(MOTIVO_FORA)
+    invalidos = set(manifesto["invalidos"])
+    if invalidos and not conhecido:  # desfazer forjado não pula a validação de conteúdo
+        raise _recusa(MOTIVO_MANIFESTO)
     if set(por_nome) != set(declarados):
         raise _recusa(MOTIVO_NAO_CONFERE)
     if any(item["tamanho_bytes"] > services.max_upload_bytes for item in declarados.values()):
@@ -629,8 +733,8 @@ def _validar_entradas(services: PacoteLocalServices, pacote: zipfile.ZipFile) ->
             dados = None
         if dados is None or len(dados) != item["tamanho_bytes"] or hashlib.sha256(dados).hexdigest() != item["sha256"]:
             raise _recusa(MOTIVO_NAO_CONFERE)
-        if not _conteudo_valido(services, rel, dados):
-            raise _recusa(f"conteúdo inválido em {rel}")
+        if rel not in invalidos and not _conteudo_valido(services, rel, dados):
+            raise _conteudo_invalido(rel)
         conteudo[rel] = dados
     return manifesto, conteudo
 
@@ -671,6 +775,53 @@ def _totais(acoes: List[tuple[str, str]]) -> Dict[str, int]:
     return totais
 
 
+def _host(valor: Any) -> Optional[str]:
+    """Só o domínio do link (sem esquema, porta, caminho, query, usuário ou token); vazio ou inválido = None."""
+    if not isinstance(valor, str) or not valor.strip():
+        return None
+    try:
+        return urlsplit(valor.strip()).hostname or None
+    except ValueError:
+        return None
+
+
+def _json_ou_vazio(dados: Optional[bytes]) -> Dict[str, Any]:
+    try:
+        valor = json.loads(dados.decode("utf-8-sig")) if dados is not None else {}
+    except (UnicodeError, ValueError):
+        return {}
+    return valor if isinstance(valor, dict) else {}
+
+
+def _links_alterados(base: Path, conteudo: Dict[str, bytes], acoes: List[tuple[str, str]]) -> List[Dict[str, Any]]:
+    """O que muda em links, contas, cliente, representantes e instruções do Assistente, sem valor pessoal."""
+    itens: List[Dict[str, Any]] = []
+    vazio = lambda rotulo: {"rotulo": rotulo, "antes": None, "depois": None}  # noqa: E731
+    for rel, acao in acoes:
+        if rel not in _LINKS_E_CONTAS or acao not in ("substituir", "criar"):
+            continue
+        if rel in _ROTULOS_ARQUIVO:
+            itens.append(vazio(_ROTULOS_ARQUIVO[rel]))
+            continue
+        try:
+            atual = (base / rel).read_bytes() if acao == "substituir" else None
+        except OSError:
+            atual = None
+        antes, depois = _json_ou_vazio(atual), _json_ou_vazio(conteudo[rel])
+        if rel == _rel(config.AUTOMATION_ACCOUNTS_FILE):
+            for link in LINKS:
+                chave = link["chave"]
+                if antes.get(chave) != depois.get(chave):
+                    itens.append({"rotulo": link["rotulo"], "antes": _host(antes.get(chave)), "depois": _host(depois.get(chave))})
+            for conta in CONTAS:
+                chaves = [chave for chave, _ in conta["chaves"]] + ([conta["outlook"][0]] if conta["outlook"] else [])
+                if any(antes.get(chave) != depois.get(chave) for chave in chaves):
+                    itens.append(vazio(conta["rotulo"]))
+        else:  # config/cliente.json
+            itens += [vazio(rotulo) for chave, rotulo in _ROTULOS_CLIENTE if antes.get(chave) != depois.get(chave)]
+    return itens
+
+
 def previa(services: PacoteLocalServices, arquivo: str) -> Dict[str, Any]:
     caminho = _caminho_pacote(_pasta_em_uso(services), arquivo)
     pacote = validar_pacote(services, caminho)
@@ -684,6 +835,8 @@ def previa(services: PacoteLocalServices, arquivo: str) -> Dict[str, Any]:
         "itens": [{"caminho": rel, "acao": acao} for rel, acao in acoes],
         "totais": _totais(acoes),
         "muda_links": any(rel in _LINKS_E_CONTAS and acao in ("substituir", "criar") for rel, acao in acoes),
+        "links_alterados": _links_alterados(services.base_dir(), pacote["conteudo"], acoes),
+        "invalidos": [PurePosixPath(rel).name for rel in pacote["manifesto"]["invalidos"]],
         "preview_token": _token(pacote["sha256"], atuais),
     }
 
@@ -730,18 +883,26 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
         gravado = False
         desfazer: Optional[Dict[str, Any]] = None
         try:
-            with services.inventory_state_transaction([base / rel for rel in ALLOWLIST]) as transacao:
+            alvos = [*(base / rel for rel in ALLOWLIST), services.arquivo_config()]
+            with services.inventory_state_transaction(alvos) as transacao:
                 try:
                     if _hashes_atuais(base) != atuais:
                         raise _recusa_restauracao("o estado mudou desde a prévia; abra a prévia de novo")
                     desfazer = _gravar_pacote(services, pasta, "desfazer")
                     try:
-                        validar_pacote(services, pasta / desfazer["arquivo"])
+                        validar_pacote(services, pasta / desfazer["arquivo"], frozenset({desfazer["sha256"]}))
                     except DomainError as error:
                         (pasta / desfazer["arquivo"]).unlink(missing_ok=True)
                         raise _recusa_restauracao(
                             f"o pacote de desfazer do estado atual não passou na conferência ({error.detail})"
                         ) from None
+                    # Registro do desfazer na mesma transação: se a restauração voltar atrás, ele volta junto.
+                    registro = _ler_config(services)
+                    transacao.stage_bytes(
+                        services.arquivo_config(),
+                        _config_bytes(registro.get("pasta"), [*_desfazer_conhecidos(registro), desfazer["sha256"]]),
+                        lambda temporario: json.loads(temporario.read_text(encoding="utf-8")),
+                    )
                     for rel, acao in acoes:
                         if acao in ("criar", "substituir"):
                             dados = pacote["conteudo"][rel]
@@ -753,9 +914,11 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
                     transacao.apply()
                     estado = services.load_database(transaction_locked=True, publish=False)
                     if not isinstance(estado, dict):
-                        if (base / _rel(config.DETAILS_UPLOAD_FILE)).is_file():
+                        # Sem cadastro, ou desfazer que devolve arquivo já inválido antes: o site fica sem equipamentos,
+                        # como estava antes da restauração original. Fora isso, volta atrás.
+                        if (base / _rel(config.DETAILS_UPLOAD_FILE)).is_file() and not pacote["manifesto"]["invalidos"]:
                             raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
-                        estado = services.estado_vazio()  # restauração sem cadastro: o site fica sem equipamentos
+                        estado = services.estado_vazio()
                     transacao.commit()
                     gravado = True
                     services.publish_database_state(estado)  # dentro da transação, como history_restore

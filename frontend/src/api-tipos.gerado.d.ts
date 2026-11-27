@@ -596,6 +596,12 @@ export type PacoteLocalItem = {
   "tamanho_bytes": number;
 };
 
+export type PacoteLocalLinkAlterado = {
+  "rotulo": string;
+  "antes"?: string | null;
+  "depois"?: string | null;
+};
+
 export type PacoteLocalLista = {
   "pasta": string;
   "pasta_padrao": boolean;
@@ -615,6 +621,8 @@ export type PacoteLocalPrevia = {
   "itens": PacoteLocalPreviaItem[];
   "totais": PacoteLocalPreviaTotais;
   "muda_links": boolean;
+  "links_alterados": PacoteLocalLinkAlterado[];
+  "invalidos": string[];
   "preview_token": string;
 };
 

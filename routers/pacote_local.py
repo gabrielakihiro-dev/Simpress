@@ -55,6 +55,12 @@ class PacoteLocalPreviaTotais(BaseModel):
     apagar: int
 
 
+class PacoteLocalLinkAlterado(BaseModel):
+    rotulo: str
+    antes: Optional[str] = None
+    depois: Optional[str] = None
+
+
 class PacoteLocalPrevia(BaseModel):
     arquivo: str
     tipo: Literal["exportacao", "desfazer"]
@@ -63,6 +69,10 @@ class PacoteLocalPrevia(BaseModel):
     itens: List[PacoteLocalPreviaItem]
     totais: PacoteLocalPreviaTotais
     muda_links: bool
+    # Só o domínio dos links e o nome dos campos de contas, cliente, representantes e instruções (sem valor pessoal).
+    links_alterados: List[PacoteLocalLinkAlterado]
+    # Nomes dos arquivos que um desfazer devolve como estavam, mesmo com conteúdo inválido.
+    invalidos: List[str]
     preview_token: str
 
 
