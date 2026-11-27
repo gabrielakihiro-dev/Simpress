@@ -825,6 +825,7 @@ export type PainelResposta = {
   "sem_acesso_60_dias"?: unknown;
   "backups_regionais"?: Record<string, unknown> | null;
   "lembretes_agendados"?: Record<string, unknown> | null;
+  "hostnames_atualizados"?: Record<string, unknown> | null;
 };
 
 export type PendenciaSebrae = {

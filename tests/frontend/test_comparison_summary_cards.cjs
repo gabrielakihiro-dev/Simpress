@@ -122,12 +122,12 @@ const FAIXAS = {
     aria: "Contadores de Divergências",
     rotulos: [
       "Notebooks comparados", "Sem correspondência — no endpoint", "Sem correspondência — na Simpress",
-      "Divergências de local", "Duplicidades e ambiguidades", "Séries sem mapeamento",
+      "Divergências de local", "Séries sem mapeamento",
     ],
   },
   apelidos: {
     aria: "Contadores de Apelidos",
-    rotulos: ["Apelidos para conferência", "Divergências manuais pendentes", "Apelidos/hostnames atualizados"],
+    rotulos: ["Duplicidades e ambiguidades", "Apelidos para conferência", "Divergências manuais pendentes", "Apelidos/hostnames atualizados"],
   },
   usuarios: { aria: "Contadores de Usuários", rotulos: ["Mudanças de usuário", "Sem usuário"] },
 };
@@ -195,8 +195,8 @@ test("Resumo (18/11/2026, atualizado 23/11/2026): o resultado não traz o bento 
 
 test("strips stay with static cards at zero and the Usuários tab has no wrapper without cards", () => {
   const html = renderizar({ total_endpoint: 0 });
-  assert.equal(cartoes(painel(html, "divergencias")).length, 6);
-  assert.equal(cartoes(painel(html, "apelidos")).length, 3);
+  assert.equal(cartoes(painel(html, "divergencias")).length, 5);
+  assert.equal(cartoes(painel(html, "apelidos")).length, 4);
   assert.doesNotMatch(painel(html, "usuarios"), /resumo-cartoes/);
 });
 
@@ -211,4 +211,29 @@ test("Visão Geral (23/11/2026): aba padrão do Resumo, habilitada sem comparaç
   assert.match(fonte, /abaPedida && ABAS_SEM_COMPARACAO\.includes\(abaPedida\)/);
   const painel = require("node:fs").readFileSync(require("node:path").join(__dirname, "../../frontend/src/paineis/ferramentas-cockpit/estado.ts"), "utf8");
   assert.equal(painel.split("app.limparAbasResumo?.(abaPedidaAoAbrir)").length - 1, 3);
+});
+
+test("Duplicidades e ambiguidades (27/11/2026): ficam no topo de Apelidos, fora de Divergências", () => {
+  const html = renderizar(COMPARACAO_COMPLETA);
+  const id = renderer.SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id;
+  assert.doesNotMatch(painel(html, "divergencias"), new RegExp(`id="${id}"`));
+  const apelidos = painel(html, "apelidos");
+  assert.ok(apelidos.indexOf(`id="${id}"`) >= 0);
+  assert.ok(apelidos.indexOf(`id="${id}"`) < apelidos.indexOf(`id="${renderer.SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id}"`));
+  assert.equal(renderer.abaDaCategoria("correspondencias_ambiguas"), "apelidos");
+  assert.equal(renderer.abaDaCategoria("registros_ambiguos"), "apelidos");
+  assert.deepEqual(renderer.CATEGORIAS_POR_ABA.apelidos.slice(0, 2), ["correspondencias_ambiguas", "apelidos_sem_atualizacao"]);
+  assert.equal(renderer.TIPOS_DIVERGENCIAS.some(tipo => tipo.categorias.includes("correspondencias_ambiguas")), false);
+});
+
+test("duplicidade marca o hostname da verificação mais recente como aplicado, só quando é único", () => {
+  const registros = (a, b) => [
+    { serie: "SER-D", computador: "PRNOTE-NOVO", ultima_verificacao: a },
+    { serie: "SER-D", computador: "PRNOTE-VELHO", ultima_verificacao: b },
+  ];
+  const html = renderizar({ ...COMPARACAO_COMPLETA, registros_ambiguos: [{ serie: "SER-D", computador: "PRNOTE-NOVO / PRNOTE-VELHO", fontes: {}, registros_endpoint: registros("2026-10-17T10:00:00-03:00", "2026-09-02T10:00:00-03:00") }] });
+  assert.equal(html.split("Aplicado (verificação mais recente)").length - 1, 1);
+  assert.match(html, /data-hostname-nome="PRNOTE-NOVO">.*?data-hostname-aplicado/s);
+  const empate = renderizar({ ...COMPARACAO_COMPLETA, registros_ambiguos: [{ serie: "SER-D", fontes: {}, registros_endpoint: registros("2026-10-17T10:00:00-03:00", "2026-10-17T10:00:00-03:00") }] });
+  assert.doesNotMatch(empate, /Aplicado \(verificação mais recente\)/);
 });

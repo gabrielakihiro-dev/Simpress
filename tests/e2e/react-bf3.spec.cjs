@@ -421,7 +421,7 @@ test.describe("comportamento (só no desktop)", () => {
     const ambiente = await preparar(page);
     await abrirResumo(page, { aba: null });
     // Visão Geral (23/11/2026): a barra de sub-abas sobe para o topo e a primeira aba guarda o bento (aba padrão, sem selo de contagem); seis abas.
-    const abas = [["visao-geral", "Visão Geral"], ["divergencias", "Divergências 7"], ["apelidos", "Apelidos 1"], ["usuarios", "Usuários 4"], ["sem-acesso", "Sem acesso 3"], ["backups", "Backups 0"]];
+    const abas = [["visao-geral", "Visão Geral"], ["divergencias", "Divergências 6"], ["apelidos", "Apelidos 2"], ["usuarios", "Usuários 4"], ["sem-acesso", "Sem acesso 3"], ["backups", "Backups 0"]];
     await expect(page.locator(".resumo-abas button")).toHaveText(abas.map(([, rotulo]) => rotulo), interno);
     await expect(page.locator("#resumo-aba-visao")).toHaveCount(0);
     await expect(page.locator("#resumo-aba-visao-geral")).toHaveAttribute("aria-selected", "true");
@@ -432,7 +432,7 @@ test.describe("comportamento (só no desktop)", () => {
     const yBento = (await page.locator("#resumo-painel-visao-geral").boundingBox()).y;
     expect(yBarra).toBeLessThan(yBento);
     await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-selected", "false");
-    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-label", "Divergências: 7 linhas");
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveAttribute("aria-label", "Divergências: 6 linhas");
     await expect(page.locator("#resumo-aba-usuarios")).toHaveAttribute("aria-label", "Usuários: 4 linhas");
 
     for (const [chave] of abas) {
@@ -447,8 +447,8 @@ test.describe("comportamento (só no desktop)", () => {
     }
 
     // Números do bento (a contagem anima até o valor) e "Ver lista →": seleciona a sub-aba, rola até ela e foca a aba.
-    await expect(page.locator("#nf3-num-divergencias")).toHaveText("7");
-    await expect(page.locator("#nf3-num-apelidos")).toHaveText("1");
+    await expect(page.locator("#nf3-num-divergencias")).toHaveText("6");
+    await expect(page.locator("#nf3-num-apelidos")).toHaveText("2");
     await expect(page.locator("#nf3-num-usuarios")).toHaveText("4");
     await expect(page.locator("#nf3-num-sem-acesso")).toHaveText("3");
     // 7 a 59 dias (26/11/2026): PRNOTE111 (72 dias) aparece só na lista de 60+; cartão e selo contam cada máquina uma vez (1 + 2).
@@ -459,7 +459,7 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(painelSemAcesso).toContainText("Sem acesso de 7 a 59 dias");
     await expect(painelSemAcesso.locator('tr[data-comparison-category="sem_acesso_60_dias"] td:nth-child(4)')).toHaveText(["Ainda no Endpoint, sem acesso", "Saiu para Ausentes no Endpoint"]);
     await irParaAba(page, "visao-geral");
-    await expect(page.locator("#nf3-num-divergencias")).toHaveText("7");
+    await expect(page.locator("#nf3-num-divergencias")).toHaveText("6");
     await page.locator('[data-nf3-cartao="usuarios"] [data-nf3-ver]').click();
     await expect(page.locator("#resumo-aba-usuarios")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#resumo-aba-usuarios")).toBeFocused();
@@ -608,9 +608,9 @@ test.describe("comportamento (só no desktop)", () => {
   test("Comparação: filtros de busca, tipo e só com anotação", async ({ page }) => {
     await preparar(page);
     await abrirResumo(page);
-    await expect(contagem(page)).toHaveText("7 linhas para conferência neste resultado.");
+    await expect(contagem(page)).toHaveText("6 linhas para conferência neste resultado.");
     await expect(barra(page).locator("[data-history-filter-category] option")).toHaveText([
-      "Todos os tipos", "Sem correspondência", "Localidade divergente", "Duplicidade ou ambiguidade", "Série sem local definido",
+      "Todos os tipos", "Sem correspondência", "Localidade divergente", "Série sem local definido",
     ]);
 
     const busca = barra(page).locator("[data-history-filter-search]");
@@ -629,7 +629,7 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(contagem(page)).toHaveText("1 linha encontrada neste resultado.");
     await expect(linhaDe(page, "BRJ100AAAA")).toBeVisible();
     await busca.fill("");
-    await expect(contagem(page)).toHaveText("7 linhas para conferência neste resultado.");
+    await expect(contagem(page)).toHaveText("6 linhas para conferência neste resultado.");
 
     const tipo = barra(page).locator("[data-history-filter-category]");
     await tipo.selectOption("divergencias_local");
@@ -640,14 +640,14 @@ test.describe("comportamento (só no desktop)", () => {
     await tipo.selectOption("sem_correspondencia");
     await expect(contagem(page)).toHaveText("3 linhas encontradas neste resultado.");
     await tipo.selectOption("");
-    await expect(contagem(page)).toHaveText("7 linhas para conferência neste resultado.");
+    await expect(contagem(page)).toHaveText("6 linhas para conferência neste resultado.");
 
     await barra(page).locator("[data-history-filter-annotated]").check();
     await expect(contagem(page)).toHaveText("1 linha encontrada neste resultado.");
     await expect(linhaDe(page, "BRJ100AAAA")).toBeVisible();
     await expect(linhaDe(page, "BRJ100BBBB")).toHaveCount(0);
     await barra(page).locator("[data-history-filter-annotated]").uncheck();
-    await expect(contagem(page)).toHaveText("7 linhas para conferência neste resultado.");
+    await expect(contagem(page)).toHaveText("6 linhas para conferência neste resultado.");
   });
 
   test("Comparação: ir para uma seção escondida pelo filtro limpa os filtros", async ({ page }) => {
@@ -659,7 +659,7 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(titulo(page, "comparacao-secao-localidade-divergente")).toBeHidden();
     expect(await irPara("comparacao-secao-localidade-divergente")).toBe(true);
     await expect(barra(page).locator("[data-history-filter-search]")).toHaveValue("");
-    await expect(contagem(page)).toHaveText("7 linhas para conferência neste resultado.");
+    await expect(contagem(page)).toHaveText("6 linhas para conferência neste resultado.");
     await expect(titulo(page, "comparacao-secao-localidade-divergente")).toBeInViewport();
 
     await barra(page).locator("[data-history-filter-annotated]").check();
@@ -710,7 +710,7 @@ test.describe("comportamento (só no desktop)", () => {
 
     await seletor.selectOption("ev-bf3-a");
     await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ATUAL}`, interno);
-    await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 7", interno);
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 6", interno);
     await irParaAba(page, "divergencias");
     await expect(linhaDe(page, "BRJ100DDDD")).toBeVisible();
     expect(escritas(ambiente)).toEqual([]);
@@ -871,7 +871,7 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator("#stat-equipamentos")).toHaveText("1.250");
     await expect(page.locator("#stat-equipamentos-rotulo")).toHaveText("equipamentos");
     await expect(page.locator("#stat-unidades")).toHaveText("5");
-    await abrirResumo(page);
+    await abrirResumo(page, { aba: "apelidos" });
     const exportar = page.locator("#btn-exportar-equipamentos");
     await expect(exportar).toBeVisible();
     await expect(exportar).toHaveAttribute("title", "Baixar a planilha com apelidos e IdCliente atualizados");
@@ -902,7 +902,7 @@ test.describe("comportamento (só no desktop)", () => {
   // bolinha da base vira "empty"; "Indisponível" só aparece quando a resposta 200 não traz o número.
   test("Indicadores: 409 mantém os números, 500 zera e resposta sem número mostra Indisponível", async ({ page }) => {
     const ambiente = await preparar(page);
-    await abrirResumo(page);
+    await abrirResumo(page, { aba: "apelidos" });
     await expect(page.locator("#stat-equipamentos")).toHaveText("1.250");
 
     ambiente.stats = { status: 409, json: { detail: "Importação em andamento." } };
@@ -1074,6 +1074,12 @@ test.describe("comportamento (só no desktop)", () => {
       texto: "A comparação de 18/10/2026 às 09:00 trouxe 5 linhas de divergência que não estavam na de 11/10/2026 às 08:00: 3 em Localidade divergente e 2 em Séries sem local definido.", lista: [],
     },
     {
+      id: "alerta-hostnames-atualizados",
+      extra: { hostnames_atualizados: { total: 1, itens: [{ serie: "BRJ100GGGG", hostname_anterior: "PRNOTE109", hostname_novo: "PRNOTE108" }] } },
+      selo: "Atenção", titulo: "Hostname atualizado pelo Endpoint", acao: "BRJ100GGGG: PRNOTE109 → PRNOTE108",
+      texto: "1 série mudou de hostname. Clique na série para ver na Comparação, aba Apelidos.", lista: ["BRJ100GGGG: PRNOTE109 → PRNOTE108"],
+    },
+    {
       id: "alerta-chamados-outro-tecnico",
       extra: { chamados_outro_tecnico: { total: 2, itens: [{ chamado: "UTIC-2026-1378", serie: "BRJ444DDDD", os: "7285070", motivo: "saiu_do_dashboard" }, { chamado: "UTIC-2026-1379", serie: "BRJ555EEEE", os: "7285071", motivo: "nao_encontrado_softexpert" }] } },
       selo: "Atenção", titulo: "Chamados finalizados por outro técnico", acao: "Ver na aba OS",
@@ -1122,6 +1128,22 @@ test.describe("comportamento (só no desktop)", () => {
     expect(escritas(ambiente)).toEqual([]);
   });
 
+  test("Alertas: clicar na série do aviso de hostname abre a Comparação em Apelidos e realça a linha", async ({ page }) => {
+    const ambiente = await preparar(page);
+    await abrirSino(page);
+    await atualizarPainel(page, ambiente, painel({ hostnames_atualizados: { total: 1, itens: [{ serie: "BRJ100GGGG", hostname_anterior: "PRNOTE109", hostname_novo: "PRNOTE108" }] } }));
+    await page.locator('#alerta-hostnames-atualizados-lista button[data-serie="BRJ100GGGG"]').click();
+    await expect(page.locator("#notification-center-panel")).toBeHidden();
+    await expect(page.locator("#resumo-aba-apelidos")).toHaveAttribute("aria-selected", "true");
+    const linha = linhaDe(page, "BRJ100GGGG");
+    await expect(linha).toBeInViewport();
+    await expect(linha).toHaveClass(/ck-linha-destaque/);
+    // A linha da duplicidade marca o hostname da verificação mais recente, e só ele.
+    await expect(linha.locator('li[data-hostname-nome="PRNOTE108"] [data-hostname-aplicado]')).toHaveText("Aplicado (verificação mais recente)");
+    await expect(linha.locator("[data-hostname-aplicado]")).toHaveCount(1);
+    expect(escritas(ambiente)).toEqual([]);
+  });
+
   test("Alertas: todos juntos, contagem do sino e variantes de gravidade", async ({ page }) => {
     const ambiente = await preparar(page, { painel: painelComAlertas() });
     await abrirSino(page);
@@ -1129,13 +1151,17 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator("#notification-center-title")).toHaveText("Pendências · 5");
     await expect(page.locator("#badge-notificacoes")).toHaveText("5");
     // painelComAlertas fica sem falha de finalização (a foto central-avisos segue a mesma); ela entra só aqui e soma um aviso.
+    // O aviso de hostname atualizado também entra só aqui (mesma razão).
     const FALHA = ALERTAS_UNICOS.find(alerta => alerta.id === "alerta-finalizacao-softexpert");
-    for (const { id } of ALERTAS_UNICOS.filter(alerta => alerta !== FALHA)) await expect(page.locator(`#${id}`)).toBeVisible();
+    const HOST = ALERTAS_UNICOS.find(alerta => alerta.id === "alerta-hostnames-atualizados");
+    for (const { id } of ALERTAS_UNICOS.filter(alerta => alerta !== FALHA && alerta !== HOST)) await expect(page.locator(`#${id}`)).toBeVisible();
     await expect(page.locator(`#${FALHA.id}`)).toBeHidden();
-    await atualizarPainel(page, ambiente, painelComAlertas(FALHA.extra));
+    await expect(page.locator(`#${HOST.id}`)).toBeHidden();
+    await atualizarPainel(page, ambiente, painelComAlertas({ ...FALHA.extra, ...HOST.extra }));
     await expect(page.locator(`#${FALHA.id}`)).toBeVisible();
-    await expect(page.locator("#notification-center-summary")).toHaveText("6 avisos ativos.");
-    await expect(page.locator("#badge-notificacoes")).toHaveText("6");
+    await expect(page.locator(`#${HOST.id}`)).toBeVisible();
+    await expect(page.locator("#notification-center-summary")).toHaveText("7 avisos ativos.");
+    await expect(page.locator("#badge-notificacoes")).toHaveText("7");
 
     // Sem acesso: no limite (sem ninguém acima de 60 dias) vira Atenção.
     await atualizarPainel(page, ambiente, painelComAlertas({
@@ -1238,7 +1264,7 @@ test.describe("comportamento (só no desktop)", () => {
     await assentar(page);
     await assentar(page);
     await expect(page.locator("#cockpit-comparison-status")).toHaveText(`Atualização · ${CURTO_ATUAL}`, interno);
-    await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 7", interno);
+    await expect(page.locator("#resumo-aba-divergencias")).toHaveText("Divergências 6", interno);
     await expect(linhaDe(page, "BRJ200AAAA")).toHaveCount(0);
   });
 });

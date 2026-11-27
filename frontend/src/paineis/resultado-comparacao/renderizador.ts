@@ -520,7 +520,11 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
       return escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—");
     }
     const classeBotao = "px-2 py-1 rounded-md border text-xs font-semibold";
-    return `<ul class="space-y-3 min-w-[15rem]">${registros.map(registro => {
+    // O back-end aplica o hostname da verificação mais recente (invall_alias_status aplicado_mais_recente); marca só se for único e todos tiverem horário.
+    const instantes = registros.map(registro => Date.parse(registro.ultima_verificacao || ""));
+    const maisRecente = Math.max(...instantes);
+    const indiceAplicado = instantes.every(Number.isFinite) && instantes.filter(instante => instante === maisRecente).length === 1 ? instantes.indexOf(maisRecente) : -1;
+    return `<ul class="space-y-3 min-w-[15rem]">${registros.map((registro, indice) => {
       const hostname = registro.computador || "";
       const horario = registro.ultima_verificacao ? formatarHorarioHistorico(registro.ultima_verificacao) : "—";
       const acoes = permitirRemocao && registro.mais_antigo === true
@@ -532,6 +536,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
           <span class="font-mono text-fg-secondary break-all">${escapeHtml(hostname || "—")}</span>
           <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span class="whitespace-nowrap text-fg-subtle">${escapeHtml(horario)}</span>
+            ${indice === indiceAplicado ? '<span data-hostname-aplicado class="text-xs text-emerald-300">Aplicado (verificação mais recente)</span>' : ""}
             ${acoes}
           </span>
         </li>`;
@@ -728,8 +733,9 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
     sem_usuario: "Sem usuário",
   };
   const CATEGORIAS_POR_ABA = {
-    divergencias: ["ausentes_no_endpoint", "ausentes_em_detalhes", "divergencias_local", "correspondencias_ambiguas", "series_sem_mapeamento"],
-    apelidos: ["apelidos_sem_atualizacao", "divergencias_apelidos_manuais"],
+    divergencias: ["ausentes_no_endpoint", "ausentes_em_detalhes", "divergencias_local", "series_sem_mapeamento"],
+    // Duplicidades e ambiguidades ficam no topo de Apelidos (27/11/2026): são hostnames repetidos, não divergência.
+    apelidos: ["correspondencias_ambiguas", "apelidos_sem_atualizacao", "divergencias_apelidos_manuais"],
     usuarios: ["mudancas_usuarios", "sem_usuario"],
     "sem-acesso": ["sem_acesso_7_dias", "sem_acesso_60_dias"],
   };
@@ -737,7 +743,6 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
   const TIPOS_DIVERGENCIAS = [
     { valor: "sem_correspondencia", rotulo: "Sem correspondência", categorias: ["ausentes_no_endpoint", "ausentes_em_detalhes"] },
     { valor: "divergencias_local", rotulo: "Localidade divergente", categorias: ["divergencias_local"] },
-    { valor: "correspondencias_ambiguas", rotulo: "Duplicidade ou ambiguidade", categorias: ["correspondencias_ambiguas"] },
     { valor: "series_sem_mapeamento", rotulo: "Série sem local definido", categorias: ["series_sem_mapeamento"] },
   ];
   const TEXTO_VAZIO_ABA: Record<string, string | undefined> = {
@@ -864,7 +869,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
       " data-user-change-summary") : "";
     // Traço dos contadores de Divergências (comparados menos "na Simpress" sobre comparados).
     const comparados = Math.max(0, Number(comparison.total_endpoint || 0));
-    const maximoDivergencias = Math.max(ausentesEndpoint.length, ausentesDetalhes.length, divergenciasLocal.length, ambiguityRows.length, seriesSemMapa.length, 1);
+    const maximoDivergencias = Math.max(ausentesEndpoint.length, ausentesDetalhes.length, divergenciasLocal.length, seriesSemMapa.length, 1);
     const tracoDivergencia = (valor: number) => (valor / maximoDivergencias) * 100;
     const tracoComparados = comparados > 0 ? Math.min(1, Math.max(0, (comparados - ausentesDetalhes.length) / comparados)) * 100 : 0;
     const avisoListaAusente = `<p class="notice notice-info" data-resumo-lista-ausente role="status">${TEXTO_LISTA_AUSENTE}</p>`;
@@ -884,9 +889,6 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
         ${cartaoSecaoBento("ambar", 3,
           cabecalhoSecaoBento("Localidade divergente", SECOES_CARTOES_RESUMO.divergencias_local.id, "Equipamentos cujo local cadastrado na Simpress é diferente do local previsto pelo prefixo da série.", divergenciasLocal.length),
           renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.", "divergencias_local"))}
-        ${cartaoSecaoBento("esmeralda", 4,
-          cabecalhoSecaoBento("Duplicidades e correspondências ambíguas", SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id, "Séries ou hostnames repetidos, ou que não identificam um único equipamento.", ambiguityRows.length),
-          renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Última verificação com êxito", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas"))}
         ${cartaoSecaoBento("indigo", 5,
           cabecalhoSecaoBento("Séries sem local definido", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id, "Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.", seriesSemMapa.length),
           renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento"))}
@@ -895,10 +897,12 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
           cartaoMetricaComparacao("Sem correspondência — no endpoint", ausentesEndpoint.length, "amber", "", "ausentes_no_endpoint", { cor: "ciano", icone: "link", traco: tracoDivergencia(ausentesEndpoint.length), atraso: 1 }),
           cartaoMetricaComparacao("Sem correspondência — na Simpress", ausentesDetalhes.length, "amber", "", "ausentes_em_detalhes", { cor: "fucsia", icone: "predio", traco: tracoDivergencia(ausentesDetalhes.length), atraso: 2 }),
           cartaoMetricaComparacao("Divergências de local", divergenciasLocal.length, "amber", "", "divergencias_local", { cor: "ambar", icone: "local", traco: tracoDivergencia(divergenciasLocal.length), atraso: 3 }),
-          cartaoMetricaComparacao("Duplicidades e ambiguidades", ambiguityRows.length, "rose", "", "correspondencias_ambiguas", { cor: "esmeralda", icone: "copia", traco: tracoDivergencia(ambiguityRows.length), atraso: 4 }),
           cartaoMetricaComparacao("Séries sem mapeamento", seriesSemMapa.length, "amber", "", "series_sem_mapeamento", { cor: "indigo", icone: "etiqueta", traco: tracoDivergencia(seriesSemMapa.length), atraso: 5 }),
         ])}
         ${painelResumo("apelidos", `
+        ${cartaoSecaoBento("esmeralda", 2,
+          cabecalhoSecaoBento("Duplicidades e correspondências ambíguas", SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id, "Séries ou hostnames repetidos, ou que não identificam um único equipamento.", ambiguityRows.length),
+          renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Última verificação com êxito", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas"))}
         ${cartaoSecaoBento("indigo", 3,
           cabecalhoSecaoBento("Linhas mantidas para conferência", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id, `Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}`, apelidosSemAtualizacao.length),
           renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao"))}
@@ -910,9 +914,10 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
           renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização."),
           " data-resumo-informativo")}
         `, false, [
-          cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao", { cor: "indigo", atraso: 0 }),
-          cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais", { cor: "ambar", atraso: 1 }),
-          cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald", "", "apelidos_atualizados", { cor: "ciano", atraso: 2 }),
+          cartaoMetricaComparacao("Duplicidades e ambiguidades", ambiguityRows.length, "rose", "", "correspondencias_ambiguas", { cor: "esmeralda", icone: "copia", atraso: 0 }),
+          cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao", { cor: "indigo", atraso: 1 }),
+          cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais", { cor: "ambar", atraso: 2 }),
+          cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald", "", "apelidos_atualizados", { cor: "ciano", atraso: 3 }),
         ])}
         ${painelResumo("usuarios", `
         ${secaoMudancasUsuarios || avisoListaAusente}

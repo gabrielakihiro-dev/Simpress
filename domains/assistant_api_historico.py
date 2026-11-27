@@ -79,7 +79,7 @@ _CAUSAS_SECAO = {
 _SECOES_EXPLICACAO = (*_CAUSAS_SECAO, "apelidos_atualizados", "mudancas_usuarios")
 # What the current record says about the Endpoint (invall_alias_status); anything else is unknown.
 _ENDPOINT_PELO_STATUS = {
-    "aplicado": "presente", "serie_invall_duplicada": "presente", "hostname_vazio": "presente",
+    "aplicado": "presente", "aplicado_mais_recente": "presente", "serie_invall_duplicada": "presente", "hostname_vazio": "presente",
     "serie_nao_encontrada": "ausente",
 }
 _CAUSAS_STATUS = {

@@ -106,7 +106,7 @@ class EffectiveAliasPrecedenceTests(unittest.TestCase):
 
         item = self.apply(equipment("S1"), endpoint_index(rows("out 14, 2026 03:06 PM", "out 29, 2026 12:13 PM")))
         self.assertEqual((item["usuarios_logados"], item["usuarios_logados_candidatos"]), ("recente", []))
-        self.assertEqual(item["invall_alias_status"], "serie_invall_duplicada")
+        self.assertEqual(item["invall_alias_status"], "aplicado_mais_recente")
 
         for case, old, new in (
             ("mesma data", "out 29, 2026 12:13 PM", "out 29, 2026 12:13 PM"),
@@ -298,6 +298,132 @@ class EndpointAliasIndexTests(unittest.TestCase):
                 removed = frozenset({("S1", effective_alias.normalize_reference_value("fixture-1"))})
                 self.assertEqual(effective_alias.read_endpoint_alias_index(services, removed)["unique"], {})
                 self.assertEqual(len(builds), 3, "a new removed set builds the index again")
+
+
+def dup(*pairs, serial="SN9"):
+    """Linhas repetidas no Endpoint: (hostname, última verificação)."""
+    return [
+        {"SERIAL": serial, "NOMEDOCOMPUTADOR": host, "ULTIMAVERIFICACAOCOMEXITO": when}
+        for host, when in pairs
+    ]
+
+
+class ResolvedByRecencyTests(unittest.TestCase):
+    OLD, NEW = "2026-11-16 10:00:00", "2026-11-26 10:00:00"
+
+    def test_latest_row_wins_and_serial_stays_duplicated(self):
+        index = endpoint_index(dup(("PRNOTEOLD", self.OLD), ("PRNOTENEW", self.NEW)))
+        self.assertEqual(index["resolved_by_recency"], {"SN9": "PRNOTENEW"})
+        self.assertIn("SN9", index["duplicates"])
+        self.assertNotIn("SN9", index["unique"])
+
+    def test_tie_missing_date_or_blank_latest_hostname_stay_ambiguous(self):
+        cases = {
+            "tie": dup(("A", self.NEW), ("B", self.NEW)),
+            "no_date": dup(("A", self.OLD), ("B", "")),
+            "blank_latest": dup(("A", self.OLD), ("", self.NEW)),
+        }
+        for name, records in cases.items():
+            with self.subTest(name):
+                self.assertEqual(endpoint_index(records)["resolved_by_recency"], {})
+
+    def test_removed_pair_makes_serial_unique_not_resolved(self):
+        records = dup(("PRNOTEOLD", self.OLD), ("PRNOTENEW", self.NEW))
+        index = effective_alias.build_endpoint_alias_index(records, frozenset({("SN9", "PRNOTENEW")}))
+        self.assertEqual(index["resolved_by_recency"], {})
+        self.assertEqual(index["unique"], {"SN9": "PRNOTEOLD"})
+
+    def test_apply_uses_latest_hostname(self):
+        index = endpoint_index(dup(("PRNOTEOLD", self.OLD), ("PRNOTENEW", self.NEW)))
+        item = equipment("SN9")
+        effective_alias.apply_effective_alias(item, index)
+        self.assertEqual(item["apelido"], "PRNOTENEW")
+        self.assertEqual(item["invall_alias_status"], "aplicado_mais_recente")
+        self.assertIn("verificação mais recente", item["invall_alias_detail"])
+
+    def test_manual_override_keeps_precedence_but_backup_hostname_wins(self):
+        index = endpoint_index(dup(("PRNOTEOLD", self.OLD), ("PRNOTENEW", self.NEW)))
+        item = equipment("SN9", manual_alias="MANUAL (M)")
+        effective_alias.apply_effective_alias(item, index)
+        self.assertEqual(item["apelido"], "MANUAL (M)")
+        backup = endpoint_index(dup(("PRNOTEOLD", self.OLD), ("PRNOTEBKPCWB002", self.NEW)))
+        item = equipment("SN9", manual_alias="MANUAL (M)")
+        effective_alias.apply_effective_alias(item, backup)
+        self.assertEqual(item["apelido"], "PRNOTEBKPCWB002")
+
+    def test_ambiguous_duplicate_keeps_current_alias(self):
+        index = endpoint_index(dup(("A", self.NEW), ("B", self.NEW)))
+        item = equipment("SN9")
+        effective_alias.apply_effective_alias(item, index)
+        self.assertEqual(item["invall_alias_status"], "serie_invall_duplicada")
+        self.assertEqual(item["apelido"], "SIMPRESS-ALIAS")
+
+    def test_review_item_names_the_chosen_hostname(self):
+        index = endpoint_index(dup(("PRNOTEOLD", self.OLD), ("PRNOTENEW", self.NEW)) + dup(("A", self.NEW), ("B", self.NEW), serial="SN8"))
+        motivos = {item["serie"]: item["motivo"] for item in effective_alias.endpoint_alias_review_items(index)}
+        self.assertIn("verificação mais recente (PRNOTENEW)", motivos["SN9"])
+        self.assertIn("nenhum hostname foi escolhido", motivos["SN8"])
+
+    def test_export_uses_resolved_hostname(self):
+        from domains import equipment_export
+
+        index = endpoint_index(dup(("PRNOTEOLD", self.OLD), ("PRNOTENEW", self.NEW)))
+        services = unittest.mock.Mock()
+        services.load_modified_apelidos.return_value = {}
+        aliases = equipment_export.get_export_aliases(services, index)
+        self.assertEqual(aliases["SN9"], "PRNOTENEW")
+
+
+class HostnamesAtualizadosTests(unittest.TestCase):
+    OLD, NEW = "2026-11-16 10:00:00", "2026-11-26 10:00:00"
+
+    def index(self, new_host="PRNOTENEW"):
+        return endpoint_index(dup(("PRNOTEOLD", self.OLD), (new_host, self.NEW)))
+
+    def test_first_run_without_base_lists_with_other_hostnames_as_previous(self):
+        result = effective_alias.calcular_hostnames_atualizados(self.index(), {})
+        self.assertEqual(result["aplicados"], {"SN9": "PRNOTENEW"})
+        self.assertEqual(result["itens"], [{"serie": "SN9", "hostname_anterior": "PRNOTEOLD", "hostname_novo": "PRNOTENEW"}])
+
+    def test_same_base_lists_nothing(self):
+        result = effective_alias.calcular_hostnames_atualizados(self.index(), {"SN9": "PRNOTENEW"})
+        self.assertEqual(result["itens"], [])
+        self.assertEqual(result["aplicados"], {"SN9": "PRNOTENEW"})
+
+    def test_change_uses_base_hostname_as_previous(self):
+        result = effective_alias.calcular_hostnames_atualizados(self.index("PRNOTE3"), {"SN9": "PRNOTENEW"})
+        self.assertEqual(result["itens"][0]["hostname_anterior"], "PRNOTENEW")
+        self.assertEqual(result["itens"][0]["hostname_novo"], "PRNOTE3")
+
+    def test_reader_missing_unreadable_and_valid(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "aviso.json"
+            self.assertIsNone(effective_alias.ler_hostnames_atualizados(path))
+            path.write_text("{quebrado", encoding="utf-8")
+            self.assertEqual(effective_alias.ler_hostnames_atualizados(path), {"aplicados": {}, "itens": []})
+            path.write_text('{"aplicados": {"A": "B"}, "itens": []}', encoding="utf-8")
+            self.assertEqual(effective_alias.ler_hostnames_atualizados(path)["aplicados"], {"A": "B"})
+
+    def test_import_stage_overwrites_file_each_time(self):
+        from domains import inventory_update
+
+        class Transaction:
+            def stage_bytes(self, target, data, validator=None):
+                Path(target).write_bytes(data)
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "aviso.json"
+            services = unittest.mock.Mock(hostnames_atualizados_file=lambda: path)
+            stage = inventory_update._stage_hostnames_atualizados
+            stage(Transaction(), services, self.index())
+            first = effective_alias.ler_hostnames_atualizados(path)
+            self.assertEqual(len(first["itens"]), 1)
+            stage(Transaction(), services, self.index())
+            self.assertEqual(effective_alias.ler_hostnames_atualizados(path)["itens"], [])
+            stage(Transaction(), services, self.index("PRNOTE3"))
+            self.assertEqual(effective_alias.ler_hostnames_atualizados(path)["itens"][0]["hostname_anterior"], "PRNOTENEW")
+            stage(Transaction(), services, effective_alias.unavailable_endpoint_alias_index())
+            self.assertEqual(len(effective_alias.ler_hostnames_atualizados(path)["itens"]), 1)  # indisponível: não grava
 
 
 if __name__ == "__main__":

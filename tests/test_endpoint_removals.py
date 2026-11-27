@@ -182,8 +182,11 @@ class RemovalWorkflowTests(unittest.TestCase):
         self.temp_context.cleanup()
 
     def test_removed_hostname_is_the_one_exported_and_can_be_restored(self):
+        # Série repetida com datas distintas: o hostname da verificação mais recente nomeia o equipamento,
+        # mas a série continua duplicada (fora de "unique").
         self.assertEqual(main.load_endpoint_aliases(), {})
-        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "ALIAS-1")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "HOST-NEW")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["invall_alias_status"], "aplicado_mais_recente")
 
         result = endpoint_removals.remove_endpoint_hostname(self.services, "SN-1", "HOST-OLD")
 
@@ -203,7 +206,7 @@ class RemovalWorkflowTests(unittest.TestCase):
 
         endpoint_removals.restore_endpoint_hostname(self.services, "SN-1", "HOST-OLD")
         self.assertEqual(main.load_endpoint_aliases(), {})
-        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "ALIAS-1")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "HOST-NEW")
         self.assertEqual(json.loads(self.removed.read_text(encoding="utf-8")), [])
 
     def test_the_last_remaining_hostname_and_unknown_pairs_are_refused(self):

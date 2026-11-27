@@ -35,9 +35,11 @@ from domains.effective_alias import (
     BACKUP_HOSTNAME_ALIAS_ACTION,
     apply_effective_alias,
     build_endpoint_alias_index,
+    calcular_hostnames_atualizados,
     endpoint_loss_warnings,
     endpoint_user_for_serial,
     hostname_backup_vence_manual,
+    ler_hostnames_atualizados,
     with_details_serials,
 )
 from domains.history_comparisons import ANNOTATABLE_COMPARISON_CATEGORIES
@@ -119,6 +121,8 @@ class InventoryUpdateServices:
     validate_export_model_sync: Optional[Callable[[bytes], Any]] = None
     # Manual aliases file; with alias_history_file, a manual alias beaten by a backup hostname is deleted.
     modified_aliases_file: Optional[Callable[[], Path]] = None
+    # Aviso do sino "hostnames atualizados": gravado a cada importação (sobrescrito), na mesma transação.
+    hostnames_atualizados_file: Optional[Callable[[], Path]] = None
 
 
 # Keep the most recent confirmed writes. Once an entry is evicted, a retry is
@@ -690,6 +694,8 @@ def _inventory_transaction_targets(
     )
     if modified_aliases_file is not None:
         transaction_targets.append(modified_aliases_file)
+    if services.hostnames_atualizados_file is not None:
+        transaction_targets.append(services.hostnames_atualizados_file())
     return transaction_targets, alias_history_file, manual_users_file, modified_aliases_file
 
 
@@ -1054,6 +1060,19 @@ def _reconcile_endpoint_users(
     return user_changes
 
 
+def _stage_hostnames_atualizados(transaction: Any, services: InventoryUpdateServices, endpoint_index: Dict[str, Any]) -> None:
+    """Grava o aviso do sino: hostnames de séries repetidas que mudaram desde a importação anterior."""
+    if services.hostnames_atualizados_file is None or not endpoint_index.get("available"):
+        return
+    path = services.hostnames_atualizados_file()
+    anterior = ler_hostnames_atualizados(path) or {}
+    resultado = calcular_hostnames_atualizados(endpoint_index, anterior.get("aplicados", {}))
+    transaction.stage_bytes(
+        path, json.dumps(resultado, ensure_ascii=False, indent=2).encode("utf-8"),
+        lambda temp: json.loads(temp.read_text(encoding="utf-8")),
+    )
+
+
 def _drop_manual_aliases_beaten_by_backup_hostname(
     transaction: Any,
     services: InventoryUpdateServices,
@@ -1068,13 +1087,13 @@ def _drop_manual_aliases_beaten_by_backup_hostname(
     """
     if modified_aliases_file is None:
         return set(), []
-    unique = endpoint_index.get("unique", {})
+    unique = {**endpoint_index.get("unique", {}), **endpoint_index.get("resolved_by_recency", {})}
     beaten: Dict[str, Dict[str, Any]] = {}
     for item in prepared_state["equipamentos_cache"].values():
         key = services.normalize_reference_value(item.get("serial"))
         if (
             item.get("_apelido_manual_override")
-            and item.get("invall_alias_status") == "aplicado"
+            and item.get("invall_alias_status") in ("aplicado", "aplicado_mais_recente")
             and hostname_backup_vence_manual(unique.get(key))
         ):
             beaten[key] = item
@@ -1399,6 +1418,7 @@ def _commit_inventory_files(
         prepared_state = _apply_inventory_replacement(transaction, services)
 
         endpoint_index = services.read_endpoint_alias_index()
+        _stage_hostnames_atualizados(transaction, services, endpoint_index)
         user_changes: List[Dict[str, str]] = []
         shown = previous
         if alias_history_file is not None:

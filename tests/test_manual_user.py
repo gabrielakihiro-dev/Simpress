@@ -329,6 +329,7 @@ class ManualUserWorkflowTests(unittest.TestCase):
             ("EXPORT_MODEL_FILE", self.model), ("UPLOAD_BACKUPS_DIR", self.input_dir / "_backups"),
             ("MODIFIED_APELIDOS_FILE", self.overrides), ("MANUAL_USERS_FILE", self.manual_users),
             ("ALIAS_HISTORY_FILE", self.history), ("COMPARISON_HISTORY_FILE", self.comparison_history),
+            ("ENDPOINT_HOSTNAMES_ATUALIZADOS_FILE", self.state_dir / "endpoint_hostnames_atualizados.json"),
             ("HISTORY_ANNOTATIONS_DIR", self.root / "shared"),
             ("LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR", self.root / "pending"),
             ("CUSTOM_UNIDADES_FILE", self.root / "unidades_custom.json"), ("TRANSACTION_ROOT", self.root),

@@ -1,11 +1,14 @@
 """Endpoint hostname index and effective alias precedence.
 
 The effective alias of an equipment follows a fixed precedence:
-manual override > unique Endpoint hostname > Simpress alias, except that a backup
+manual override > Endpoint hostname > Simpress alias, except that a backup
 hostname with a known city sigla (``PRNOTEBK[P]<sigla>[nº]``) beats the manual
-override. Hostnames are applied only when the serial appears exactly once in both sources.
+override. Hostnames are applied when the serial appears exactly once in both sources, or when
+a serial repeated in the Endpoint has a strictly most recent verified row (``resolved_by_recency``;
+the serial stays in ``duplicates`` so the user can still discard the old row).
 """
 
+import json
 import logging
 import re
 import threading
@@ -88,7 +91,7 @@ def _cached_endpoint_alias_index(
 def unavailable_endpoint_alias_index() -> Dict[str, Any]:
     return {
         "available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {},
-        "users": {}, "ambiguous_users": {}, "verified_by_serial": {},
+        "users": {}, "ambiguous_users": {}, "verified_by_serial": {}, "resolved_by_recency": {},
     }
 
 
@@ -167,6 +170,16 @@ def build_endpoint_alias_index(
         if candidates:
             ambiguous_users[serial_key] = list(candidates.values())
 
+    # Same tie-break for the hostname: the strictly latest verified row names the equipment. The serial
+    # stays in ``duplicates`` (many readers treat ``unique`` as "appears once"), so this is only a hint.
+    resolved_by_recency: Dict[str, str] = {}
+    for serial_key, rows in duplicates.items():
+        times = [moment for moment in verified_by_serial[serial_key] if moment is not None]
+        if len(times) == len(rows) and times.count(max(times)) == 1:
+            hostname = rows[times.index(max(times))]["hostname"]
+            if hostname:
+                resolved_by_recency[serial_key] = hostname
+
     # Latest non-empty verification per serial (ISO); serials without any date are left out. A date without a
     # timezone stays without one, so the reader applies its own local clock (same rule as the comparison).
     latest_verified: Dict[str, str] = {}
@@ -186,6 +199,7 @@ def build_endpoint_alias_index(
         "blank_serials": blank_serials,
         "blank_hostnames": blank_hostnames,
         "verified_by_serial": latest_verified,
+        "resolved_by_recency": resolved_by_recency,
     }
 
 
@@ -255,11 +269,16 @@ def endpoint_alias_review_items(
 ) -> List[Dict[str, str]]:
     """Describe InvAll rows that were deliberately not applied."""
     items: List[Dict[str, str]] = []
+    resolved = index.get("resolved_by_recency", {})
     for serial_key, rows in sorted(index.get("duplicates", {}).items()):
         items.append({
             "serie": rows[0].get("serie") or serial_key,
             "computador": ", ".join(row.get("hostname", "") for row in rows if row.get("hostname")),
-            "motivo": "Série duplicada no endpoint; nenhum hostname foi escolhido.",
+            "motivo": (
+                f"Série duplicada no endpoint; aplicado o hostname da verificação mais recente ({resolved[serial_key]})."
+                if serial_key in resolved
+                else "Série duplicada no endpoint; nenhum hostname foi escolhido."
+            ),
         })
     for row in index.get("blank_serials", []):
         items.append({
@@ -486,6 +505,19 @@ def apply_effective_alias(
     elif details_duplicate:
         equipment["invall_alias_status"] = "serie_detalhes_duplicada"
         equipment["invall_alias_detail"] = "A série aparece mais de uma vez na Simpress; confira antes de aplicar um hostname."
+    elif serial_key in endpoint_index.get("resolved_by_recency", {}):
+        hostname = endpoint_index["resolved_by_recency"][serial_key]
+        backup_wins = manual_override and hostname_backup_vence_manual(hostname)
+        if not manual_override or backup_wins:
+            equipment["apelido"] = hostname
+        equipment["invall_alias_status"] = "aplicado_mais_recente"
+        equipment["invall_alias_detail"] = (
+            "Série repetida no Endpoint; hostname de backup da verificação mais recente prevalece sobre o apelido manual."
+            if backup_wins
+            else "Série repetida no Endpoint; o apelido manual prevalece."
+            if manual_override
+            else "Série repetida no Endpoint; aplicado o hostname da verificação mais recente."
+        )
     elif serial_key in endpoint_index.get("duplicates", {}):
         equipment["invall_alias_status"] = "serie_invall_duplicada"
         equipment["invall_alias_detail"] = "A série aparece mais de uma vez no endpoint; o apelido atual foi mantido."
@@ -520,3 +552,40 @@ def merge_export_aliases(endpoint_aliases: Dict[str, str], overrides: Dict[str, 
     })
     return aliases
 
+
+
+def calcular_hostnames_atualizados(index: Mapping[str, Any], base: Mapping[str, Any]) -> Dict[str, Any]:
+    """Aviso do sino: séries repetidas cujo hostname da verificação mais recente mudou desde ``base``.
+
+    ``base`` é o ``aplicados`` da importação anterior (vazio se não houver arquivo); o anterior mostrado é
+    o da base ou, sem ele, os outros hostnames da série no Endpoint.
+    """
+    aplicados = dict(index.get("resolved_by_recency", {}))
+    itens: List[Dict[str, str]] = []
+    for serial_key, novo in sorted(aplicados.items()):
+        if base.get(serial_key) == novo:
+            continue
+        rows = index.get("duplicates", {}).get(serial_key, [])
+        anterior = base.get(serial_key) or ", ".join(
+            dict.fromkeys(row["hostname"] for row in rows if row.get("hostname") and row["hostname"] != novo)
+        )
+        itens.append({
+            "serie": (rows[0].get("serie") if rows else "") or serial_key,
+            "hostname_anterior": anterior,
+            "hostname_novo": novo,
+        })
+    return {"aplicados": aplicados, "itens": itens}
+
+
+def ler_hostnames_atualizados(path: Path) -> Optional[Dict[str, Any]]:
+    """Lê o arquivo do aviso: ``None`` se não existe, vazio se ilegível; nunca registra conteúdo."""
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        logger.warning("Falha ao ler o aviso de hostnames atualizados: %s.", type(error).__name__)
+        return {"aplicados": {}, "itens": []}
+    if not isinstance(data, dict) or not isinstance(data.get("aplicados"), dict) or not isinstance(data.get("itens"), list):
+        return {"aplicados": {}, "itens": []}
+    return data

@@ -228,6 +228,7 @@ export function criarPaineisDados() {
     function renderizarNotificacoes(data: Qualquer) {
       const osParadas = data?.os_paradas;
       const divergenciasNovas = data?.divergencias_novas;
+      const hostnamesAtualizados = data?.hostnames_atualizados;
       const semAcesso60 = data?.sem_acesso_60_dias;
       const semAcesso60Ativo = (semAcesso60?.estado === "passou_60" && Number(semAcesso60.total_passou) > 0)
         || (semAcesso60?.estado === "limite_55" && Number(semAcesso60.total_limite) > 0);
@@ -246,6 +247,7 @@ export function criarPaineisDados() {
       const lembretesAtivo = contagemLembretesAgendados(data?.lembretes_agendados) !== null;
       const total = Number(osParadas?.estado === "paradas" && Number(osParadas.total) > 0)
         + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0)
+        + Number(Number(hostnamesAtualizados?.total) > 0)
         + Number(semAcesso60Ativo) + Number(outroTecnicoAtivo) + Number(falhasFinalizacaoAtivo) + Number(backupsAtivo) + Number(lembretesAtivo);
       const label = total
         ? `Notificações, ${pluralize(total, "aviso ativo", "avisos ativos")}`
@@ -301,7 +303,7 @@ export function criarPaineisDados() {
       });
 
       notificationPanel.addEventListener("click", (event: Qualquer) => {
-        if (!event.target?.closest?.(".ck-aviso__acao, .stale-base-alert-action")) return;
+        if (!event.target?.closest?.(".ck-aviso__acao, .ck-aviso__item-acao, .stale-base-alert-action")) return;
         fecharCentralNotificacoes();
         notificationButton.focus();
       });

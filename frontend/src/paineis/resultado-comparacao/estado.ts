@@ -36,6 +36,8 @@ export interface AlvoNavegacao {
   serial?: string;
   hostname?: string;
   category?: string;
+  // Realce curto da linha achada (clique no sino); o padrão dos chips da Home não realça.
+  destacar?: boolean;
 }
 interface TipoResumo {
   valor: string;
@@ -833,6 +835,10 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     row.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
     motion?.reveal(row);
+    if (target.destacar) {
+      row.classList.add("ck-linha-destaque");
+      setTimeout(() => row.classList.remove("ck-linha-destaque"), 1500);
+    }
   }
 
   async function resolverDivergenciaApelidoManual(
