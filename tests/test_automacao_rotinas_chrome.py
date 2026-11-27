@@ -86,6 +86,93 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         with opener, self.assertRaisesRegex(automacao.RotinaErro, "HTTP 422.*arquivo inválido"):
             automacao.importar_dashboard_no_site(arquivo)
 
+    def _importar(self, *efeitos):
+        """Roda ``importar_dashboard_no_site`` com ``OpenerDirector.open`` devolvendo/levantando ``efeitos``; devolve (resultado ou erro, aberturas, esperas, saída)."""
+        arquivo = self.root / "Dashboard.xlsx"
+        arquivo.write_bytes(b"PK")
+        saida = io.StringIO()
+        with patch("urllib.request.OpenerDirector.open", side_effect=list(efeitos)) as abrir, \
+                patch.object(automacao.time, "sleep") as dormir, redirect_stdout(saida):
+            try:
+                resultado = automacao.importar_dashboard_no_site(arquivo)
+            except Exception as erro:  # noqa: BLE001
+                resultado = erro
+        return resultado, abrir.call_count, dormir.call_count, saida.getvalue()
+
+    def _http_erro(self, codigo, corpo=b"{}", cabecalhos=None):
+        import urllib.error
+
+        erro = urllib.error.HTTPError("u", codigo, "x", cabecalhos or {}, io.BytesIO(corpo))
+        self.addCleanup(erro.close)
+        return erro
+
+    @staticmethod
+    def _resposta(corpo: bytes):
+        resposta = MagicMock()
+        resposta.__enter__.return_value = io.BytesIO(corpo)
+        return resposta
+
+    def test_importar_dashboard_cut_or_invalid_answer_is_rotina_erro_and_never_retried(self):
+        import http.client
+
+        for nome, efeito in (("IncompleteRead", http.client.IncompleteRead(b"{")), ("BadStatusLine", http.client.BadStatusLine("x")),
+                             ("JSON inválido", self._resposta(b"{nao e json"))):
+            with self.subTest(nome):
+                resultado, aberturas, _, _ = self._importar(efeito, self._resposta(b"{}"))
+                self.assertIsInstance(resultado, automacao.RotinaErro)
+                self.assertEqual(aberturas, 1)  # the import may have been applied: never sent again
+
+    def test_importar_dashboard_retries_once_only_when_409_or_503_bring_retry_after(self):
+        for codigo in (409, 503):
+            with self.subTest(codigo=codigo):
+                resultado, aberturas, esperas, _ = self._importar(self._http_erro(codigo, cabecalhos={"Retry-After": "2"}), self._resposta(b'{"ok": true}'))
+                self.assertEqual((resultado, aberturas, esperas), ({"ok": True}, 2, 1))
+        with self.subTest("só uma nova tentativa"):
+            resultado, aberturas, _, _ = self._importar(*(self._http_erro(409, cabecalhos={"Retry-After": "2"}) for _ in range(3)))
+            self.assertIsInstance(resultado, automacao.RotinaErro)
+            self.assertEqual(aberturas, 2)
+        with self.subTest("409 sem Retry-After"):
+            resultado, aberturas, esperas, _ = self._importar(self._http_erro(409, "{\"detail\": \"outra importação\"}".encode()), self._resposta(b"{}"))
+            self.assertIsInstance(resultado, automacao.RotinaErro)
+            self.assertEqual((aberturas, esperas), (1, 0))
+
+    def test_importar_dashboard_422_shows_only_loc_and_msg_never_the_input(self):
+        corpo = json.dumps({"detail": [{"type": "missing", "loc": ["body", "file"], "msg": "Field required", "input": "VALOR-SINTETICO-SECRETO"}]}).encode()
+        resultado, _, _, saida = self._importar(self._http_erro(422, corpo))
+        self.assertIsInstance(resultado, automacao.RotinaErro)
+        self.assertIn("body.file: Field required", str(resultado))
+        self.assertNotIn("VALOR-SINTETICO-SECRETO", str(resultado))
+        self.assertNotIn("VALOR-SINTETICO-SECRETO", saida)
+
+    def test_importar_dashboard_422_of_the_real_server_shows_campo_and_msg(self):
+        # main.py validation_error_handler: {"detail": [{"campo", "msg"}]}, never loc/input.
+        corpo = json.dumps({"detail": [{"campo": "file", "msg": "Field required"}]}).encode()
+        resultado, _, _, _ = self._importar(self._http_erro(422, corpo))
+        self.assertIsInstance(resultado, automacao.RotinaErro)
+        self.assertIn("(HTTP 422): file: Field required", str(resultado))
+
+    def test_cdp_ativo_treats_a_broken_http_answer_as_inactive(self):
+        import http.client
+
+        with patch("urllib.request.urlopen", side_effect=http.client.RemoteDisconnected("x")):
+            self.assertFalse(automacao.cdp_ativo())
+        with patch("urllib.request.urlopen", side_effect=http.client.IncompleteRead(b"")):
+            self.assertFalse(automacao.cdp_ativo())
+
+    def test_nova_aba_fails_at_once_on_a_5xx_answer_and_never_reloads(self):
+        context = MagicMock()
+        page = context.new_page.return_value
+        page.goto.return_value = SimpleNamespace(status=502)
+        with patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
+                patch.object(automacao, "garantir_tela_minima"), self.assertRaisesRegex(automacao.RotinaErro, "502"):
+            automacao.nova_aba(context, "https://exemplo.invalid/tela", "Teste")
+        page.goto.assert_called_once()
+        page.reload.assert_not_called()
+        for resposta in (None, SimpleNamespace(status=200), MagicMock()):
+            page.goto.return_value = resposta
+            with patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), patch.object(automacao, "garantir_tela_minima"):
+                self.assertIs(automacao.nova_aba(context, "https://exemplo.invalid/tela", "Teste"), page)
+
     def test_arquivo_final_dashboard_uses_the_site_output_and_ignores_downloads(self):
         saida = self.root / "saida"
         downloads = self.root / "downloads"
@@ -529,6 +616,27 @@ class LoginAbasTests(unittest.TestCase):
         for aba in abas.values():
             aba.is_closed.return_value = False
         return abas
+
+    def test_a_site_answering_5xx_does_not_stop_the_other_tabs(self):
+        abas = self._abas()
+        tentados = []
+
+        def abrir(_c, _u, origem):
+            if origem == "Endpoint Central":
+                raise automacao.RotinaErro("https://exemplo.invalid respondeu HTTP 503; tente de novo em alguns minutos.")
+            return abas[origem]
+
+        def aguardar(page, nome, logado, **_kw):
+            tentados.append(nome)
+            return True
+
+        with patch.object(automacao, "log"), patch.object(automacao, "nova_aba", side_effect=abrir), \
+                patch.object(automacao, "aguardar_login", side_effect=aguardar), redirect_stdout(io.StringIO()):
+            self.assertEqual(automacao.abrir_para_login(MagicMock()), 0)
+        self.assertEqual(tentados, ["UX Simpress", "Oracle"])
+        for erro in (automacao.RotinaCancelada("x"), automacao.RotinaEncerrada("x")):
+            with self.subTest(type(erro).__name__), patch.object(automacao, "nova_aba", side_effect=erro), self.assertRaises(type(erro)):
+                automacao.abrir_para_login(MagicMock())
 
     def test_oracle_tab_reopens_when_ux_already_logged_in_during_automatic_attempts(self):
         abas = self._abas()
@@ -1376,6 +1484,21 @@ class EnviarDashboardTests(unittest.TestCase):
                 reaplicar.assert_called_once()
                 self.assertEqual(reaplicar.call_args.kwargs["enviado"], enviado if base_do_enviado is None else None)
 
+    def test_conflict_message_lists_each_column_of_a_deleted_row_once(self):
+        # A linha_apagada conflict keeps "D,R" in one field: the message splits it ("colunas D, J, R").
+        from domains.sebrae_dashboard_gravacao import registrar_encerramentos
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = self._dashboard(abertos=True)
+        gerado = registrar_encerramentos(T.do_site(base, {"UTIC-2026-0003": {"J": "INCIDENTE"}}), {"UTIC-2026-0002": "20/11/2026 10:00"})[0].conteudo
+        sharepoint = T._antes_da_coluna_p(T.tres(("UTIC-2026-0001", "UTIC-2026-0003")), 3, T.texto("J3", "REQUISIÇÃO"))
+        raiz, saida = self._montar_envio(base, gerado)
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, sharepoint)
+        self.assertIsInstance(resultado, automacao.DashboardEmConflito)
+        self.assertEqual(enviados, [])
+        self.assertIn("2 célula(s)", str(resultado))
+        self.assertIn("(colunas D, J, R)", str(resultado))
+
     def test_routine_stops_at_the_first_attempt_on_a_conflict_without_a_pending_copy_and_keeps_the_choices(self):
         from domains import sebrae_finalizacao as fin
         from tests import test_sebrae_dashboard_gravacao as T
@@ -1675,7 +1798,9 @@ class EnviarDashboardTests(unittest.TestCase):
         resultado, enviados, _ = self._rodar_com_merge(raiz, saida, base)
         self.assertEqual(resultado, 0)
         from domains import sebrae_finalizacao as fin
+        from domains import sebrae_os_recusadas
 
+        sebrae_os_recusadas.remover(raiz, "UTIC-2026-0001", "7365311")  # the Remover click that produces limpar_e
         saida.write_bytes(atualizar(base, edicoes={"UTIC-2026-0002": {"J": "REQUISIÇÃO"}}, limpar_e={"UTIC-2026-0001": "7365311"}).conteudo)
         fin.gravar_origem_saida(saida, fin.base_importada(raiz))
         sharepoint = T._trocar_parte(enviados[0], "xl/worksheets/sheet9.xml", "<t>laudo</t>", "<t>laudo editado à mão</t>")
@@ -1685,6 +1810,138 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(segundo["UTIC-2026-0002"]["J"], "REQUISIÇÃO")
         self.assertNotIn("E", segundo["UTIC-2026-0001"])
         self.assertEqual(self._laudos(enviados2[0]), self._laudos(sharepoint))
+
+    def _dois_envios(self, base: bytes, primeiro: bytes, segundo: bytes, remover=()):
+        """1º envio de ``primeiro`` (SharePoint = importado); 2º de ``segundo`` sobre o que foi enviado, sem reimportar. Devolve (resultado, enviados2)."""
+        from domains import sebrae_finalizacao as fin
+        from domains import sebrae_os_recusadas
+
+        raiz, saida = self._montar_envio(base, primeiro)
+        resultado, enviados, _ = self._rodar_com_merge(raiz, saida, base)
+        self.assertEqual(resultado, 0)
+        for chamado, os_ in remover:
+            sebrae_os_recusadas.remover(raiz, chamado, os_)
+        saida.write_bytes(segundo)
+        fin.gravar_origem_saida(saida, fin.base_importada(raiz))
+        resultado, enviados2, _ = self._rodar_com_merge(raiz, saida, enviados[0])
+        return resultado, enviados2
+
+    @staticmethod
+    def _nova(chamado: str) -> dict:
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        return {**T.NOVA, "C": chamado}
+
+    def test_second_partial_send_keeps_the_new_tickets_of_the_first_send(self):
+        # Real case: 121 imported, +8 sent (129), then Finalizar builds 122 from the import; the other 7 must stay.
+        from domains.sebrae_dashboard_gravacao import registrar_encerramentos
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = T.tres()
+        primeiro = T.do_site(base, novas=[self._nova("UTIC-2026-0010"), self._nova("UTIC-2026-0011")])
+        segundo = registrar_encerramentos(T.do_site(base, novas=[self._nova("UTIC-2026-0010")]), {"UTIC-2026-0010": "20/11/2026 10:00"})[0].conteudo
+        resultado, enviados2 = self._dois_envios(base, primeiro, segundo)
+        self.assertEqual(resultado, 0)
+        enviado = T.por_chamado(enviados2[0])
+        self.assertEqual(sorted(enviado), [*T.CHAMADOS, "UTIC-2026-0010", "UTIC-2026-0011"])
+        self.assertEqual(enviado["UTIC-2026-0011"], T.por_chamado(primeiro)["UTIC-2026-0011"])
+        self.assertEqual((enviado["UTIC-2026-0010"]["D"], enviado["UTIC-2026-0010"]["R"]), ("FINALIZADO", "20/11/2026 10:00"))
+
+    def test_second_send_keeps_an_e_filled_by_the_first_send_that_the_site_no_longer_has(self):
+        # Without a Remover, an empty E in the generated file never erases the E already in SharePoint.
+        from domains.sebrae_dashboard_gravacao import atualizar
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = T.tres()
+        primeiro = atualizar(base, automaticos={"UTIC-2026-0001": {"E": "7365311"}}).conteudo
+        resultado, enviados2 = self._dois_envios(base, primeiro, T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}))
+        self.assertEqual(resultado, 0)
+        enviado = T.por_chamado(enviados2[0])
+        self.assertEqual((enviado["UTIC-2026-0001"]["E"], enviado["UTIC-2026-0002"]["J"]), ("7365311", "INCIDENTE"))
+
+    def test_second_send_keeps_a_sharepoint_value_that_is_blank_in_the_generated_file(self):
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = T.tres()
+        primeiro = T.do_site(base, {"UTIC-2026-0001": {"B": "REDE"}})
+        resultado, enviados2 = self._dois_envios(base, primeiro, T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}))
+        self.assertEqual(resultado, 0)
+        enviado = T.por_chamado(enviados2[0])
+        self.assertEqual((enviado["UTIC-2026-0001"]["B"], enviado["UTIC-2026-0002"]["J"]), ("REDE", "INCIDENTE"))
+
+    def test_second_send_erases_the_e_only_with_the_remover_of_that_os(self):
+        from domains.sebrae_dashboard_gravacao import atualizar
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = T.tres()
+        primeiro = atualizar(base, automaticos={"UTIC-2026-0001": {"E": "7365311"}, "UTIC-2026-0002": {"E": "7365322"}}).conteudo
+        segundo = T.do_site(base, {"UTIC-2026-0003": {"J": "INCIDENTE"}})
+        resultado, enviados2 = self._dois_envios(base, primeiro, segundo, remover=[("UTIC-2026-0001", "7365311"), ("UTIC-2026-0002", "1111111")])
+        self.assertEqual(resultado, 0)
+        enviado = T.por_chamado(enviados2[0])
+        self.assertNotIn("E", enviado["UTIC-2026-0001"])
+        self.assertEqual(enviado["UTIC-2026-0002"]["E"], "7365322")  # Remover of another OS does not erase this one
+
+    def test_preservou_accepts_the_happy_path_and_refuses_each_loss(self):
+        from domains.sebrae_dashboard_gravacao import atualizar, reaplicar
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        nova = {**T.NOVA, "C": "UTIC-2026-0011"}
+        baixado = atualizar(T.do_site(T.tres(), novas=[nova]), automaticos={"UTIC-2026-0001": {"E": "7365311"}}).conteudo
+        gerado = T.do_site(T.tres(), {"UTIC-2026-0002": {"J": "INCIDENTE"}})  # from the import: no 0011, E of 0001 empty
+        certo = reaplicar(baixado, gerado, baixado, removidas={}).conteudo
+        self.assertTrue(automacao._preservou(gerado, certo, baixado, {}))
+        casos = {
+            "perdeu a linha que só existe no baixado": T.tres(),
+            "célula preenchida no gerado diferente": T._trocar_na_folha(certo, ">INCIDENTE<", ">REQUISIÇÃO<"),
+            "E vazia sem a OS em removidas": T._trocar_na_folha(certo, ">7365311<", "><"),
+        }
+        for nome, resultado in casos.items():
+            with self.subTest(nome):
+                self.assertNotEqual(T.por_chamado(resultado), T.por_chamado(certo))
+                self.assertFalse(automacao._preservou(gerado, resultado, baixado, {}))
+        sem_e = casos["E vazia sem a OS em removidas"]
+        self.assertTrue(automacao._preservou(gerado, sem_e, baixado, {"UTIC-2026-0001": ["7365311"]}))
+
+    def test_remover_on_a_row_without_utic_still_sends_with_the_e_erased(self):
+        from domains.sebrae_dashboard_gravacao import atualizar, reaplicar
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = T._antes_da_coluna_p(T.montar(("Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO", "EM ABERTO")), 2, T.texto("E2", "7365311"))
+        gerado = atualizar(base, limpar_e={"linha:2": "7365311"}).conteudo
+        removidas = {"linha:2": ["7365311"]}
+        resultado = reaplicar(base, gerado, base, removidas=removidas).conteudo
+        self.assertNotIn("E", T.por_chamado(resultado)["Sem chamado"])
+        self.assertTrue(automacao._preservou(gerado, resultado, base, removidas))
+
+    def test_busy_removed_registry_is_logged_with_the_error_type_only(self):
+        from domains import sebrae_os_recusadas
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        raiz = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        base = T.tres()
+        baixado = raiz / "baixado.xlsx"
+        baixado.write_bytes(base)
+        ocupado = sebrae_os_recusadas.DomainBusyError("UTIC-2026-0001 7365311")  # the text never reaches the log
+        with patch.object(automacao, "DASHBOARD_SAIDA_DIR", raiz / "sebrae_dashboard_saida"), patch.object(automacao, "log") as log, \
+                patch.object(sebrae_os_recusadas, "removidas", side_effect=ocupado):
+            automacao.montar_sobre_o_sharepoint(baixado, T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}), base)
+        mensagens = " ".join(str(c.args[1]) for c in log.call_args_list)
+        self.assertIn("DomainBusyError", mensagens)
+        self.assertNotIn("7365311", mensagens)
+
+    def test_second_send_erases_no_e_when_the_removed_registry_is_unreadable(self):
+        from domains import sebrae_os_recusadas
+        from domains.sebrae_dashboard_gravacao import atualizar
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        base = T.tres()
+        primeiro = atualizar(base, automaticos={"UTIC-2026-0001": {"E": "7365311"}}).conteudo
+        quebrar = patch.object(sebrae_os_recusadas, "removidas", side_effect=sebrae_os_recusadas.DomainBusyError("ilegível"))
+        with quebrar:
+            resultado, enviados2 = self._dois_envios(base, primeiro, T.do_site(base, {"UTIC-2026-0002": {"J": "INCIDENTE"}}))
+        self.assertEqual(resultado, 0)
+        self.assertEqual(T.por_chamado(enviados2[0])["UTIC-2026-0001"]["E"], "7365311")
 
     def test_precheck_aborts_when_the_stored_copy_is_missing(self):
         with tempfile.TemporaryDirectory() as pasta:

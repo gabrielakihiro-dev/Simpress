@@ -1010,7 +1010,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.")
         try:
             ativa = _rotina_em_andamento()
-        except Exception:  # noqa: BLE001
+        except Exception as erro:  # noqa: BLE001
+            logger.warning("Não foi possível ler o estado da rotina antes da finalização (%s).", type(erro).__name__)
             return
         if ativa is not None:
             raise DomainConflictError("Já há uma rotina em execução. Aguarde terminar.")
@@ -1242,7 +1243,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             try:
                 ativo = _rotina_em_andamento()
                 rodando = ativo is not None and ativo.get("rotina") == "fechar"
-            except Exception:  # noqa: BLE001 - sem o estado do runner, vale o que o arquivo diz
+            except Exception as erro:  # noqa: BLE001 - sem o estado do runner, vale o que o arquivo diz
+                logger.warning("Não foi possível ler o estado da rotina de fechar (%s).", type(erro).__name__)
                 rodando = bool(resultado and resultado.get("em_andamento"))
         return JSONResponse({
             "em_andamento": rodando, "resultado": resultado, "sharepoint": fin.aviso_do_pendente(pasta),
@@ -1324,7 +1326,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             try:
                 ativo = _rotina_em_andamento()
                 rodando = ativo is not None and ativo.get("rotina") == "antigos"
-            except Exception:  # noqa: BLE001 - sem o estado do runner, vale o arquivo
+            except Exception as erro:  # noqa: BLE001 - sem o estado do runner, vale o arquivo
+                logger.warning("Não foi possível ler o estado da rotina de antigos (%s).", type(erro).__name__)
                 pass
         resultado = sebrae_novos.ler_resultado_antigos(services.caminhos())
         return JSONResponse({"em_andamento": rodando, "resultado": resultado}, headers={"Cache-Control": "no-store"})
