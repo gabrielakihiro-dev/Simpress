@@ -189,6 +189,11 @@ def _city(value: Any) -> str:
     return str(value or "").strip() or "—"
 
 
+def series_key(serial: Any) -> str:
+    """Comparison key of a series in every timeline source (the ticket report's own key)."""
+    return _stable_serial(serial)
+
+
 def _records(items: Any, serial_field: str, key: str) -> Iterable[Mapping[str, Any]]:
     return (i for i in items if isinstance(i, Mapping) and _stable_serial(i.get(serial_field)) == key)
 
@@ -196,7 +201,7 @@ def _records(items: Any, serial_field: str, key: str) -> Iterable[Mapping[str, A
 def alias_user_events(history: Sequence[Any], key: str) -> List[Event]:
     events: List[Event] = []
     for item in _records(history, "serial", key):
-        if _is_alias_event(item):
+        if _is_alias_event(dict(item)):
             events.append(_event(item.get("horario"), "apelido_usuario", "Apelido alterado",
                                  _change(item.get("apelido_anterior"), item.get("apelido_novo"))))
         elif item.get("tipo") == "usuario":
@@ -239,16 +244,16 @@ def sebrae_events(links: Sequence[Mapping[str, Any]], archive: Optional[Mapping[
             events.append(_event(link["finalizado_em"], "sebrae", "OS finalizada", f"{number} · OS {order}"))
     items = (archive or {}).get("itens")
     for item in (items.values() if isinstance(items, Mapping) else ()):
-        number = numbers.get(str(item.get("numero") or "").strip().upper()) if isinstance(item, Mapping) else None
-        for cycle in (item.get("ciclos") or []) if number else ():
+        ticket = numbers.get(str(item.get("numero") or "").strip().upper(), "") if isinstance(item, Mapping) else ""
+        for cycle in (item.get("ciclos") or []) if ticket else ():
             if not isinstance(cycle, Mapping):
                 continue
             if cycle.get("motivo") == "finalizado":
                 status = str(cycle.get("status") or "").strip()
                 events.append(_event(cycle.get("saida_em"), "sebrae", "Chamado encerrado no Dashboard",
-                                     f"{number} · {status}" if status else number))
+                                     f"{ticket} · {status}" if status else ticket))
             elif cycle.get("motivo") == "saiu_do_dashboard":
-                events.append(_event(cycle.get("saida_em"), "sebrae", "Chamado saiu do Dashboard", number))
+                events.append(_event(cycle.get("saida_em"), "sebrae", "Chamado saiu do Dashboard", ticket))
     # A finalização link exists once per source (Simpress/Oracle) for the same OS.
     return list({(repr(w), e["titulo"], tuple(e["detalhes"])): (w, e) for w, e in events}.values())
 

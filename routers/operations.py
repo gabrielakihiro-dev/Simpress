@@ -52,7 +52,6 @@ from domains.ticket_reporting import (
     normalize_ticket_snapshot,
     ticket_report_snapshots,
     ticket_snapshot_metadata,
-    _stable_serial,
 )
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 
@@ -565,16 +564,20 @@ def create_operations_router(
         except HTTPException as error:
             logger.warning("Dossiê do equipamento: fonte de OS indisponível (HTTP %s).", error.status_code)
             section = empty_os_section("indisponivel")
-        key = _stable_serial(clean_serial)
+        key = equipment_dossier.series_key(clean_serial)
         src = dossier_sources or DossierSources()
+        apelidos, transferencias, cobertura, encerrados = src.apelidos, src.transferencias, src.cobertura, src.sebrae_encerrados
         missing: List[str] = []
         sources: Dict[str, Optional[List[Any]]] = {
-            "apelido_usuario": dossier_source("apelido_usuario", src.apelidos and (lambda: equipment_dossier.alias_user_events(src.apelidos(), key)), missing),
-            "transferencia": dossier_source("transferencia", src.transferencias and (lambda: equipment_dossier.transfer_events(src.transferencias(), key)), missing),
+            "apelido_usuario": dossier_source("apelido_usuario", (
+                lambda: equipment_dossier.alias_user_events(apelidos(), key)) if apelidos else None, missing),
+            "transferencia": dossier_source("transferencia", (
+                lambda: equipment_dossier.transfer_events(transferencias(), key)) if transferencias else None, missing),
             "os": equipment_dossier.os_events(section),
             "sebrae": dossier_source("sebrae", lambda: equipment_dossier.sebrae_events(
-                dossier_links(), src.sebrae_encerrados() if src.sebrae_encerrados else None, key), missing),
-            "cobertura": dossier_source("cobertura", src.cobertura and (lambda: equipment_dossier.coverage_events(*src.cobertura(), key)), missing),
+                dossier_links(), encerrados() if encerrados else None, key), missing),
+            "cobertura": dossier_source("cobertura", (
+                lambda: equipment_dossier.coverage_events(*cobertura(), key)) if cobertura else None, missing),
         }
         if section["estado"] == "indisponivel":
             missing.append("os")
