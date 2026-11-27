@@ -1534,6 +1534,17 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(len(self.bancada.finalizados), 1)
         self.assertSemEscrita()
 
+    def test_mesma_aba_com_confirmacao_nativa_sai_cedo_sem_sim_html(self):
+        # A confirmação nativa não marca confirmado[0]: a saída cedo não pode depender dele (ESPERA_FINALIZAR_MS real).
+        self.bancada.abertura = "mesma_aba"
+        self.bancada.chamados = [chamado(1, finalizacao=True, confirmacao_final="nativa"), chamado(2)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], se.STATUS_OK, resultado)
+        self.assertFalse([m for m in self.mensagens if "espera do Finalizar chegou ao limite" in m], self.mensagens)
+        self.assertEqual(len(self.bancada.finalizados), 1)
+        self.assertSemEscrita()
+
     def test_mesma_aba_respeita_o_prazo_quando_a_lista_nao_volta(self):
         self.bancada.abertura = "mesma_aba"
         self.bancada.chamados = [chamado(1, finalizacao=True, finalizar_falha=True), chamado(2)]

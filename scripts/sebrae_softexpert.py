@@ -1671,18 +1671,23 @@ def _clicar_finalizar(page: "Page", janela: "Page", numero: str, escritas: List[
                 )
             if janela.is_closed():
                 return True
-            if janela is page and _visivel(page.locator(SEL_LISTA)) and not _formulario_visivel(page):
-                return True  # mesma aba: a própria aplicação voltou para a lista; para de procurar o "Sim"
-            if not confirmado[0]:
-                _confirmar_modal_finalizar(janela, confirmado)
+            # A guarda do modal vem antes da saída cedo: modal estranho sobre a lista é "incerto", nunca "ok".
+            if not confirmado[0] and _confirmar_modal_finalizar(janela, confirmado):
+                return False
+            if (
+                janela is page and _visivel(page.locator(SEL_LISTA)) and not _formulario_visivel(page)
+                and not any(_visivel(frame.locator(SEL_DIALOGO)) for frame in _frames(page))
+            ):
+                return True  # mesma aba: a própria aplicação voltou para a lista, sem diálogo aberto
             return False
 
         if not _esperar(page, andou, ESPERA_FINALIZAR_MS):
-            modo = "mesma aba" if janela is page else "janela"
+            mesma_aba = janela is page
+            modo, sem = ("mesma aba", "sem voltar à lista") if mesma_aba else ("janela", "sem a janela fechar")
             sim = "clicado" if confirmado[0] else "não clicado"
             _log(
                 f"{numero}: espera do Finalizar chegou ao limite de {ESPERA_FINALIZAR_MS // 1000} s "
-                f"sem a janela fechar ({modo}; Sim do modal {sim}); conferindo a central de tarefas."
+                f"{sem} ({modo}; Sim do modal HTML {sim}); conferindo a central de tarefas."
             )
     finally:
         if not janela.is_closed():
