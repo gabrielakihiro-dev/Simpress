@@ -1,6 +1,8 @@
-"""Helpers shared by `SimpressApi` and its theme mixins: list/text limits, masking trim and OS-tab notes and marks.
+"""Helpers shared by `SimpressApi` and its theme mixins: list/text limits, masking trim, OS-tab notes and marks, and the equipment
+summary sent to the model.
 
-Leaf module: `assistant_api` re-exports these names, so nothing here may import it or `assistant_api_sebrae`.
+Leaf module: `assistant_api` re-exports these names, so nothing here may import it or a theme mixin
+(`assistant_api_sebrae`, `assistant_api_historico`).
 """
 
 import re
@@ -8,8 +10,9 @@ import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.errors import DomainValidationError
-from domains.assistant_lgpd import limpar_texto_sensivel
+from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
 from domains.os_observacoes import chave_os
+from domains.regras_negocio import cadastro_e_macbook
 
 # Limits keep the text returned to the model inside its context window.
 MAX_ITENS_LISTA = 20
@@ -106,3 +109,25 @@ def _marcas_de(marcas: Dict[str, List[Dict[str, Any]]], serie: Any, ordem: Any, 
         return []
     alvo = str(chamado or "").strip().upper()
     return [m for m in achadas if not alvo or m["chamado"].upper() == alvo]
+
+
+def sanitizar_equipamento(equip: Any) -> Dict[str, Any]:
+    """Keep machine facts and city/UF only; street addresses never reach the model."""
+    if not isinstance(equip, dict):
+        return {}
+    return {
+        "serial": equip.get("serial", ""),
+        "modelo": equip.get("modelo", ""),
+        "tipo": equip.get("tipo", ""),
+        "categoria": equip.get("categoria", ""),
+        "apelido": equip.get("apelido", ""),
+        "cidade": equip.get("retirada_cidade", "") or equip.get("cidade", ""),
+        "uf": equip.get("retirada_uf", "PR"),
+        "usuario_logado": equip.get("usuarios_logados", "") or equip.get("usuario_manual", "") or SEM_USUARIO,
+        "contrato": equip.get("contrato", ""),
+    }
+
+
+def e_macbook(equip: Dict[str, Any]) -> bool:
+    """Same test as Simpress (categorize_equipment): 'MACBOOK' in the type or the model."""
+    return cadastro_e_macbook(equip.get("categoria"), equip.get("tipo"), equip.get("modelo"))
