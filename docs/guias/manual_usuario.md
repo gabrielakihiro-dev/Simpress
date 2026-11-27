@@ -16,6 +16,8 @@ O Simpress é um site que roda **somente no seu computador** (Windows). Os dados
 8. [Restaurar um backup](#8-restaurar-um-backup)
 9. [Os 5 erros mais comuns](#9-os-5-erros-mais-comuns)
 
+Fora da numeração: [Ver a saúde local e limpar temporários](#ver-a-saúde-local-e-limpar-temporários).
+
 ---
 
 ## 1. Instalar
@@ -307,6 +309,29 @@ O Simpress não envia o pacote para lugar nenhum: a cópia é feita por você.
 - O Assistente (F9) explica o Pacote local, mas não exporta, não lista e não restaura. Essas ações são só suas, por clique.
 - Depois de restaurar, o que ficou de fora (envios, finalizações, marcas de OS) continua como está hoje. Confira o Sebrae e as OS antes de agir.
 - Se a restauração falhar com "Falha ao restaurar. Os arquivos anteriores foram recuperados.", o Simpress voltou ao estado de antes. Se aparecer "confira a pasta .transactions antes de usar o app", não use o app e peça ajuda.
+
+## Ver a saúde local e limpar temporários
+
+Serve para ver quanto espaço o Simpress usa neste computador e apagar arquivos temporários que sobraram de atualizações. Não mexe nas suas planilhas nem no histórico.
+
+**Passos**
+
+1. Na tela principal, abra o painel **Prontidão da base** (o indicador de prontidão da barra superior).
+2. No item **Saúde local**, clique em **Abrir**.
+3. Leia o disco, as áreas e a situação dos arquivos de estado. Nada disso altera arquivos.
+4. Para limpar: clique em **Ver prévia**. A lista mostra o que seria removido ou movido para a quarentena. Nada foi alterado ainda.
+5. Se a lista estiver certa, clique em **Limpar temporários** e depois em **Limpar agora** na janela **Limpar temporários?**. Em dúvida, clique em **Cancelar**.
+
+**Como confirmar**
+
+- A tela mostra **Limpeza concluída.** com as quantidades reais, ou **Nenhum temporário para limpar.**.
+
+**O que é seguro**
+
+- A limpeza só mexe em cópias temporárias. Cópias iguais a um arquivo já gravado são removidas depois de 24 horas. Cópias diferentes e antigas (mais de 7 dias) vão para uma pasta de quarentena, e não são apagadas de imediato.
+- Nunca toca nas planilhas, nos modelos, no histórico, nas anotações, nos logs nem nos backups. Não recupera transações pendentes.
+- Se aparecer **Limpeza recusada**, há uma automação, importação ou migração em andamento. Espere terminar e tente de novo. Se a mensagem falar de transações pendentes, reinicie o servidor local.
+- **Baixar pacote de diagnóstico** gera um arquivo JSON para enviar ao suporte. Ele não tem nomes, e-mails, CPF, dados das planilhas, caminhos de pasta nem senhas. Fica só no seu computador até você enviá-lo.
 
 ## 9. Os 5 erros mais comuns
 

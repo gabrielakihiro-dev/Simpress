@@ -46,7 +46,7 @@ import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, cast
 from urllib.parse import urlsplit
 
 if TYPE_CHECKING:
@@ -2897,13 +2897,13 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
                 if divergencia_anterior == [erro.sha256]:
                     gerado = arquivo.read_bytes()
                     conteudo_mesclado = mesclar_dashboard_com_sharepoint(
-                        baixado, gerado, sebrae_finalizacao.base_do_conteudo(state_dir, gerado), erro,
+                        cast(Path, baixado), gerado, sebrae_finalizacao.base_do_conteudo(state_dir, gerado), erro,
                     )
                     if conteudo_mesclado is None:
                         raise RotinaErro(str(erro)) from erro
                     montado[:], terceiro[:] = [conteudo_mesclado], [True]
                     log("Dashboard", "O SharePoint mudou; as células alteradas pelo site foram reaplicadas sobre ele.")
-                    return baixado
+                    return cast(Path, baixado)
                 divergencia_anterior[:] = [erro.sha256]
                 raise EtapaInstavel(str(erro)) from erro
             except Exception as erro:

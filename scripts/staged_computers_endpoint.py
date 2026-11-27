@@ -260,6 +260,7 @@ def verificar_staged_computers(context: "BrowserContext", automacao: ModuleType)
     contagem = {"gravada": 0, "igual": 0, "falha": 0, "ignorada": 0}
     # Relê as linhas: o login e a leitura podem levar minutos, e a nota pode ter mudado no Resumo.
     atuais = {l["anotacao_id"]: l for l in linhas_saiu_endpoint(automacao, evento_id)}
+    linha: "dict | None"
     for linha in linhas:
         linha = atuais.get(linha["anotacao_id"])
         if linha is None:

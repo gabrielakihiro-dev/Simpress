@@ -38,6 +38,27 @@ export type ApelidoUpdatePayload = {
   "apelido": string;
 };
 
+export type App = {
+  "versao": string;
+  "python": string;
+  "sistema": string;
+  "versao_sistema": string;
+};
+
+export type Area = {
+  "chave": "backups_planilhas" | "logs" | "lotes_processados" | "pacotes_locais" | "quarentena";
+  "arquivos": number;
+  "bytes": number;
+  "existe": boolean;
+};
+
+export type ArquivoJson = {
+  "nome": "assistente_busca_web.json" | "assistente_conversas.json" | "assistente_instrucoes.json" | "assistente_notas.json" | "backups_regionais.json" | "dashboard_agendamento.json" | "historico_alteracoes.json" | "historico_chamados.json" | "historico_transferencias.json" | "inventory_update_idempotency.json" | "lembretes.json" | "nomes_pessoas_manuais.json" | "operacao_cobertura.json" | "operacao_cobertura_arquivados.json" | "os_chamados_vinculos.json" | "os_marcas_finalizacao.json" | "os_observacoes.json" | "outlook_email_modelos.json" | "outlook_modelo_cabo_padrao.json" | "powershell_codigos.json" | "representantes_regionais_padrao.json" | "sebrae_agendamento.json" | "sebrae_antigos_resultado.json" | "sebrae_antigos_softexpert.json" | "sebrae_categoria_indice.json" | "sebrae_chamados_encerrados.json" | "sebrae_chamados_estado.json" | "sebrae_config.json" | "sebrae_credenciais.json" | "sebrae_dashboard_conflitos.json" | "sebrae_dashboard_enviado.json" | "sebrae_dashboard_envio.json" | "sebrae_dashboard_existentes.json" | "sebrae_fechar_job.json" | "sebrae_fechar_resultado.json" | "sebrae_finalizacao.json" | "sebrae_historico.json" | "sebrae_novos.json" | "sebrae_observacoes.json" | "sebrae_os_recusadas.json" | "unidades_custom.json" | "usuarios_entra_pr.json" | "ux_chamados_historico.json" | "ux_solicitante.json" | "ux_tickets_historico.json" | "apelidos_modificados/apelidos_modificados.json" | "historico_comparacoes/historico_comparacoes.json" | "hostnames_removidos/hostnames_removidos.json" | "usuarios_manuais/usuarios_manuais.json" | "usuarios_manuais/usuarios_manuais_datas.json" | "usuarios_manuais/usuarios_pendencias.json";
+  "bytes": number;
+  "situacao": "integro" | "invalido" | "vazio" | "ilegivel" | "grande_demais";
+  "erro"?: "JSONDecodeError" | "UnicodeDecodeError" | "ValueError" | "RecursionError" | "PermissionError" | "FileNotFoundError" | "IsADirectoryError" | "OSError" | null;
+};
+
 export type AssistentePayload = {
   "openrouter_api_key"?: string | null;
   "deepseek_api_key"?: string | null;
@@ -298,6 +319,22 @@ export type DevolucaoPayload = {
   "observacao"?: string;
 };
 
+export type Diagnostico = {
+  "formato": 1;
+  "gerado_em": string;
+  "app": App;
+  "prontidao": Prontidao;
+  "areas": Area[];
+  "disco": Disco | null;
+  "estado_json": EstadoJson;
+  "transacoes": Transacoes;
+};
+
+export type Disco = {
+  "livre_bytes": number;
+  "total_bytes": number;
+};
+
 export type DisponibilidadeCaso = {
   "rev": number;
   "estado_efetivo": string;
@@ -477,6 +514,12 @@ export type EstadoAutomacao = {
   "ultima"?: ExecucaoAutomacao | null;
 };
 
+export type EstadoJson = {
+  "arquivos": ArquivoJson[];
+  "outros": number;
+  "copias_corrompidas": number;
+};
+
 export type EstadoMovimentacaoPayload = {
   "estado": "coletada" | "em_transito" | "recebida" | "recebida_com_divergencia" | "cancelada";
   "rev": number;
@@ -514,6 +557,11 @@ export type FinalizarPayload = {
   "confirmar_outro_tecnico"?: boolean;
 };
 
+export type FuncaoProntidao = {
+  "available": boolean;
+  "state": "ready" | "awaiting_import" | "invalid" | "unavailable";
+};
+
 export type HTTPValidationError = {
   "detail"?: ValidationError[];
 };
@@ -533,6 +581,13 @@ export type HostnameRemovalPayload = {
 
 export type InstrucoesPayload = {
   "texto": string;
+};
+
+export type ItemLimpeza = {
+  "acao": "remover" | "quarentena";
+  "area": "planilhas_entrada" | "state" | "modelos";
+  "caminho": string;
+  "bytes": number;
 };
 
 export type KitPayload = {
@@ -557,6 +612,16 @@ export type Lembrete = {
 export type LembretesReagendados = {
   "lembretes": Lembrete[];
   "reagendados": number;
+};
+
+export type Limpeza = {
+  "aplicada": boolean;
+  "itens": ItemLimpeza[];
+  "totais": TotaisLimpeza;
+};
+
+export type LimpezaPayload = {
+  "confirmado"?: boolean;
 };
 
 export type LinkEndpoint = {
@@ -828,10 +893,20 @@ export type PrepararTicketPayload = {
   "conferido"?: boolean;
 };
 
+export type Prontidao = {
+  "arquivos": Record<string, "ready" | "awaiting_import" | "invalid" | "unavailable">;
+  "funcoes": Record<string, FuncaoProntidao>;
+};
+
 export type RecuperacaoEnvioPayload = {
   "envio_id": string;
   "acao": "limpar" | "confirmar_recebimento" | "declarar_nao_enviado" | "concluir_legado";
   "confirmacao"?: string;
+};
+
+export type RecusaDetalhe = {
+  "codigo": "chrome" | "importacao" | "transacoes" | "migracao" | "limpeza_em_andamento";
+  "mensagem": string;
 };
 
 export type ReenvioSnapshotPayload = {
@@ -908,6 +983,14 @@ export type SalvarModeloPayload = {
   "texto": string;
 };
 
+export type SaudeLocal = {
+  "gerado_em": string;
+  "disco": Disco | null;
+  "areas": Area[];
+  "estado_json": EstadoJson;
+  "transacoes": Transacoes;
+};
+
 export type SemAcesso7Dias = {
   "pontos": PontoSemAcesso[];
   "historico_desde": string | null;
@@ -963,6 +1046,19 @@ export type TicketTimelineAnnotationPayload = {
   "revisao_id"?: string | null;
   "base_revisoes"?: string[];
   "resolver_conflito"?: boolean;
+};
+
+export type TotaisLimpeza = {
+  "remover_arquivos": number;
+  "remover_bytes": number;
+  "quarentena_arquivos": number;
+  "quarentena_bytes": number;
+  "preservados": number;
+};
+
+export type Transacoes = {
+  "situacao": "limpo" | "pendente";
+  "quantidade": number;
 };
 
 export type TransferenciaPayload = {
@@ -1824,6 +1920,26 @@ export interface Rotas {
     consulta: { "dias": number; };
     corpo: never;
     resposta: TendenciasRelatorioMensal;
+  };
+  "GET /api/saude-local": {
+    consulta: never;
+    corpo: never;
+    resposta: SaudeLocal;
+  };
+  "GET /api/saude-local/diagnostico": {
+    consulta: never;
+    corpo: never;
+    resposta: Diagnostico;
+  };
+  "POST /api/saude-local/limpeza": {
+    consulta: never;
+    corpo: LimpezaPayload;
+    resposta: Limpeza;
+  };
+  "POST /api/saude-local/limpeza/previa": {
+    consulta: never;
+    corpo: never;
+    resposta: Limpeza;
   };
   "GET /api/sebrae/antigos/ler": {
     consulta: never;
