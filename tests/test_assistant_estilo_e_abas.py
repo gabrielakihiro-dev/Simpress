@@ -28,12 +28,16 @@ class AbasAtualizadasTests(unittest.TestCase):
     def test_regra_41_orienta_f8_f7_e_desfazer_finalizacao(self):
         texto = regra("41. Relatório Mensal (F8)")
         for trecho in (
-            "`Visão geral`", "`OS e pedidos do mês`", "`Chamados (F5)`", "`Base atual`",
+            "`Visão geral`", "`OS e pedidos do mês`", "`Chamados (F5)`", "`Base atual`", "`Tendências`",
             "obter_relatorio_mensal", '"Histórico de apelidos"', '"Finalizado por outro técnico"', '"Desfazer finalização"',
             "sem mexer no SoftExpert nem no SharePoint", "Você não tem ferramenta para isso",
             "Todos, Apelido, Usuário, Endereço, Avisos do Endpoint", "Somente com ação disponível",
         ):
             self.assertIn(trecho, texto)
+        # Tendências fica só na tela: o Assistente orienta abrir a aba em vez de informar os números.
+        self.assertIn("só na tela", texto)
+        self.assertIn("NÃO traz esses números", texto)
+        self.assertIn("não informa tempo médio de OS nem a série de sem acesso por período", texto)
         # The tool trims the monthly ticket list; the prompt must not call it complete.
         self.assertIn("resumo de cada sub-aba, com listas cortadas", texto)
         self.assertNotIn("traz os dados de todas", texto)

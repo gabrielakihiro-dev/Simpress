@@ -11,22 +11,51 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 import openpyxl
 
-from core.errors import DomainBusyError, DomainError
+from core.errors import DomainBusyError, DomainError, DomainValidationError
 from core.integrity import AtomicFileTransaction
 from domains.sebrae_dashboard import DashboardInvalido
 from domains.monthly_report import (
     ReportMonth,
     build_monthly_report,
     build_monthly_report_workbook,
+    build_trends,
     parse_report_month,
     report_filename,
     sebrae_tickets_section,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class TempoMedioOs(BaseModel):
+    media_dias: Optional[float]
+    encerradas: int
+    encerradas_sem_data: int
+    media_dias_anterior: Optional[float]
+    encerradas_anterior: int
+
+
+class PontoSemAcesso(BaseModel):
+    horario: str
+    data: str
+    total: int
+
+
+class SemAcesso7Dias(BaseModel):
+    pontos: List[PontoSemAcesso]
+    historico_desde: Optional[str]
+
+
+class TendenciasRelatorioMensal(BaseModel):
+    dias: int
+    inicio: str
+    data_corte: str
+    tempo_medio_os: TempoMedioOs
+    sem_acesso_7_dias: SemAcesso7Dias
 
 
 @dataclass(frozen=True)
@@ -141,6 +170,17 @@ def create_monthly_report_router(services: MonthlyReportServices) -> APIRouter:
         }
         report["sebrae"] = _sebrae_section(services, month)
         return jsonable_encoder(report)
+
+    @router.get("/api/relatorio-mensal/tendencias", response_model=TendenciasRelatorioMensal)
+    def tendencias_relatorio_mensal(dias: int = Query(...)) -> Dict[str, Any]:
+        if dias not in (30, 90):
+            raise DomainValidationError("O período deve ser de 30 ou 90 dias.", status_code=422)
+        return build_trends(
+            dias=dias,
+            today=services.today(),
+            comparison_history=services.load_comparison_history(),
+            ticket_report=_read_ticket_report(services.ticket_report_path()),
+        )
 
     @router.get("/api/relatorio-mensal")
     def exportar_relatorio_mensal(mes: str = Query(..., max_length=7)) -> StreamingResponse:

@@ -645,9 +645,6 @@ scripts/automacao_rotinas_chrome.py  Rotinas do Chrome de automação (OS, inven
 scripts/sebrae_leitura.py            Leitura no SoftExpert dos chamados que o Dashboard ainda não tem
 scripts/sebrae_softexpert.py         Acesso ao SoftExpert usado pelas rotinas do Sebrae
 scripts/sebrae_fechar.py             Finalização no SoftExpert dos chamados marcados FINALIZADO
-scripts/sebrae_rotina.py             Liga a leitura do SoftExpert e o Excel Online à rotina do Sebrae
-scripts/sebrae_excel.py              Camada de Excel Online da rotina "Sincronizar chamados Sebrae"
-scripts/sebrae_sombra.py             Modo sombra: o modelo local sugere o tipo, sem influenciar a rotina
 scripts/staged_computers_endpoint.py Procura no Endpoint Central os hostnames que sumiram do Endpoint
 scripts/avisos_windows.py            Avisos do Windows (notificação) da automação das rotinas
 scripts/verificar_usuarios_endpoint.py  Conferência das pendências de usuário logado no Endpoint
