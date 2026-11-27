@@ -93,7 +93,7 @@ class ReadyWorkbookTransientErrorTests(unittest.TestCase):
         self.assertEqual(status["reason"], "arquivo temporariamente indisponível (PermissionError)")
         # The tool result goes to the model as JSON after the Assistant mask (assistant_chat.py).
         texto = json.dumps(Mascara().mascarar({"dados": report}), ensure_ascii=False) + str(report)
-        for proibido in ("fulano", "C:\\Users"):
+        for proibido in ("fulano", "Users"):
             self.assertNotIn(proibido, texto)
 
 
