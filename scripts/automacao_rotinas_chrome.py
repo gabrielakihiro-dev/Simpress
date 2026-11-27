@@ -1909,7 +1909,10 @@ _trava_ativa: "trava_execucao | None" = None
 
 
 def registrar_driver(pw) -> None:
-    """Chame logo depois de ``with sync_playwright() as pw`` dentro da trava: o vigia do cancelamento encerra esse driver."""
+    """Chame logo depois de ``with sync_playwright() as pw`` dentro da trava: o vigia do cancelamento encerra esse driver.
+
+    Registro depois do encerramento forçado é recusado (``RotinaCancelada``) e a rotina termina como cancelada.
+    """
     trava = _trava_ativa
     if trava is None:
         return
@@ -1922,7 +1925,10 @@ def registrar_driver(pw) -> None:
         log("Cancelamento", "PID do driver do Playwright não encontrado; o cancelamento espera o próximo ponto de espera.")
         return
     if isinstance(pid, int) and pid > 0:
-        trava.drivers.append(proc)
+        with trava._guarda:
+            if trava.encerrada:  # o vigia já disparou e não volta: um driver novo ficaria sem encerrador
+                raise RotinaCancelada()
+            trava.drivers.append(proc)
 
 
 def marcar_clique_irreversivel() -> None:
@@ -1982,14 +1988,19 @@ class trava_execucao:
                 if self._fim.is_set() or self.clique_irreversivel or not self._cancelamento_pedido():
                     return  # depois de um clique irreversível, só o cancelamento cooperativo
                 self.encerrada = True
+                sinalizados = 0
                 for proc in self.drivers:
                     if proc.returncode is not None:
                         continue  # driver já saiu: o pid pode ser de outro processo
                     try:
                         os.kill(proc.pid, signal.SIGTERM)  # no Windows é TerminateProcess
+                        sinalizados += 1
                     except OSError:
                         pass
-            log("Cancelamento", f"A rotina não parou em {CANCELAMENTO_FORCADO_S:.0f} s; driver do Playwright encerrado.")
+            if sinalizados:
+                log("Cancelamento", f"A rotina não parou em {CANCELAMENTO_FORCADO_S:.0f} s; driver do Playwright encerrado.")
+            else:
+                log("Cancelamento", f"A rotina não parou em {CANCELAMENTO_FORCADO_S:.0f} s; nenhum driver ativo, o próximo registro recusa.")
             return
 
     def __exit__(self, _tipo, erro, _tb) -> None:
