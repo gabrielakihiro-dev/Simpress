@@ -8,6 +8,7 @@ const URL_CONFLITOS = "/api/sebrae/dashboard/conflitos";
 const URL_ESTADO_AUTOMACAO = "/api/automacao/estado";
 const INTERVALO_MS = 3000;
 const TENTATIVAS_MAX = 300; // ~15 min: a rotina enviar espera o SharePoint
+export const TEXTO_SESSAO_EXPIRADA = "A sessão do Simpress expirou. Abra o site de novo pelo iniciar_servidor.bat para continuar.";
 const LIMITE_VALOR = 300;
 const PRAZO_CONSULTA_MS = 15000; // sem prazo, um GET pendurado deixaria o painel "ocupado" até recarregar a página
 
@@ -199,7 +200,13 @@ function acompanharEnvio() {
     let dados: { estado?: string; ultima?: { status?: string } | null } | null = null;
     try {
       dados = await apiFetch(URL_ESTADO_AUTOMACAO, { errorMessage: "Não foi possível consultar a automação." });
-    } catch {
+    } catch (erro) {
+      const status = (erro as ApiFetchError).status;
+      if (minha === acompanhamento && (status === 401 || status === 403)) { // sessão vencida: insistir 300 vezes não adianta
+        avisoFixo = true;
+        mudar({ ocupado: false, status: TEXTO_SESSAO_EXPIRADA });
+        return;
+      }
       dados = null; // falha de rede: tenta de novo até o limite
     }
     if (minha !== acompanhamento) return;

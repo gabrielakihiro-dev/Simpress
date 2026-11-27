@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const path = require("node:path");
+const path = require("node:path").win32; // fixtures do Windows em qualquer SO
 
 const { blockReason } = require("../../.claude/hooks/protect-operational-data.cjs");
 
