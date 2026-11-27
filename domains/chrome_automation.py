@@ -241,8 +241,11 @@ class ChromeAutomationRunner:
         is_alive: Callable[[int], bool] = pid_alive,
         now: Callable[[], datetime] = datetime.now,
         watch: bool = True,
+        bloqueado: Callable[[], bool] = lambda: False,
     ) -> None:
         self.contract = contract
+        # True enquanto o Pacote local restaura arquivos (main.py injeta ``pacote_local.RESTAURANDO.is_set``).
+        self._bloqueado = bloqueado
         self._popen = popen
         self._run_command = run
         self._is_alive = is_alive
@@ -466,6 +469,8 @@ class ChromeAutomationRunner:
             active = self._active_locked()
             if active is not None:
                 raise DomainConflictError(self.busy_message(active))
+            if self._bloqueado():
+                raise DomainConflictError("Uma restauração do Pacote local está em andamento; tente de novo em instantes.")
             if not self.contract.script.is_file():
                 raise DomainBusyError("O script da automação não foi encontrado em scripts/automacao_rotinas_chrome.py.")
             log_path = self._new_log_path(rotina)

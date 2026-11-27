@@ -281,31 +281,50 @@ Pedido do usuário em 11/11/2026, com escopo revisado e aprovado só para a part
 - **Fonte:** o relatório de chamados importado (aba OS, F6) e os vínculos UTIC (`os_chamados_vinculos.json` e os derivados do Dashboard). Nada novo é armazenado.
 - **Situação atual por OS:** vem da importação mais recente (a "seleção do F6" é sempre a mais recente nesta v1). Por OS: número, fonte (Simpress ou Oracle), status, fila, `dias_aberta` e UTIC com origem `Manual` ou `Dashboard`. O vínculo manual vence o derivado na mesma chave (fonte, série, OS). Série duplicada na mesma importação: a situação atual junta as OS de todas as linhas, sem repetir a mesma OS; o histórico usa só a primeira linha, como a linha do tempo da aba OS.
 - **Status Simpress é da série**, não de cada OS: o relatório guarda o status da Simpress por série. A OS Simpress não tem fila nem `dias_aberta`.
-- **Histórico:** título `Mudanças da série nas importações de OS`. Reaproveita a linha do tempo da série, sem os eventos `Sem mudanças`, com as 30 ocorrências mais recentes primeiro. Não há histórico por OS. As anotações da linha do tempo não entram no dossiê. Cada mudança aparece como na aba OS: `<campo>: <antes> → <depois>`, com as listas separadas por `, ` e `(vazio)` quando não havia valor.
+- **Histórico (decisão B, 27/11/2026):** a lista `Mudanças da série nas importações de OS` saiu da tela; essas mudanças viraram eventos de OS na linha do tempo (abaixo). `os.historico` continua na API: a linha do tempo da série (primeira linha em série duplicada) sem os eventos `Sem mudanças`, no máximo 30, dos mais recentes aos mais antigos. Não há histórico por OS. As anotações da linha do tempo não entram no dossiê. Cada mudança aparece como na aba OS: `<campo>: <antes> → <depois>`, com as listas separadas por `, ` e `(vazio)` quando não havia valor.
 - **Série fora da importação mais recente:** mostra `Última vez observada em <data>.` Nunca diz que a OS foi encerrada: a série pode só ter saído do relatório.
 - **Profundidade:** mostra `Importações disponíveis: <N>` (no máximo 50 guardadas).
 - **Estados da seção:** `Sem base importada` (nenhuma importação de OS), `Sem registros para esta série` (a série não aparece em nenhuma importação) e `Fonte indisponível` (relatório ou vínculos ilegíveis; o cabeçalho continua aparecendo).
-- **LGPD:** a resposta traz só série, modelo, números de OS e UTIC, status, fila, dias e as mudanças da linha do tempo. Nunca descrição da OS, usuário, nome, e-mail ou telefone.
+- **LGPD:** a resposta traz só série, modelo, números de OS e UTIC, status, fila, dias e as mudanças e eventos da linha do tempo. Nunca descrição da OS, nome, e-mail ou telefone. Usuário e apelido aparecem na tela, mas não na impressão nem no Assistente (decisão A, 27/11/2026).
 - **Assistente:** sem ferramenta nova; só orienta onde abrir o dossiê (`docs/cockpit-prompts/15-assistente.md`).
 
 ### Tela
 
 - Botão `Ver dossiê` (`#btn-ver-dossie`) na seção `Outros` do painel `Ações` (desde 13/11/2026; antes ficava em `.ck-eq-cab__acoes`), ao lado de `Enviar e-mail`; habilitado só com equipamento selecionado; sem atalho de teclado.
 - Diálogo `#modal-dossie-equipamento` no visual do Cockpit (`.ck-veu` e `.ck-dialogo`, temas claro e escuro), título `Dossiê do equipamento`, com a série e o modelo no cabeçalho. Abre por `app.abrirModalAcessivel`; `Fechar` e `Esc` fecham e devolvem o foco ao `Ver dossiê`.
-- Seção `OS e chamados`: tabela da situação atual por OS (cards de uma coluna no celular), a linha `Importações disponíveis: <N>`, o aviso de última observação quando houver e a lista do histórico.
+- Seção `OS e chamados`: tabela da situação atual por OS (cards de uma coluna no celular), a linha `Importações disponíveis: <N>` e o aviso de última observação quando houver. A lista do histórico saiu daqui (ver Linha do tempo).
 - `Ver OS` em cada OS da situação atual: fecha o diálogo e chama `abrirChamadoDaOs([], serie, os)`, que abre a OS na aba OS (F6); `serie` é a da linha do relatório (`ordens[].serie`, que pode diferir da do cadastro; sem ela, a série aberta) e `os` é o número da OS, porque a F6 acha a linha por essas duas grafias. Sem OS na importação mais recente, não há `Ver OS` (a aba OS esconde a série sem OS).
 - A consulta é cancelada (`AbortController`) ao fechar o diálogo ou trocar de série; resposta atrasada de outra série é descartada.
 - Trocar de série com o diálogo aberto (por exemplo, outra busca aplicada por baixo dele) **fecha o diálogo** (pelo mesmo caminho de `Fechar`) e cancela a consulta. Reabrir mostra a série nova. Reaplicar a mesma série mantém o diálogo aberto.
-- Em estado diferente de `ok`, o diálogo mostra só a mensagem do estado (sem a linha de importações, sem tabela e sem histórico). Em `ok` sem OS na importação mais recente, a tabela some inteira (sem texto novo) e ficam a linha de importações, o aviso de última observação (quando houver) e o histórico.
+- Em estado diferente de `ok`, a seção `OS e chamados` mostra só a mensagem do estado (sem a linha de importações e sem tabela). Em `ok` sem OS na importação mais recente, a tabela some inteira (sem texto novo) e ficam a linha de importações e o aviso de última observação (quando houver). A linha do tempo é uma seção própria e segue as suas fontes (ver abaixo).
 - Acessibilidade: a coluna da ação tem o cabeçalho `Ver OS` só para leitores de tela (classe `ck-sr`); cada botão leva `aria-label="Ver OS <número>"`; `#btn-ver-dossie` tem `title` com a explicação curta (`Ver as OS e os chamados deste equipamento nas importações`, dica de tela, fora da lista de textos aprovados). O erro da consulta é sempre o texto aprovado, nunca o `detail` do servidor.
 - Layout: abaixo de 1200px a tabela vira cards (`.ck-tabela--cards`); abaixo de 768px os cards têm uma coluna só. Estilos em `static/styles/ck-cockpit.css` (bloco "Dossiê do equipamento"), só com os tokens existentes; sem animação nova (a abertura é a de `abrirModalAcessivel`; a linha de carregamento reaproveita `ck-surgir` e respeita `prefers-reduced-motion`). Código (React desde 15/11/2026, migração Dia 2, G3): o conteúdo do `.ck-dialogo` é desenhado por `frontend/src/paineis/dossie-equipamento/` (`data-react-painel="dossie-equipamento"`, mesmos IDs, classes e ARIA); `frontend/src/aplicacao/equipment-dossier.ts` é só a ponte que mantém em `window` as ações `abrirDossieEquipamento`, `fecharDossieEquipamento` e `atualizarDossieEquipamento` (esta chamada por `definirEquipamentoAtual`, que liga e desliga `Ver dossiê` na hora). Sem o bundle React, `Ver dossiê` não abre o diálogo e o erro vai para o console.
 
 ### Textos aprovados (exatos)
 
-- Botão: `Ver dossiê`. Título: `Dossiê do equipamento`. Seção: `OS e chamados`. Histórico: `Mudanças da série nas importações de OS`.
+- Botão: `Ver dossiê`. Título: `Dossiê do equipamento`. Seções: `OS e chamados` e `Linha do tempo` (id `dossie-linha`, abaixo de `OS e chamados`).
 - Colunas: `OS`, `Fonte`, `Status`, `Fila`, `Dias aberta`, `UTIC`. Origem do UTIC: `Manual`, `Dashboard`. Ação: `Ver OS`. Fechar: `Fechar`.
-- `Importações disponíveis: <N>`; `Última vez observada em <data>.`; `Sem mudanças registradas.` (histórico vazio).
+- `Importações disponíveis: <N>`; `Última vez observada em <data>.`.
 - Estados: `Sem base importada`, `Sem registros para esta série`, `Fonte indisponível`. Carregando: `Carregando dossiê…`. Erro da consulta: `Não foi possível carregar o dossiê. Tente de novo.`
+
+### Linha do tempo (27/11/2026)
+
+Pedido do usuário em 27/11/2026 (decisões A, B, C e D aprovadas nessa data). Só leitura: nada é gravado. Contrato: `docs/arquitetura/CONTRATOS_API_BACKEND.md` (rota 206, chave `linha_do_tempo`). Código: `domains/equipment_dossier.py` (`build_timeline`), `routers/operations.py`, `main.py` (`_dossier_sources`), `frontend/src/paineis/dossie-equipamento/`, CSS `@media print` em `static/styles/ck-cockpit.css`.
+
+- **Fontes e eventos (tipo, título, detalhes):**
+  - `apelido_usuario` `Apelido e usuário`: "Apelido alterado" (`<apelido anterior> → <apelido novo>`) e "Usuário alterado" (`<usuário anterior> → <usuário novo>`), do histórico de alterações; só esses dois tipos. Endereço, avisos do Endpoint e nomes de pessoa ficam de fora.
+  - `transferencia` `Transferências`: "Transferência registrada" (`<retirada cidade> → <entrega cidade>`), data de criação do registro. Contato, observação e nome da pessoa ficam de fora.
+  - `os` `OS`: as mudanças da série nas importações de OS (a mesma lista que saiu da tela, decisão B); o título é o tipo do evento, como na aba OS.
+  - `sebrae` `Chamados Sebrae`: "Chamado vinculado à OS" e "OS finalizada" (`<UTIC> · OS <os>`); "Chamado encerrado no Dashboard" (`<UTIC> · <status>`, só `<UTIC>` sem status) e "Chamado saiu do Dashboard" (`<UTIC>`). Vínculo do Dashboard e vínculo manual sem data de gravação não entram (sem data). Senha, assunto, descrição, solicitante, categoria, tipo e SLA ficam de fora.
+  - `cobertura` `Cobertura`: "Reservada na Cobertura" (`Necessidade em <cidade da demanda>`, sem detalhe se não houver cidade); "Movimentação preparada" (`<origem> → <destino>`); "Movimentação recebida" (`<destino>`); "Movimentação cancelada" (`<origem> → <destino>`). Quem recebeu, comprovante, divergência e kit ficam de fora.
+- **Ordem e data (decisão D):** do mais recente ao mais antigo, comparando data e hora (nunca texto). Data só com dia conta como o fim desse dia (23:59:59, hora local). Data ilegível ou ausente: o evento não entra. Empates mantêm ordem estável.
+- **Valor vazio** em `a → b` aparece como `(vazio)`; listas juntam com `, `; cidade vazia aparece como `—`.
+- **Limite (decisão C):** 200 eventos, os mais recentes. Acima disso: `Mostrando os 200 eventos mais recentes de <N>.`
+- **Filtros:** `Tudo` e um filtro por tipo que tenha eventos, cada um com a contagem (pílulas com `aria-pressed`, grupo `Filtrar a linha do tempo`). Trocar o filtro anima a lista em 150 ms; com `prefers-reduced-motion`, sem animação.
+- **Falha por fonte:** cada fonte falha sozinha. Fonte com erro entra em `indisponiveis` e a tela mostra `Fonte indisponível: <rótulos separados por ', '>.` Log só com a chave da fonte e o tipo do erro, nunca dado.
+- **Vazio:** `Sem eventos para esta série.`
+- **Impressão (decisão C):** botão `Imprimir` à esquerda de `Fechar` (`window.print()`). Imprime o filtro ativo, em fundo branco e texto escuro nos dois temas, sem botões nem filtros, sem limite de altura nem rolagem. O cabeçalho impresso mostra `Filtro: <rótulo>`, só na impressão. Na impressão não aparecem usuário nem apelido, só o título (`Apelido alterado` ou `Usuário alterado`) (decisão A).
+- **Assistente:** usuário e apelido nunca vão ao Assistente (F9). Nenhuma ferramenta nova.
 
 ### Verificação
 
