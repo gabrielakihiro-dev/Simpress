@@ -42,6 +42,7 @@ export function SecaoPacoteLocal({ visivel, revisao, Cabecalho }: Props) {
   const [concluido, setConcluido] = useState(false);
   const tituloPrevia = useRef<HTMLHeadingElement>(null);
   const mensagemRef = useRef<HTMLParagraphElement>(null);
+  const semFoco = useRef(false);
 
   const aplicar = (l: Lista) => { setLista(l); setPasta(l.pasta_padrao ? "" : l.pasta); setErroPasta(l.erro_pasta || ""); };
 
@@ -49,11 +50,12 @@ export function SecaoPacoteLocal({ visivel, revisao, Cabecalho }: Props) {
   useEffect(() => {
     if (!visivel) return;
     // Só recarrega a lista: uma prévia aberta não fecha quando outra seção salva.
-    apiFetch<Lista>(BASE, { errorMessage: "Não foi possível ler os pacotes." }).then(aplicar).catch(e => setErro(mensagem(e, "Não foi possível ler os pacotes.")));
+    apiFetch<Lista>(BASE, { errorMessage: "Não foi possível ler os pacotes." }).then(aplicar).catch(e => { semFoco.current = true; setErro(mensagem(e, "Não foi possível ler os pacotes.")); });
   }, [visivel, revisao]);
 
   useEffect(() => { if (previa) tituloPrevia.current?.focus(); }, [previa]);
-  useEffect(() => { if (erro || ok || recusa) mensagemRef.current?.focus(); }, [erro, ok, recusa]);
+  // Erro da carga automática não rouba o foco (chega tarde, depois de o usuário fechar o modal).
+  useEffect(() => { if (semFoco.current) { semFoco.current = false; return; } if (erro || ok || recusa) mensagemRef.current?.focus(); }, [erro, ok, recusa]);
 
   async function salvarPasta(e: React.FormEvent) {
     e.preventDefault();
