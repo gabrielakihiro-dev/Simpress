@@ -137,7 +137,7 @@ class LocalTemporaryCleanupTests(unittest.TestCase):
         self.assertTrue(old.exists())
         self.assertFalse((self.history_dir / QUARANTINE_DIRECTORY).exists())
         now = old.stat().st_mtime + 7 * 24 * 3600
-        with patch("scripts.cleanup_local_temps.time.time", return_value=now):
+        with patch("core.limpeza_temporarios.time.time", return_value=now):
             result = cleanup_local_temps(self.root)
         self.assertTrue(old.exists())
         self.assertEqual(result["diferentes_preservados"], 1)
@@ -145,7 +145,7 @@ class LocalTemporaryCleanupTests(unittest.TestCase):
     def test_quarantine_report_failure_preserves_snapshot(self):
         self.target.write_bytes(b"committed history")
         old = self._temporary("a1b2c3d4", b"distinct", age_hours=8 * 24)
-        with patch("scripts.cleanup_local_temps.json.dump", side_effect=OSError("report failure")):
+        with patch("core.limpeza_temporarios.json.dump", side_effect=OSError("report failure")):
             with self.assertRaises(OSError):
                 cleanup_local_temps(self.root)
         self.assertEqual(old.read_bytes(), b"distinct")
@@ -240,6 +240,53 @@ class LocalTemporaryCleanupTests(unittest.TestCase):
         self.assertEqual((preview["iguais_prontos"], preview["bloqueados_preservados"]), (1, 0))
         self.assertEqual((applied["removidos"], applied["bloqueados_preservados"]), (0, 1))
         self.assertTrue(duplicate.exists())
+
+    def test_one_held_temporary_does_not_stop_the_others(self):
+        from core import limpeza_temporarios
+
+        first_target = self.history_dir / "a.json"
+        second_target = self.history_dir / "b.json"
+        first_target.write_bytes(b"x")
+        second_target.write_bytes(b"y")
+        held = self.history_dir / ".a.json.abcd1234.tmp"
+        free = self.history_dir / ".b.json.abcd1234.tmp"
+        for temporary, content in ((held, b"x"), (free, b"y")):
+            temporary.write_bytes(content)
+            timestamp = time.time() - 30 * 3600
+            os.utime(temporary, (timestamp, timestamp))
+        real_digest = limpeza_temporarios._digest
+
+        def digest(path):
+            if path == held:
+                raise PermissionError("held by another program")
+            return real_digest(path)
+
+        with patch("core.limpeza_temporarios._digest", side_effect=digest):
+            preview = cleanup_local_temps(self.root, dry_run=True)
+            applied = cleanup_local_temps(self.root)
+        self.assertEqual((preview["iguais_prontos"], preview["bloqueados_preservados"]), (1, 1))
+        self.assertEqual((applied["removidos"], applied["bloqueados_preservados"]), (1, 1))
+        self.assertTrue(held.exists())
+        self.assertFalse(free.exists())
+
+    def test_temporary_that_vanishes_or_is_held_at_stat_is_skipped(self):
+        self.target.write_bytes(b"committed history")
+        vanished = self._temporary("a1b2c3d4", b"committed history", age_hours=30)
+        held = self._temporary("e5f6g7h8", b"committed history", age_hours=30)
+        real_stat = Path.stat
+
+        def stat(path, *args, **kwargs):
+            if not kwargs.get("follow_symlinks", True):  # is_symlink and friends keep working
+                return real_stat(path, *args, **kwargs)
+            if path == vanished:
+                raise FileNotFoundError(2, "gone")
+            if path == held:
+                raise PermissionError(13, "held")
+            return real_stat(path, *args, **kwargs)
+
+        with patch.object(Path, "stat", stat):
+            result = cleanup_local_temps(self.root)
+        self.assertEqual((result["examinados"], result["bloqueados_preservados"], result["removidos"]), (2, 1, 0))
 
 if __name__ == "__main__":
     unittest.main()

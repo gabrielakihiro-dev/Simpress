@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import json  # noqa: F401 - tests patch scripts.cleanup_local_temps.json.dump
 import sys
-import time  # noqa: F401 - tests patch scripts.cleanup_local_temps.time.time
 from pathlib import Path
 from typing import Dict
 

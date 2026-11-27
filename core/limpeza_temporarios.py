@@ -201,7 +201,13 @@ def cleanup_local_temps(
         if target is None or target.parent != temporary.parent or is_link_or_junction(target):
             result["formato_desconhecido_preservado"] += 1
             continue
-        metadata = temporary.stat()
+        try:
+            metadata = temporary.stat()
+        except FileNotFoundError:  # vanished between the listing and now: nothing to clean
+            continue
+        except PermissionError:  # held by an antivirus or OneDrive: try again next time
+            result["bloqueados_preservados"] += 1
+            continue
         age_hours = (now - metadata.st_mtime) / 3600
         if age_hours < min_age_hours:
             result["recentes_preservados"] += 1
@@ -236,12 +242,13 @@ def cleanup_local_temps(
                     continue
                 result["iguais_prontos"] += 1
                 if not dry_run:
-                    temporary.unlink()
+                    integrity._unlink_with_backoff(temporary)
                     result["removidos"] += 1
                 if itens is not None:
                     itens.append({"acao": "remover", **item})
-        except (integrity.FileBusyError, integrity.FileTransactionError):
-            # The message may carry the file name: count it, never propagate it to a log.
+        except (integrity.FileBusyError, integrity.FileTransactionError, PermissionError, FileNotFoundError):
+            # One held or vanished file must not stop the others; the message may carry
+            # the file name: count it, never propagate it to a log. Other OSErrors propagate.
             result["bloqueados_preservados"] += 1
 
     return result

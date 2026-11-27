@@ -1,23 +1,11 @@
 // Estado do modal Saúde local (store externo, lido pelo corpo com useSyncExternalStore).
 // Contrato da API: GET /api/saude-local, POST /api/saude-local/limpeza[/previa], GET /api/saude-local/diagnostico.
 
-export type ChaveArea = "backups_planilhas" | "logs" | "lotes_processados" | "pacotes_locais" | "quarentena";
-export type SituacaoJson = "integro" | "invalido" | "vazio" | "ilegivel" | "grande_demais";
-export interface Area { chave: ChaveArea; arquivos: number; bytes: number; existe: boolean }
-export interface ArquivoEstado { nome: string; bytes: number; situacao: SituacaoJson; erro: string | null }
-export interface SaudeLocal {
-  gerado_em: string;
-  disco: { livre_bytes: number; total_bytes: number } | null;
-  areas: Area[];
-  estado_json: { arquivos: ArquivoEstado[]; outros: number; copias_corrompidas: number };
-  transacoes: { situacao: "limpo" | "pendente"; quantidade: number };
-}
-export interface ItemLimpeza { acao: "remover" | "quarentena"; area: "planilhas_entrada" | "state" | "modelos"; caminho: string; bytes: number }
-export interface Limpeza {
-  aplicada: boolean;
-  itens: ItemLimpeza[];
-  totais: { remover_arquivos: number; remover_bytes: number; quarentena_arquivos: number; quarentena_bytes: number; preservados: number };
-}
+import type { Area, ArquivoJson, ItemLimpeza, Limpeza, SaudeLocal } from "../../api-tipos.gerado";
+
+export type { Area, ArquivoJson, ItemLimpeza, Limpeza, SaudeLocal };
+export type ChaveArea = Area["chave"];
+export type SituacaoJson = ArquivoJson["situacao"];
 export interface Aviso { titulo: string; detalhe: string; tipo: "alerta" | "erro" }
 
 export interface Estado {

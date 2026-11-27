@@ -417,6 +417,22 @@ class DiagnosticoTests(SaudeLocalBase):
         self.assertEqual(corpo["areas"][2]["arquivos"], 2)  # processadas + falhas
         self.assertEqual(corpo["areas"][4]["arquivos"], 1)  # the corrupted copy
 
+    def test_json_corrompido_em_subpasta_aparece_como_invalido(self) -> None:
+        state = self.root / "data" / "state"
+        _escrever(state / "usuarios_manuais" / "usuarios_pendencias.json", f'{{"{PESSOA}": '.encode())
+        _escrever(state / "apelidos_modificados" / "apelidos_modificados.json", b"{}")
+        _escrever(state / "usuarios_manuais" / f"{CPF}.json", b"{")  # not in the list: never opened nor named
+        resposta = self.client.get("/api/saude-local")
+        por_nome = {a["nome"]: a for a in resposta.json()["estado_json"]["arquivos"]}
+        self.assertEqual(por_nome["usuarios_manuais/usuarios_pendencias.json"]["situacao"], "invalido")
+        self.assertEqual(por_nome["usuarios_manuais/usuarios_pendencias.json"]["erro"], "JSONDecodeError")
+        self.assertEqual(por_nome["apelidos_modificados/apelidos_modificados.json"]["situacao"], "integro")
+        self.assertEqual(por_nome["historico_comparacoes/historico_comparacoes.json"]["situacao"], "invalido")
+        self.assertNotIn("usuarios_manuais/usuarios_manuais.json", por_nome)
+        self.assertEqual(resposta.json()["estado_json"]["outros"], 1)  # only the top level is counted
+        self._sem_dado_pessoal(resposta.text)
+        Diagnostico.model_validate(self.client.get("/api/saude-local/diagnostico").json())
+
     def test_json_grande_demais_nao_e_aberto(self) -> None:
         grande = self.root / "data" / "state" / "lembretes.json"
         with patch.object(saude_local, "MAX_JSON_BYTES", 3), patch.object(Path, "read_bytes", side_effect=AssertionError("abriu")):

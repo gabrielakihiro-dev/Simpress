@@ -13,6 +13,7 @@ import os
 import platform
 import re
 import shutil
+import stat
 import threading
 from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
@@ -22,7 +23,8 @@ from core.limpeza_temporarios import QUARANTINE_DIRECTORY, CleanupBlockedError, 
 from core.local_paths import is_link_or_junction
 from domains.assistant_lgpd import mascarar_cpfs
 
-# State files at the top of data/state, named in core/config.py and domains/ (only the existing ones are listed).
+# State files of data/state (relative path, "/" for subfolders), named in core/config.py and domains/;
+# only the existing ones are listed.
 NomeJson = Literal[
     "assistente_busca_web.json", "assistente_conversas.json", "assistente_instrucoes.json", "assistente_notas.json",
     "backups_regionais.json", "dashboard_agendamento.json", "historico_alteracoes.json", "historico_chamados.json",
@@ -37,6 +39,9 @@ NomeJson = Literal[
     "sebrae_finalizacao.json", "sebrae_historico.json", "sebrae_novos.json", "sebrae_observacoes.json",
     "sebrae_os_recusadas.json", "unidades_custom.json", "usuarios_entra_pr.json", "ux_chamados_historico.json",
     "ux_solicitante.json", "ux_tickets_historico.json",
+    "apelidos_modificados/apelidos_modificados.json", "historico_comparacoes/historico_comparacoes.json",
+    "hostnames_removidos/hostnames_removidos.json", "usuarios_manuais/usuarios_manuais.json",
+    "usuarios_manuais/usuarios_manuais_datas.json", "usuarios_manuais/usuarios_pendencias.json",
 ]
 NOMES_JSON: Tuple[str, ...] = get_args(NomeJson)
 ChaveArea = Literal["backups_planilhas", "logs", "lotes_processados", "pacotes_locais", "quarentena"]
@@ -83,6 +88,10 @@ def _arquivos(pasta: Path) -> Iterator[Tuple[Path, int, bool]]:
     """(path, size, inside a quarantine folder) of every regular file; never follows links or junctions."""
     if not pasta.is_dir() or is_link_or_junction(pasta):
         return
+    try:
+        raiz = pasta.resolve()
+    except OSError:
+        return
     pilha: List[Tuple[Path, bool]] = [(pasta, False)]
     while pilha:
         atual, em_quarentena = pilha.pop()
@@ -94,7 +103,7 @@ def _arquivos(pasta: Path) -> Iterator[Tuple[Path, int, bool]]:
         for entrada in entradas:
             caminho = Path(entrada.path)
             try:
-                if is_link_or_junction(caminho) or not inside_root(caminho, pasta):
+                if is_link_or_junction(caminho) or not caminho.resolve().is_relative_to(raiz):
                     continue
                 if entrada.is_dir(follow_symlinks=False):
                     pilha.append((caminho, em_quarentena or entrada.name == QUARANTINE_DIRECTORY))
@@ -197,15 +206,17 @@ def estado_json(base: Path) -> Dict[str, Any]:
         except OSError:
             entradas = {}
         for nome in NOMES_JSON:
-            entrada = entradas.get(nome)
+            caminho = pasta / nome
             try:
-                if entrada is None or not entrada.is_file(follow_symlinks=False) or is_link_or_junction(Path(entrada.path)):
+                info = caminho.lstat()
+                # Regular file only (lstat: a link is not), in a real subfolder inside data/state.
+                if (not stat.S_ISREG(info.st_mode) or is_link_or_junction(caminho.parent)
+                        or not inside_root(caminho, pasta)):
                     continue
-                tamanho = entrada.stat(follow_symlinks=False).st_size
             except OSError:
                 continue
-            situacao, erro = _situacao_json(Path(entrada.path), tamanho)
-            arquivos.append({"nome": nome, "bytes": tamanho, "situacao": situacao, "erro": erro})
+            situacao, erro = _situacao_json(caminho, info.st_size)
+            arquivos.append({"nome": nome, "bytes": info.st_size, "situacao": situacao, "erro": erro})
         for nome in entradas:
             if not nome.endswith(".json") or nome in NOMES_JSON:
                 continue

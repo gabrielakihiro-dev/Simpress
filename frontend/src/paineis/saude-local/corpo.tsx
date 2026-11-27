@@ -2,7 +2,7 @@
 // Desktop: tabelas; abaixo de 768 px a TabelaNl vira cartões com os mesmos dados.
 import { useSyncExternalStore, type ReactNode } from "react";
 import { TabelaNl, type ColunaNl } from "../../componentes/tabela-nl";
-import { assinar, ler, formatarBytes, plural, type Area, type ArquivoEstado, type Aviso, type ChaveArea, type ItemLimpeza, type SituacaoJson } from "./estado";
+import { assinar, ler, formatarBytes, plural, type Area, type ArquivoJson, type Aviso, type ChaveArea, type ItemLimpeza, type SituacaoJson } from "./estado";
 
 type Tom = "ok" | "alerta" | "erro" | "info" | "";
 const Selo = ({ tom = "", children }: { tom?: Tom; children: ReactNode }) => <span className="ck-badge" data-status={tom || undefined}>{children}</span>;
@@ -84,13 +84,13 @@ function UsoPorArea({ areas }: { areas: Area[] }) {
   return <TabelaNl legenda="Uso por área" colunas={colunas} linhas={areas} chaveLinha={area => area.chave} />;
 }
 
-function ArquivosEstado({ json }: { json: { arquivos: ArquivoEstado[]; outros: number; copias_corrompidas: number } }) {
+function ArquivosEstado({ json }: { json: { arquivos: ArquivoJson[]; outros: number; copias_corrompidas: number } }) {
   const { arquivos, outros, copias_corrompidas: copias } = json;
   const integros = arquivos.filter(a => a.situacao === "integro").length;
   const invalidos = arquivos.filter(a => a.situacao === "invalido").length;
   const tom: Tom = invalidos ? "erro" : integros === arquivos.length ? "ok" : "alerta";
   const textoSelo = invalidos ? plural(invalidos, "inválido", "inválidos") : `${integros} de ${arquivos.length} íntegros`;
-  const colunas: ColunaNl<ArquivoEstado>[] = [
+  const colunas: ColunaNl<ArquivoJson>[] = [
     { chave: "nome", rotulo: "Arquivo", render: a => <span className="sl-mono">{a.nome}</span> },
     { chave: "bytes", rotulo: "Tamanho", render: a => formatarBytes(a.bytes) },
     {
@@ -211,6 +211,8 @@ export function CorpoSaudeLocal() {
             <p className="ckp-secao__desc">
               {saude.transacoes.situacao === "limpo"
                 ? "Nenhuma gravação interrompida aguardando recuperação."
+                : saude.transacoes.quantidade === 0
+                ? "Não foi possível contar as gravações interrompidas. Reinicie o servidor local; enquanto isso, a limpeza fica bloqueada."
                 : `${saude.transacoes.quantidade === 1 ? "1 gravação interrompida aguarda" : `${saude.transacoes.quantidade} gravações interrompidas aguardam`} recuperação. Reinicie o servidor local para recuperá-las; enquanto isso, a limpeza fica bloqueada.`}
             </p>
           </Secao>
