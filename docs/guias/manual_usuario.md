@@ -97,6 +97,8 @@ Para ler a linha do tempo, use os botões de filtro (**Tudo** ou um tipo, como *
 
 **Como confirmar que deu certo:** depois de **Restaurar anterior**, o registro e o equipamento mostram o valor anterior. Séries que começam com `VMWARE` ou `GOOGLECLOUD` (máquinas virtuais do próprio Sebrae) não aparecem nesta tela.
 
+**Relatório mensal (F8):** abra em **Ferramentas › Relatório mensal** (ou tecle `F8`). A aba **Tendências** mostra como estão os últimos 30 ou 90 dias, conforme o seletor **Período**, sem depender do mês escolhido na barra. Ela traz o tempo médio, em dias, para fechar as OS (só as que têm data de criação e de conclusão) e quantos computadores ficaram sem acesso há 7 dias ou mais em cada atualização do inventário. Essa aba só lê os dados: não grava nada e não muda a planilha do relatório.
+
 ## 4. Atualizar a base EquipamentosDetalhes
 
 A base oficial de equipamentos é o `EquipamentosDetalhes` mais recente que você receber. Ela fica salva em `data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx`. Cada atualização **substitui** a base anterior (não soma linhas de versões antigas), e o sistema guarda um backup automático do que estava ativo.
