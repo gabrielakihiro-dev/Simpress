@@ -623,9 +623,13 @@ class LocalRequestSecurityTests(unittest.TestCase):
             (("127.0.0.1", 1234), [(b"host", authority), (b"origin", b"http://evil.example")], False),
             (("127.0.0.1", 1234), [(b"host", b"evil.example:80"), (b"origin", b"http://evil.example:80")], False),
             (("192.0.2.1", 1234), [(b"host", authority), same_origin], False),
+            # /api/* over WebSocket needs the session like HTTP: cookie and X-Simpress-Sessao.
+            (("127.0.0.1", 1234), [(b"host", authority), same_origin], False, "/api/ws"),
+            (("127.0.0.1", 1234), [(b"host", authority), same_origin, *SESSION_HEADERS[:1]], False, "/api/ws"),
+            (("127.0.0.1", 1234), [(b"host", authority), same_origin, *SESSION_HEADERS], True, "/api/ws"),
         )
-        for client, headers, allowed in cases:
-            with self.subTest(client=client, headers=headers):
+        for client, headers, allowed, *caminho in cases:
+            with self.subTest(client=client, headers=headers, caminho=caminho):
                 messages = []
                 reached = []
 
@@ -639,7 +643,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
                 async def send(message):
                     messages.append(message)
 
-                scope = {"type": "websocket", "path": "/ws", "scheme": "ws",
+                scope = {"type": "websocket", "path": caminho[0] if caminho else "/ws", "scheme": "ws",
                          "client": client, "headers": headers}
                 asyncio.run(main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send))
                 self.assertEqual(bool(reached), allowed)

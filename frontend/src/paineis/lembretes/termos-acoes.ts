@@ -88,6 +88,8 @@ async function carregarAssinatura(): Promise<HTMLImageElement | null> {
     const limite = new Promise<never>((_, rejeitar) => { relogio = setTimeout(rejeitar, TEMPO_ASSINATURA_MS); });
     const carga = async () => {
       img.src = await urlDeBlobDaApi(URL_ASSINATURA, controle.signal);
+      // Chegou depois dos 3 s: a impressão já seguiu sem a imagem, então só libera o blob.
+      if (controle.signal.aborted) return liberarAssinatura(img);
       await img.decode();
     };
     await Promise.race([carga(), limite]);

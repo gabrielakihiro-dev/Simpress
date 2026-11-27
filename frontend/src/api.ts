@@ -21,29 +21,41 @@ const DEFAULT_ERROR_MESSAGE = "Não foi possível concluir a solicitação.";
 // No navegador é a janela; no teste em Node, o globalThis (sem dispatchEvent, o evento offline não sai).
 const root: any = typeof window !== "undefined" ? window : globalThis; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-// Sessão local (security/sessao_local.py): o /bootstrap redireciona para /#sessao=<hex>; o valor vai para o localStorage
-// (por origem, porta incluída, então outro servidor em 127.0.0.1 não o vê) e segue em X-Simpress-Sessao junto do cookie.
+// Sessão local (security/sessao_local.py): o /bootstrap redireciona para /#sessao=<hex> e o valor segue em X-Simpress-Sessao
+// junto do cookie. Fica no localStorage (por origem, porta incluída: outro servidor em 127.0.0.1 não o vê), mas só depois
+// que um /api/* feito com ele responder 2xx: qualquer site pode abrir /#sessao=<inventado> e não pode apagar a sessão
+// boa das outras abas. Até lá o valor vale só nesta aba; um 401 com ele o descarta.
 const CHAVE_SESSAO = "simpress_sessao";
 const FORMATO_SESSAO = /^[0-9a-f]{64}$/;
-let sessaoReserva = "";
+let sessaoDoEndereco = ""; // #sessao= ainda não confirmado
+let sessaoReserva = ""; // confirmado, para quando o localStorage não está disponível
 
-function guardarSessaoDoEndereco() {
+function lerSessaoDoEndereco() {
   if (typeof location === "undefined") return;
   const valor = location.hash.startsWith("#sessao=") ? location.hash.slice("#sessao=".length) : "";
   if (!FORMATO_SESSAO.test(valor)) return;
-  sessaoReserva = valor;
-  try { localStorage.setItem(CHAVE_SESSAO, valor); } catch { /* sem armazenamento: vale a reserva desta aba */ }
+  sessaoDoEndereco = valor;
   try { history.replaceState(null, "", location.pathname + location.search); } catch { /* sem history: o valor fica na barra */ }
 }
-guardarSessaoDoEndereco();
+lerSessaoDoEndereco();
 
 // Lido a cada pedido (não no carregamento): um novo /bootstrap em outra aba vale para todas.
 function sessaoAtual(): string {
+  if (sessaoDoEndereco) return sessaoDoEndereco;
   try {
     const salvo = localStorage.getItem(CHAVE_SESSAO) || "";
     if (FORMATO_SESSAO.test(salvo)) return salvo;
   } catch { /* sem armazenamento */ }
   return sessaoReserva;
+}
+
+function confirmarSessaoDoEndereco(enviada: string, status: number) {
+  if (!enviada || enviada !== sessaoDoEndereco) return;
+  if (status === 401) sessaoDoEndereco = "";
+  if (!(status >= 200 && status <= 299)) return;
+  sessaoReserva = enviada;
+  sessaoDoEndereco = "";
+  try { localStorage.setItem(CHAVE_SESSAO, enviada); } catch { /* sem armazenamento: vale a reserva desta aba */ }
 }
 
 function mesmaOrigem(url: string): boolean {
@@ -108,6 +120,7 @@ export async function apiFetch(url: string, options: ApiFetchOptions = {}): Prom
     }
     throw networkError;
   }
+  confirmarSessaoDoEndereco(sessao, response.status);
   if (!response.ok) {
     const data = await readJson(response, true, errorMessage);
     const detail = data && typeof data === "object" ? (data as { detail?: unknown }).detail : undefined;

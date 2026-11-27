@@ -1,5 +1,6 @@
-// Sessão local no front (security/sessao_local.py): api.ts lê #sessao=<hex> ao carregar, guarda no localStorage,
-// limpa a barra e manda X-Simpress-Sessao só para a mesma origem. Arquivo próprio: os globais vêm antes do require.
+// Sessão local no front (security/sessao_local.py): api.ts lê #sessao=<hex> ao carregar, limpa a barra, manda
+// X-Simpress-Sessao só para a mesma origem e guarda o valor no localStorage depois do primeiro /api/* 2xx com ele.
+// Arquivo próprio: os globais vêm antes do require.
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
@@ -29,9 +30,13 @@ function mockFetch(t) {
   return calls;
 }
 
-test("o valor de #sessao= vai para o localStorage e sai da barra ao carregar", () => {
-  assert.equal(armazenado.get("simpress_sessao"), VALOR);
+test("o valor de #sessao= sai da barra ao carregar e só vai ao localStorage depois de um /api/* 2xx", async t => {
   assert.deepEqual(trocas, [[null, "", "/?aba=home"]]);
+  assert.equal(armazenado.has("simpress_sessao"), false);
+  const calls = mockFetch(t);
+  await apiFetch("/api/stats");
+  assert.equal(calls[0][1].headers.get("X-Simpress-Sessao"), VALOR);
+  assert.equal(armazenado.get("simpress_sessao"), VALOR);
 });
 
 test("mesma origem leva X-Simpress-Sessao; outra origem não", async t => {

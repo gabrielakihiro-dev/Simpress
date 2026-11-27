@@ -300,7 +300,9 @@ function Captura({ execucao, captura }: { execucao: Execucao; captura: { nome: s
           ? <span className="automation-capture-missing">Captura indisponível</span>
           : endereco ? <img src={endereco} alt={descricao} decoding="async" onError={() => setFalhou(true)} /> : null}
       </button>
-      <a className="automation-history-link" href={endereco || undefined} target="_blank" rel="noopener noreferrer">{captura.nome}</a>
+      {/* Sem noopener: o Chrome pode recusar abrir blob: (PNG da mesma origem) numa aba sem opener. Recarregar essa aba
+          depois que a linha some do histórico não volta: o blob já foi revogado. */}
+      <a className="automation-history-link" href={endereco || undefined} target="_blank">{captura.nome}</a>
     </span>
   );
 }

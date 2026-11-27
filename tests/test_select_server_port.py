@@ -153,7 +153,7 @@ class ProbeAgainstRealServerTests(unittest.TestCase):
             with self.subTest(mode=mode):
                 self.assertEqual(selector._probe_simpress(port), {"outdated": False})
 
-    def test_server_echoing_the_raw_secret_is_not_accepted(self):
+    def test_previous_version_with_raw_secret_cookie_is_outdated(self):
         from fastapi import FastAPI
         from fastapi.responses import RedirectResponse
 
@@ -164,6 +164,25 @@ class ProbeAgainstRealServerTests(unittest.TestCase):
         def bootstrap(t: str = ""):
             resposta = RedirectResponse("/", status_code=303)
             resposta.set_cookie(f"simpress_sessao_{port}", t)
+            return resposta
+
+        self._serve_on(fake, port)
+        self._write_secret(port, "segredo-sintetico")
+        # Older Simpress (cookie == raw secret) on the same data/state: reported as OUTDATED, never as another program.
+        self.assertEqual(selector._probe_simpress(port), {"outdated": True})
+
+    def test_bootstrap_with_a_cookie_that_is_neither_raw_nor_derived_is_not_accepted(self):
+        from fastapi import FastAPI
+        from fastapi.responses import RedirectResponse
+
+        fake = FastAPI()
+        port = self._free_port()
+
+        @fake.get("/bootstrap")
+        def bootstrap(t: str = ""):
+            resposta = RedirectResponse("/", status_code=303)
+            resposta.set_cookie(f"simpress_sessao_{port}", "valor-qualquer")
+            resposta.set_cookie(f"outro_simpress_sessao_{port}", t)
             return resposta
 
         self._serve_on(fake, port)

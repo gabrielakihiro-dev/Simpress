@@ -239,6 +239,10 @@ test("Automação ignores a late historical response after returning to live mod
 });
 
 test("Automação history lists status, batches and capture links, and passes the accessibility audit", async ({ page, request }) => {
+  // A captura vem por apiFetch (leva o X-Simpress-Sessao guardado) e o link usa o endereço blob: dela.
+  const sessao = "b".repeat(64);
+  await page.addInitScript(valor => localStorage.setItem("simpress_sessao", valor), sessao);
+  const pedidoCaptura = page.waitForRequest(pedido => new URL(pedido.url()).pathname === "/api/automacao/capturas/20261019_170210_Oracle.png");
   const panel = await openAutomation(page, request);
   const history = panel.locator("#automacao-historico");
   const rows = history.locator("tbody tr");
@@ -250,8 +254,8 @@ test("Automação history lists status, batches and capture links, and passes th
   await expect(rows.nth(1)).toContainText("Falha");
   await expect(rows.nth(1)).toContainText("Login não concluído em 10 minutos.");
   const capture = rows.nth(1).getByRole("link", { name: "20261019_170210_Oracle.png" });
-  // A captura vem por fetch (leva o X-Simpress-Sessao) e o link usa o endereço blob: dela.
-  await expect(capture).toHaveAttribute("href", /^blob:/);
+  expect((await pedidoCaptura).headers()["x-simpress-sessao"]).toBe(sessao);
+  await expect(capture).toHaveAttribute("href", /^blob:http:\/\/127\.0\.0\.1:\d+\//);
   await expect(capture).toHaveAttribute("target", "_blank");
   await expect(rows.nth(1).locator(".automation-capture-thumb img")).toHaveCount(1);
 

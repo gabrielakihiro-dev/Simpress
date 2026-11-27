@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -64,8 +65,9 @@ def _probe_simpress(port: int) -> dict | None:
     secret = _read_secret(port)
     if not secret:
         return None
-    cookie = f"simpress_sessao_{port}={_derive(secret, b'simpress-sessao/cookie/v1')}"
-    session = {"Cookie": cookie, "X-Simpress-Sessao": _derive(secret, b"simpress-sessao/cabecalho/v1")}
+    cookie_name = f"simpress_sessao_{port}"
+    cookie_value = _derive(secret, b"simpress-sessao/cookie/v1")
+    session = {"Cookie": f"{cookie_name}={cookie_value}", "X-Simpress-Sessao": _derive(secret, b"simpress-sessao/cabecalho/v1")}
     opener = build_opener(ProxyHandler({}), _NoRedirect)
     try:
         with opener.open(
@@ -73,7 +75,14 @@ def _probe_simpress(port: int) -> dict | None:
         ):
             return None  # a Simpress answers 303, never a plain 200
     except HTTPError as error:
-        if error.code != 303 or cookie not in (error.headers.get("Set-Cookie") or ""):
+        if error.code != 303:
+            return None
+        found = re.search(rf"(?:^|[\s,;]){cookie_name}=([^\s,;]*)", ", ".join(error.headers.get_all("Set-Cookie") or []))
+        value = found.group(1) if found else ""
+        if value == secret:
+            # Simpress before the X-Simpress-Sessao header (cookie == raw secret): same data/state, so never start a 2nd copy.
+            return {"outdated": True}
+        if value != cookie_value:
             return None
     except Exception:
         return None

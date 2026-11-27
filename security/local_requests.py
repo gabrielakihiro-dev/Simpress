@@ -163,6 +163,8 @@ class LocalRequestSafetyMiddleware:
             host_authority is not None
             and host_authority in self.services.allowed_authorities()
             and parse_request_authority(origin_values[0], is_origin=True) == host_authority
+            # Same gate as HTTP /api/*: a WebSocket there needs the session cookie and X-Simpress-Sessao too.
+            and (not scope.get("path", "").startswith("/api/") or sessao_local.sessao_valida(scope, self.services.session_port()))
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

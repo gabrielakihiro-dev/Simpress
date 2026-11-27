@@ -159,7 +159,7 @@ exit /b 1
 echo.
 echo [INFO] O Simpress ja esta em execucao na porta %SIMPRESS_PORT%.
 echo Abrindo a instancia existente sem iniciar uma segunda copia.
-rem /api/* exige o cookie da sessao local; /bootstrap o cria a partir do segredo gravado pelo servidor.
+rem /api/* exige o cookie e o cabecalho X-Simpress-Sessao da sessao local; /bootstrap cria os dois a partir do segredo gravado pelo servidor.
 set "SIMPRESS_SESSAO="
 if exist "%LOCALAPPDATA%\Simpress\sessao_%SIMPRESS_PORT%.txt" set /p SIMPRESS_SESSAO=<"%LOCALAPPDATA%\Simpress\sessao_%SIMPRESS_PORT%.txt"
 if defined SIMPRESS_SESSAO (

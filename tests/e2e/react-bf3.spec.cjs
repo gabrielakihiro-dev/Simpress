@@ -475,6 +475,34 @@ test.describe("comportamento (só no desktop)", () => {
   });
 
   // Novo layout (18/11/2026): cartão "Histórico" do bento (4 registros, selo "atual", "Ver tudo →" abre o diálogo como gaveta).
+  // /api/* exige o X-Simpress-Sessao: os links do Endpoint não apontam para a API; o clique (ou o do meio) pede a URL da tela
+  // certa por apiFetch e abre a aba externa (frontend/src/comum/links-endpoint.ts). Só dados sintéticos (exemplo.invalid).
+  test("Comparação: links do Endpoint em Sem acesso pedem a tela certa e abrem a aba externa", async ({ page }) => {
+    const telas = [];
+    await page.route("**/api/config/local/endpoint/*", route => {
+      const tela = new URL(route.request().url()).pathname.split("/").pop();
+      telas.push(tela);
+      return route.fulfill({ json: { url: `https://exemplo.invalid/webclient#/${tela}` } });
+    });
+    await page.context().route("https://exemplo.invalid/**", route => route.fulfill({ contentType: "text/html", body: "<title>externo</title>" }));
+    await preparar(page);
+    await abrirResumo(page, { aba: "sem-acesso" });
+    const painelSemAcesso = page.locator("#resumo-painel-sem-acesso");
+    const urlAntes = page.url();
+    for (const [seletor, tela, botao] of [["[data-endpoint-computers-link]", "som-computadores", "left"], ["[data-endpoint-staged-link]", "staged-computers", "middle"]]) {
+      const link = painelSemAcesso.locator(seletor);
+      await expect(link).toHaveAttribute("data-endpoint-tela", tela);
+      await expect(link).toHaveAttribute("href", "#");
+      const aba = page.context().waitForEvent("page");
+      await link.click({ button: botao });
+      await (await aba).waitForURL(`https://exemplo.invalid/webclient#/${tela}`);
+    }
+    expect(telas).toEqual(["som-computadores", "staged-computers"]);
+    expect(page.url()).toBe(urlAntes);
+    // Só as duas abas externas: o clique do meio não abriu o /# do Simpress.
+    expect(page.context().pages().map(aberta => new URL(aberta.url()).host)).toEqual([new URL(urlAntes).host, "exemplo.invalid", "exemplo.invalid"]);
+  });
+
   test("Resumo: cartão Histórico mostra os 4 primeiros registros, troca a comparação e abre o histórico completo", async ({ page }, info) => {
     const extra = (id, horario) => ({ ...eventoB(), id, horario });
     const ambiente = await preparar(page, {
