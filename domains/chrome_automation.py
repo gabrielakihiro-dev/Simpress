@@ -341,6 +341,11 @@ class ChromeAutomationRunner:
                     "cancelamento_pedido": self._cancel_requested_since(owner.get("inicio"))}
         return None
 
+    def ocupado(self) -> bool:
+        """True while a routine started here or by the script holds the automation Chrome lock."""
+        with self._lock:
+            return self._active_locked() is not None
+
     @staticmethod
     def busy_message(active: Dict[str, Any]) -> str:
         label = ROUTINE_LABELS.get(active["rotina"], active["rotina"] or "rotina")

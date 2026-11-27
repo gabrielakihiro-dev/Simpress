@@ -206,6 +206,15 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         self.assertIn("Rotina Completa desde 07:30", raised.exception.detail)
         self.assertEqual(harness.popen_calls, [])
 
+    def test_ocupado_reads_the_live_lock_only(self):
+        harness = self.harness(alive_pids={999})
+        self.assertFalse(harness.runner.ocupado())
+        harness.contract.lock_file.parent.mkdir(parents=True)
+        harness.contract.lock_file.write_text(json.dumps({"pid": 999, "rotina": "os", "inicio": ""}), encoding="utf-8")
+        self.assertTrue(harness.runner.ocupado())
+        harness.alive_pids.clear()
+        self.assertFalse(harness.runner.ocupado())
+
     def test_stale_lock_with_dead_pid_does_not_block(self):
         harness = self.harness()
         harness.contract.lock_file.parent.mkdir(parents=True)

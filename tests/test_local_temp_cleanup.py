@@ -172,5 +172,58 @@ class LocalTemporaryCleanupTests(unittest.TestCase):
         self.assertEqual(archived[0].read_bytes(), b"previous workbook")
 
 
+    def test_items_list_what_was_ready_and_what_was_done(self):
+        self.target.write_bytes(b"committed history")
+        self._temporary("a1b2c3d4", b"committed history", age_hours=30)
+        self._temporary("e5f6g7h8", b"distinct", age_hours=8 * 24)
+        preview = []
+        cleanup_local_temps(self.root, dry_run=True, itens=preview)
+        expected = [
+            {"acao": "remover", "area": "state", "bytes": 17,
+             "caminho": "historico_comparacoes/.historico_comparacoes.json.a1b2c3d4.tmp"},
+            {"acao": "quarentena", "area": "state", "bytes": 8,
+             "caminho": "historico_comparacoes/.historico_comparacoes.json.e5f6g7h8.tmp"},
+        ]
+        self.assertEqual(preview, expected)
+        aplicados = []
+        cleanup_local_temps(self.root, itens=aplicados)
+        self.assertEqual(aplicados, expected)
+
+    def test_without_recovery_pending_transactions_only_refuse(self):
+        self.target.write_bytes(b"committed history")
+        duplicate = self._temporary("a1b2c3d4", b"committed history", age_hours=30)
+        pending = self.root / ".transactions" / "pending"
+        pending.parent.mkdir()
+        pending.write_text("fixture", encoding="utf-8")
+        with patch("core.integrity.recover_pending_transactions") as recover:
+            with self.assertRaises(CleanupBlockedError) as raised:
+                cleanup_local_temps(self.root, recuperar_transacoes=False)
+        recover.assert_not_called()
+        self.assertEqual(raised.exception.codigo, "transacoes")
+        self.assertEqual(pending.read_text(encoding="utf-8"), "fixture")
+        self.assertTrue(duplicate.exists())
+        pending.unlink()
+        (self.root / "data" / "planilhas_entrada" / ".upload-staging-x").mkdir(parents=True)
+        with self.assertRaises(CleanupBlockedError) as raised:
+            cleanup_local_temps(self.root, recuperar_transacoes=False)
+        self.assertEqual(raised.exception.codigo, "migracao")
+
+    def test_linked_folder_outside_the_root_is_never_scanned(self):
+        outside_context = tempfile.TemporaryDirectory(prefix=".temp-cleanup-outside-", dir=tempfile.gettempdir())
+        self.addCleanup(outside_context.cleanup)
+        outside = Path(outside_context.name)
+        (outside / "alvo.json").write_bytes(b"same")
+        outside_temporary = outside / ".alvo.json.a1b2c3d4.tmp"
+        outside_temporary.write_bytes(b"same")
+        timestamp = time.time() - 30 * 3600
+        os.utime(outside_temporary, (timestamp, timestamp))
+        try:
+            os.symlink(outside, self.history_dir / "link", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Sem permissão para criar link simbólico.")
+        result = cleanup_local_temps(self.root)
+        self.assertEqual(result["examinados"], 0)
+        self.assertTrue(outside_temporary.exists())
+
 if __name__ == "__main__":
     unittest.main()

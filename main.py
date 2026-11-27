@@ -216,6 +216,7 @@ from domains.equipment_search import (
 from routers.equipment import EquipmentRouteServices, create_equipment_router
 from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
 from routers.system import SystemRouteServices, create_system_router
+from routers.saude_local import SaudeLocalRouteServices, create_saude_local_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from routers.endpoint_removals import create_endpoint_removals_router
@@ -1839,6 +1840,14 @@ system_router, _system_exports = create_system_router(SystemRouteServices(
 get_readiness_status = _system_exports.get_readiness_status
 get_transfer_form_defaults = _system_exports.get_transfer_form_defaults
 app.include_router(system_router)
+app.include_router(create_saude_local_router(SaudeLocalRouteServices(
+    base_dir=lambda: BASE_DIR,
+    entradas=lambda: (AUTOMATIC_INVENTORY_INBOX_DIR, AUTOMATIC_TICKET_INBOX_DIR, ENTRA_INBOX_DIR),
+    # Looked up on each call: the runner is created lazily further down and writes its records on creation.
+    chrome_ocupado=lambda: get_chrome_automation_runner().ocupado(),
+    prontidao=lambda: get_startup_readiness(),
+    versao_app=lambda: app.version,
+)))
 
 units_router, _units_exports = create_units_router(UnitRouteServices(
     format_cep=format_cep,
