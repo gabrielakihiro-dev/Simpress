@@ -700,14 +700,6 @@ def resolve_manual_alias_divergence(
         raise HistoryComparisonError(409, "Esta divergência já foi resolvida no histórico.")
 
     expected_manual_alias = str(divergence.get("apelido_manual") or "").strip()
-    target_serial = next(
-        (
-            str(item.get("serial") or key).strip().upper()
-            for key, item in services.get_equipment_snapshot().items()
-            if services.normalize_reference_value(item.get("serial") or key) == serial_key
-        ),
-        str(serial).strip().upper(),
-    )
     targets = [services.comparison_history_path(), services.modified_aliases_path()]
     if acao == "excluir":
         details_file = services.get_equipment_template_file()

@@ -101,8 +101,8 @@ def _preencher(campo: Any, valor: str, *, nome: str = "", digitado: str | None =
 def _fechar_popup(popup: Any) -> None:
     try:
         popup.close()
-    except Exception:
-        pass  # already closed
+    except Exception as erro:
+        logger.debug("Falha ao fechar popup do UX (%s).", type(erro).__name__)  # already closed
 
 
 class PortalTicketUXChrome:
@@ -124,7 +124,8 @@ class PortalTicketUXChrome:
         for outra in list(self._contexto.pages):
             try:
                 aberta_pela_sessao = outra is not page and outra.opener() is page
-            except Exception:
+            except Exception as erro:
+                logger.debug("Falha ao ler a origem de uma aba do UX (%s).", type(erro).__name__)
                 aberta_pela_sessao = False
             if aberta_pela_sessao:
                 _fechar_popup(outra)

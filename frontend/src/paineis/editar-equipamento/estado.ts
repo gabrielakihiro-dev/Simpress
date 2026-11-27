@@ -1,7 +1,7 @@
 // Estado do modal "Atualizar / Cadastrar equipamento", fora do componente: a aplicação chama as ações pela ponte
 // (frontend/src/aplicacao/pontes.ts). Única escrita: POST /api/equipamento/salvar.
 import { flushSync } from "react-dom";
-import { apiFetch } from "../../api";
+import { apiRota } from "../../api";
 import { lerEstado } from "../../estado-app";
 import {
   TEXTO, TIPO_PADRAO, camposDeNovoSerial, camposDoEquipamento, lerResposta, montarPayload, normalizarSerial, seguiuSelecionado,
@@ -91,12 +91,7 @@ export async function salvarDadosEquipamento(): Promise<{ equipamento: unknown }
   const revisaoAoSalvar = lerEstado("equipamentoSelectionRevision");
   flushSync(() => mudar({ salvando: true }));
   try {
-    const dados = await apiFetch<unknown>("/api/equipamento/salvar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      errorMessage: TEXTO.erroApi,
-    });
+    const dados = await apiRota("POST /api/equipamento/salvar", { corpo: payload, errorMessage: TEXTO.erroApi });
     const resposta = lerResposta(dados, serial);
     const aindaSelecionado = seguiuSelecionado(revisaoAoSalvar, lerEstado("equipamentoSelectionRevision"));
     app.showToast(resposta.mensagem, "success");

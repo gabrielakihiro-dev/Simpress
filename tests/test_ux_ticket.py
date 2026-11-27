@@ -292,6 +292,18 @@ class TicketsUXTests(unittest.TestCase):
         self.assertEqual(registro["estado"], "incerto")
         self.assertIn("conferido_em", registro)
 
+    def test_uncertain_send_logs_only_the_exception_type(self):
+        def enviar(aba, antes_do_clique):
+            antes_do_clique()
+            raise TimeoutError("SEGREDO-123")
+
+        with mock.patch.object(self.portal, "enviar", side_effect=enviar):
+            with self.assertLogs(ux_ticket.logger, level="WARNING") as capturado:
+                self.assertEqual(self.executar(self.preparar(), enviar=True, confirmado=True)["status"], "incerto")
+        saida = "\n".join(capturado.output)
+        self.assertIn("TimeoutError", saida)
+        self.assertNotIn("SEGREDO-123", saida)
+
     def test_failure_before_the_click_is_not_uncertain_and_keeps_the_session(self):
         self.portal.falhar_antes = True
         sessao = self.preparar()
