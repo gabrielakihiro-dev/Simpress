@@ -537,6 +537,72 @@ class RestaurarTests(PacoteLocalBase):
         self.assertEqual((self.base / cliente_rel()).read_bytes(), bruto)
         self.assertEqual(self.estado(), self.alterado)
 
+    def test_desfazer_com_outro_arquivo_invalido_que_nao_carrega_volta_atras(self):
+        nome = self.preparar()
+        bruto = b'{"contrato": "123", "cnpj_faturamento": "11.111.111/1111-11"}'
+        self.gravar(cliente_rel(), bruto)
+        desfazer = self.restaurar(nome, self.previa(nome).json()["preview_token"]).json()["pacote_desfazer"]
+        depois = self.estado()
+        self.carregar.return_value = False  # o estado vazio vale só para cadastro ou InvAll inválidos
+        resposta = self.restaurar(desfazer, self.previa(desfazer).json()["preview_token"])
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]), (500, pacote_local.MSG_FALHA))
+        self.assertEqual(self.estado(), depois)
+        self.assertNotIn(self.estado_vazio, self.publicados)
+
+    def test_desfazer_e_conferido_pelos_bytes_gravados_sem_reler_a_pasta(self):
+        nome = self.preparar()
+        self.gravar(cliente_rel(), b'{"cnpj_faturamento": "11.111.111/1111-11"}')
+        token = self.previa(nome).json()["preview_token"]
+        with mock.patch.object(pacote_local, "validar_pacote", wraps=pacote_local.validar_pacote) as lidos:
+            desfazer = self.restaurar(nome, token).json()["pacote_desfazer"]
+        self.assertEqual([chamada.args[1].name for chamada in lidos.call_args_list], [nome])  # só o pacote escolhido
+        sha = hashlib.sha256((self.pasta / desfazer).read_bytes()).hexdigest()
+        self.assertEqual(self.registro()["desfazer_conhecidos"], [sha])
+
+    def test_zip_lido_uma_vez_so(self):
+        """Hash e validação usam a mesma leitura: trocar o arquivo depois do hash não troca o que é validado."""
+        ruim = b'{"cnpj_faturamento": "11.111.111/1111-11"}'
+        conhecido = montar_zip({cliente_rel(): ruim}, tipo="desfazer", invalidos=[cliente_rel()])
+        forjado = montar_zip({cliente_rel(): ruim + b" "}, tipo="desfazer", invalidos=[cliente_rel()])
+        nome = self.colocar(conhecido, "desfazer-20260101-000000.zip")
+        self.gravar("config/pacote_local.json", {"pasta": "", "desfazer_conhecidos": [hashlib.sha256(conhecido).hexdigest()]})
+        abrir = Path.open
+        leituras = []
+
+        class Trocavel(io.BytesIO):
+            """Devolve o zip conhecido na 1ª leitura e o forjado em qualquer leitura seguinte."""
+
+            def read(self, *args):
+                leituras.append(args)
+                return conhecido if len(leituras) == 1 else forjado
+
+        def abrir_trocando(caminho, *args, **kwargs):
+            return Trocavel() if caminho.name == nome else abrir(caminho, *args, **kwargs)
+
+        with mock.patch.object(Path, "open", abrir_trocando):
+            resultado = pacote_local.validar_pacote(self.services, self.pasta / nome)
+        self.assertEqual(leituras, [(pacote_local.LIMITE_ZIP + 1,)])
+        self.assertEqual(resultado["conteudo"][cliente_rel()], ruim)
+        self.assertEqual(resultado["sha256"], hashlib.sha256(conhecido).hexdigest())
+
+    def test_link_que_esconde_o_site_real(self):
+        from domains import configuracao_local
+
+        enganoso = "https://evil.com\\@ux.legitimo.com/sites/x"
+        self.assertEqual(pacote_local._host(enganoso), "evil.com")
+        for valor in (enganoso, "https://usuario@ux.legitimo.com/x", "https://ux.legitimo.com\\x"):
+            with self.subTest(valor=valor):
+                self.assertIsNotNone(configuracao_local.validar_valor("link", valor))
+                with self.assertRaises(ValueError):  # o PUT da Configuração local usa gravar_contas
+                    configuracao_local.gravar_contas(
+                        self.base / "config" / "contas_automacao.json", self.base / "bk", {},
+                        {"dashboard_pasta_url": valor}, {}, ambiente={},
+                    )
+        self.assertIsNone(configuracao_local.validar_valor("link", "https://ux.legitimo.com/sites/x"))
+        self.assertFalse((self.base / "config" / "contas_automacao.json").exists())
+        nome = self.colocar(montar_zip({"config/contas_automacao.json": json.dumps({"dashboard_pasta_url": enganoso}).encode()}))
+        self.assertEqual(self.previa(nome).json()["detail"], "Pacote recusado: conteúdo inválido em contas_automacao.json")
+
     def test_desfazer_com_cadastro_invalido_publica_estado_vazio(self):
         detalhes = "data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx"
         nome = self.preparar()
@@ -575,7 +641,7 @@ class RestaurarTests(PacoteLocalBase):
         self.gravar(contas, {"dashboard_pasta_url": "https://antigo.example.com/sites/a", "dashboard_email": "velho@exemplo.com"})
         self.gravar(cliente_rel(), {"contrato": "123", "cnpj_faturamento": ""})
         novo_contas = json.dumps({
-            "dashboard_pasta_url": "https://usuario:segredo@novo.example.com:8443/sites/b?token=xyz",
+            "dashboard_pasta_url": "https://novo.example.com:8443/sites/b?token=xyz#segredo",  # userinfo é recusado
             "endpoint_url": "https://endpoint.example.com/webclient",
             "dashboard_email": "pessoa@exemplo.com",
         }).encode()
@@ -685,8 +751,8 @@ class PastaTests(PacoteLocalBase):
         escolhida = self.base.parent / "pacotes"
         escolhida.mkdir()
         rede = "Use uma pasta deste computador (sem OneDrive, rede ou unidade removível)."
-        casos = ((3, 7, 422), (3, 4, 422), (3, 12, 422), (3, 13, 422), (3, None, 422), (2, 11, 422),
-                 (3, 11, 200), (3, 17, 200))  # USB, 1394, SD, MMC, consulta falhou, removível; SATA e NVMe passam
+        casos = ((3, 7, 422), (3, 4, 422), (3, 9, 422), (3, 12, 422), (3, 13, 422), (3, None, 422), (2, 11, 422),
+                 (3, 11, 200), (3, 17, 200))  # USB, 1394, iSCSI, SD, MMC, consulta falhou, removível; SATA e NVMe passam
         for unidade, barramento, status in casos:
             with self.subTest(unidade=unidade, barramento=barramento), \
                     mock.patch.object(pacote_local, "_WINDOWS", True), \

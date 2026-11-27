@@ -154,8 +154,9 @@ _SINCRONIZADAS_ENV = ("OneDrive", "OneDriveCommercial", "OneDriveConsumer")
 _SINCRONIZADAS_NOMES = ("onedrive", "dropbox", "google drive", "icloud")
 _WINDOWS = sys.platform == "win32"
 _DRIVE_FIXO = 3
-# STORAGE_BUS_TYPE de HD externo e cartão: 1394, USB, SD e MMC (o Windows informa HD USB como unidade fixa).
-_BARRAMENTOS_REMOVIVEIS = {4, 7, 12, 13}
+# STORAGE_BUS_TYPE de HD externo, cartão e disco de rede: 1394, USB, iSCSI, SD e MMC (o Windows informa HD USB como
+# unidade fixa).
+_BARRAMENTOS_REMOVIVEIS = {4, 7, 9, 12, 13}
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 # Rótulos da prévia (``links_alterados``): só o nome do campo; host só para links, nunca login, e-mail ou valor.
 _ROTULOS_ARQUIVO = {
@@ -476,6 +477,13 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
         "criado_em": agora.isoformat(timespec="seconds"), "arquivos": arquivos, "ausentes": ausentes,
         "invalidos": invalidos,
     }
+    # Montado em memória: o SHA-256 e a conferência usam estes bytes, nunca uma releitura da pasta.
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as pacote:
+        pacote.writestr("manifesto.json", json.dumps(manifesto, ensure_ascii=False, indent=2))
+        for rel, dados in conteudo.items():
+            pacote.writestr(rel, dados)
+    zip_bytes = buffer.getvalue()
     final = pasta / nome
     try:
         descritor, temporario = tempfile.mkstemp(prefix=".pacote-local-", suffix=".tmp", dir=pasta)
@@ -483,10 +491,7 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
         raise DomainError(MSG_PASTA_INEXISTENTE, status_code=422) from None
     try:
         with os.fdopen(descritor, "wb") as saida:
-            with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as pacote:
-                pacote.writestr("manifesto.json", json.dumps(manifesto, ensure_ascii=False, indent=2))
-                for rel, dados in conteudo.items():
-                    pacote.writestr(rel, dados)
+            saida.write(zip_bytes)
             saida.flush()
             os.fsync(saida.fileno())
         try:  # reserva o nome: os.replace sozinho sobrescreveria um pacote existente
@@ -509,8 +514,8 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
         except FileNotFoundError:
             pass
     return {
-        "arquivo": nome, "tamanho_bytes": final.stat().st_size, "arquivos": len(arquivos),
-        "ausentes": len(ausentes), "criado_em": manifesto["criado_em"], "sha256": sha256_file(final),
+        "arquivo": nome, "tamanho_bytes": len(zip_bytes), "arquivos": len(arquivos),
+        "ausentes": len(ausentes), "criado_em": manifesto["criado_em"], "dados": zip_bytes,
     }
 
 
@@ -523,12 +528,12 @@ def exportar(services: PacoteLocalServices) -> Dict[str, Any]:
     except FileBusyError:
         raise DomainError(MSG_OCUPADOS, status_code=409) from None
     try:  # o pacote só fica na pasta se a prévia e a restauração o aceitarem
-        validar_pacote(services, pasta / resultado["arquivo"])
+        _validar_bytes(services, resultado["dados"], resultado["arquivo"])
     except DomainError:
         (pasta / resultado["arquivo"]).unlink(missing_ok=True)
         raise
     logger.info("pacote_local: exportado (arquivos=%d, ausentes=%d)", resultado["arquivos"], resultado["ausentes"])
-    return {chave: valor for chave, valor in resultado.items() if chave != "sha256"}
+    return {chave: valor for chave, valor in resultado.items() if chave != "dados"}
 
 
 # --- Validação do zip (prévia, restauração e conferência do desfazer) -----------------------------------------------
@@ -646,35 +651,39 @@ def validar_pacote(
     Arquivo listado em ``invalidos`` só passa sem validar o conteúdo se o SHA-256 do zip estiver no registro de
     desfazer criados por este app (ou em ``confiaveis``, o desfazer recém-gravado); senão o manifesto é recusado.
 
-    shortcut: o conteúdo fica em memória (até 300 MB); trocar por releitura do zip se os pacotes crescerem.
+    O zip é lido uma vez só: o SHA-256 e a validação usam os mesmos bytes (o arquivo pode mudar no disco).
+
+    shortcut: zip e conteúdo ficam em memória ao mesmo tempo (pico de até 600 MB no limite de 300 MB); trocar por
+    cópia privada em disco se os pacotes crescerem.
     """
     if is_link_or_junction(caminho) or not caminho.is_file():
         raise _recusa(MOTIVO_CAMINHO)
     try:
-        entrada = caminho.open("rb")
+        with caminho.open("rb") as entrada:
+            dados = entrada.read(LIMITE_ZIP + 1)
     except OSError:
         raise DomainError("Não foi possível ler o pacote; tente de novo.", status_code=503) from None
-    with entrada:
-        try:
-            if os.fstat(entrada.fileno()).st_size > LIMITE_ZIP:
-                raise _grande_demais(LIMITE_ZIP)
-            resumo = hashlib.sha256()
-            for bloco in iter(lambda: entrada.read(_BLOCO), b""):
-                resumo.update(bloco)
-            entrada.seek(0)
-        except OSError:
-            raise DomainError("Não foi possível ler o pacote; tente de novo.", status_code=503) from None
-        try:
-            pacote = zipfile.ZipFile(entrada)
-        except (zipfile.BadZipFile, OSError, ValueError):
-            raise _recusa(MOTIVO_MANIFESTO) from None
-        conhecido = resumo.hexdigest() in {*_desfazer_conhecidos(_ler_config(services)), *confiaveis}
-        with pacote:
-            manifesto, conteudo = _validar_entradas(services, pacote, conhecido)
-    achado = NOME_PACOTE.fullmatch(caminho.name)
+    return _validar_bytes(services, dados, caminho.name, confiaveis)
+
+
+def _validar_bytes(
+    services: PacoteLocalServices, dados: bytes, nome: str, confiaveis: FrozenSet[str] = frozenset(),
+) -> Dict[str, Any]:
+    """``validar_pacote`` sobre bytes já lidos (zip na pasta ou recém-montado em memória)."""
+    if len(dados) > LIMITE_ZIP:
+        raise _grande_demais(LIMITE_ZIP)
+    sha256 = hashlib.sha256(dados).hexdigest()
+    try:
+        pacote = zipfile.ZipFile(io.BytesIO(dados))
+    except (zipfile.BadZipFile, ValueError):
+        raise _recusa(MOTIVO_MANIFESTO) from None
+    conhecido = sha256 in {*_desfazer_conhecidos(_ler_config(services)), *confiaveis}
+    with pacote:
+        manifesto, conteudo = _validar_entradas(services, pacote, conhecido)
+    achado = NOME_PACOTE.fullmatch(nome)
     if achado and (achado.group(1) == "desfazer") != (manifesto["tipo"] == "desfazer"):
         raise _recusa(MOTIVO_MANIFESTO)  # o tipo do manifesto precisa bater com o prefixo do nome
-    return {"manifesto": manifesto, "conteudo": conteudo, "sha256": resumo.hexdigest()}
+    return {"manifesto": manifesto, "conteudo": conteudo, "sha256": sha256}
 
 
 def _validar_entradas(
@@ -780,7 +789,8 @@ def _host(valor: Any) -> Optional[str]:
     if not isinstance(valor, str) or not valor.strip():
         return None
     try:
-        return urlsplit(valor.strip()).hostname or None
+        # O Chrome lê ``\`` como ``/``: sem isso, ``https://a.com\@b.com`` mostraria b.com e abriria a.com.
+        return urlsplit(valor.strip().replace("\\", "/")).hostname or None
     except ValueError:
         return None
 
@@ -890,7 +900,8 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
                         raise _recusa_restauracao("o estado mudou desde a prévia; abra a prévia de novo")
                     desfazer = _gravar_pacote(services, pasta, "desfazer")
                     try:
-                        validar_pacote(services, pasta / desfazer["arquivo"], frozenset({desfazer["sha256"]}))
+                        sha_desfazer = hashlib.sha256(desfazer["dados"]).hexdigest()
+                        _validar_bytes(services, desfazer["dados"], desfazer["arquivo"], frozenset({sha_desfazer}))
                     except DomainError as error:
                         (pasta / desfazer["arquivo"]).unlink(missing_ok=True)
                         raise _recusa_restauracao(
@@ -900,7 +911,7 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
                     registro = _ler_config(services)
                     transacao.stage_bytes(
                         services.arquivo_config(),
-                        _config_bytes(registro.get("pasta"), [*_desfazer_conhecidos(registro), desfazer["sha256"]]),
+                        _config_bytes(registro.get("pasta"), [*_desfazer_conhecidos(registro), sha_desfazer]),
                         lambda temporario: json.loads(temporario.read_text(encoding="utf-8")),
                     )
                     for rel, acao in acoes:
@@ -914,9 +925,10 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
                     transacao.apply()
                     estado = services.load_database(transaction_locked=True, publish=False)
                     if not isinstance(estado, dict):
-                        # Sem cadastro, ou desfazer que devolve arquivo já inválido antes: o site fica sem equipamentos,
-                        # como estava antes da restauração original. Fora isso, volta atrás.
-                        if (base / _rel(config.DETAILS_UPLOAD_FILE)).is_file() and not pacote["manifesto"]["invalidos"]:
+                        # Sem cadastro, ou desfazer que devolve o cadastro ou o InvAll já inválidos antes: o site fica sem
+                        # equipamentos, como estava antes da restauração original. Fora isso, volta atrás.
+                        planilhas_invalidas = set(pacote["manifesto"]["invalidos"]) & set(_PAPEIS)
+                        if (base / _rel(config.DETAILS_UPLOAD_FILE)).is_file() and not planilhas_invalidas:
                             raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
                         estado = services.estado_vazio()
                     transacao.commit()
