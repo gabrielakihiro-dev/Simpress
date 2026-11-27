@@ -250,7 +250,8 @@ test("Automação history lists status, batches and capture links, and passes th
   await expect(rows.nth(1)).toContainText("Falha");
   await expect(rows.nth(1)).toContainText("Login não concluído em 10 minutos.");
   const capture = rows.nth(1).getByRole("link", { name: "20261019_170210_Oracle.png" });
-  await expect(capture).toHaveAttribute("href", "/api/automacao/capturas/20261019_170210_Oracle.png");
+  // A captura vem por fetch (leva o X-Simpress-Sessao) e o link usa o endereço blob: dela.
+  await expect(capture).toHaveAttribute("href", /^blob:/);
   await expect(capture).toHaveAttribute("target", "_blank");
   await expect(rows.nth(1).locator(".automation-capture-thumb img")).toHaveCount(1);
 

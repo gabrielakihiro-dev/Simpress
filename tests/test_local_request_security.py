@@ -24,7 +24,7 @@ from core.inventory_requests import InventoryUpdateMiddleware
 from security import local_requests, sessao_local
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-SESSION_COOKIE = (b"cookie", sessao_local.cabecalho_cookie(main.SERVER_PORT).encode("ascii"))
+SESSION_HEADERS = [(nome.lower().encode("ascii"), valor.encode("ascii")) for nome, valor in sessao_local.cabecalhos_sessao(main.SERVER_PORT).items()]
 
 
 def run_boundary(
@@ -51,7 +51,7 @@ def run_boundary(
         app = ProxyHeadersMiddleware(app, trusted_hosts="*")
     scope = {"type": "http", "path": path, "method": method,
              "scheme": "http", "client": client,
-             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *([SESSION_COOKIE] if session else []), *headers]}
+             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *(SESSION_HEADERS if session else []), *headers]}
     asyncio.run(app(scope, receive, send))
     return next(message["status"] for message in messages
                 if message["type"] == "http.response.start"), bool(reached)
@@ -68,7 +68,7 @@ def run_endpoint(endpoint, *, headers=(), path="/api/stats", method="GET", clien
 
     scope = {"type": "http", "path": path, "method": method,
              "scheme": "http", "client": client,
-             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *([SESSION_COOKIE] if session else []), *headers]}
+             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *(SESSION_HEADERS if session else []), *headers]}
     asyncio.run(main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send))
     start = next(message for message in messages if message["type"] == "http.response.start")
     body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
@@ -94,7 +94,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
         for path in ("/api/sebrae/dashboard", "/api/sebrae/chamados/{numero}/anexo"):
             app.add_api_route(path, consume, methods=["POST"])
         client = TestClient(app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}", client=("127.0.0.1", 1234),
-                            cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+                            headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT))
         self.addCleanup(client.close)
         for path in ("/api/sebrae/dashboard", "/api/sebrae/chamados/UTIC-2026-1/anexo"):
             with self.subTest(path=path):
@@ -147,7 +147,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
     def test_validation_errors_name_the_field_without_echoing_the_input(self):
         client = TestClient(main.app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}",
                             client=("127.0.0.1", 1234),
-                            cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+                            headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT))
         self.addCleanup(client.close)
         response = client.post("/api/automacao/executar", json={"rotina": "senha-que-nao-volta"})
         self.assertEqual(response.status_code, 422)
@@ -225,7 +225,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
             async def send(message):
                 messages.append(message)
 
-            headers = [(b"host", f"localhost:{main.SERVER_PORT}".encode()), SESSION_COOKIE]
+            headers = [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *SESSION_HEADERS]
             if declared_size is not None:
                 headers.append((b"content-length", str(declared_size).encode("ascii")))
             scope = {"type": "http", "path": "/api/usuarios-entra/importar",
@@ -266,7 +266,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
             messages.append(message)
 
         scope = {"type": "http", "path": path, "method": "POST", "client": ("127.0.0.1", 1234),
-                 "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), SESSION_COOKIE]}
+                 "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *SESSION_HEADERS]}
         asyncio.run(main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send))
         return next(m["status"] for m in messages if m["type"] == "http.response.start")
 
@@ -352,7 +352,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
                 "headers": [
                     (b"host", f"localhost:{main.SERVER_PORT}".encode()),
                     (b"idempotency-key", b"retry-01"),
-                    SESSION_COOKIE,
+                    *SESSION_HEADERS,
                 ],
             }
             app = main.LocalRequestSafetyMiddleware(endpoint)
@@ -455,7 +455,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
     def test_removed_login_and_pilot_routes_are_unavailable(self):
         client = TestClient(main.app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}",
                             client=("127.0.0.1", 1234),
-                            cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+                            headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT))
         self.addCleanup(client.close)
         for path in ("/login", "/api/auth/session", "/api/piloto/operacoes",
                      "/static/pages/login.html", "/static/js/auth/auth-session.js"):
@@ -476,23 +476,57 @@ class LocalRequestSecurityTests(unittest.TestCase):
                 self.assertEqual(client.get(path).status_code, 404)
         self.assertIn("/api/buscar", main.app.openapi()["paths"])
 
-    def test_api_requires_the_local_session_cookie(self):
+    def test_api_requires_the_local_session_cookie_and_header(self):
         nome = sessao_local.nome_cookie(main.SERVER_PORT)
+        cookie = sessao_local.cookie_derivado()
+        cabecalho = sessao_local.cabecalho_derivado()
+        outro = "segredo-sintetico-de-outro-servidor"
+        ok_cookie = (b"cookie", f"outro=1; {nome}={cookie}".encode())
+        ok_cabecalho = (b"x-simpress-sessao", cabecalho.encode())
         cases = (
-            ([], 401),
-            ([(b"cookie", f"{nome}=errado".encode())], 401),
-            ([(b"cookie", f"simpress_sessao_1={sessao_local.SEGREDO}".encode())], 401),
-            ([(b"cookie", f"outro=1; {nome}={sessao_local.SEGREDO}".encode())], 200),
+            ("nada", [], 401),
+            ("cookie errado", [(b"cookie", f"{nome}=errado".encode()), ok_cabecalho], 401),
+            ("cookie de outra porta", [(b"cookie", f"simpress_sessao_1={cookie}".encode()), ok_cabecalho], 401),
+            ("so cookie", [ok_cookie], 401),
+            ("so cabecalho", [ok_cabecalho], 401),
+            ("cookie e cabecalho", [ok_cookie, ok_cabecalho], 200),
+            ("cookie e cabecalho em maiusculas no nome", [ok_cookie, (b"X-Simpress-Sessao", cabecalho.encode())], 200),
+            ("cabecalho de outro segredo", [ok_cookie, (b"x-simpress-sessao", sessao_local.cabecalho_derivado(outro).encode())], 401),
+            ("cookie de outro segredo", [(b"cookie", f"{nome}={sessao_local.cookie_derivado(outro)}".encode()), ok_cabecalho], 401),
+            ("cookie no formato antigo", [(b"cookie", f"{nome}={sessao_local.SEGREDO}".encode()), ok_cabecalho], 401),
+            ("cabecalho igual ao segredo", [ok_cookie, (b"x-simpress-sessao", sessao_local.SEGREDO.encode())], 401),
+            ("cabecalho no lugar do cookie", [(b"cookie", f"{nome}={cabecalho}".encode()), (b"x-simpress-sessao", cookie.encode())], 401),
+            ("cabecalho duplicado", [ok_cookie, ok_cabecalho, ok_cabecalho], 401),
+            ("cabecalho duplicado com um errado", [ok_cookie, (b"x-simpress-sessao", b"0" * 64), ok_cabecalho], 401),
+            ("cabecalho 63", [ok_cookie, (b"x-simpress-sessao", cabecalho[:-1].encode())], 401),
+            ("cabecalho 65", [ok_cookie, (b"x-simpress-sessao", (cabecalho + "0").encode())], 401),
+            ("cabecalho com quebra", [ok_cookie, (b"x-simpress-sessao", (cabecalho + "\n").encode())], 401),
+            ("cabecalho maiusculo", [ok_cookie, (b"x-simpress-sessao", cabecalho.upper().encode())], 401),
+            ("cabecalho nao ascii", [ok_cookie, (b"x-simpress-sessao", "çã".encode() + cabecalho[2:].encode())], 401),
+            ("cookie nao ascii", [(b"cookie", f"{nome}=çã{cookie[2:]}".encode()), ok_cabecalho], 401),
+            ("cabecalho vazio", [ok_cookie, (b"x-simpress-sessao", b"")], 401),
         )
-        for headers, expected in cases:
-            with self.subTest(headers=headers):
+        for nome_caso, headers, expected in cases:
+            with self.subTest(caso=nome_caso):
                 status, _, body = run_endpoint(ok_endpoint, headers=headers, session=False)
                 self.assertEqual(status, expected)
                 if expected == 401:
-                    self.assertNotIn(sessao_local.SEGREDO.encode(), body)
+                    self.assertIn("Sessão local ausente ou expirada".encode(), body)
+                    for valor in (sessao_local.SEGREDO, cookie, cabecalho):
+                        self.assertNotIn(valor.encode(), body)
         # Pages and static files stay reachable so /bootstrap can be opened first.
         self.assertEqual(run_endpoint(ok_endpoint, path="/", session=False)[0], 200)
         self.assertEqual(run_endpoint(ok_endpoint, path="/static/index.html", session=False)[0], 200)
+
+    def test_derived_values_are_distinct_lowercase_hex(self):
+        cookie, cabecalho = sessao_local.cookie_derivado(), sessao_local.cabecalho_derivado()
+        for valor in (cookie, cabecalho):
+            self.assertRegex(valor, r"\A[0-9a-f]{64}\Z")
+        self.assertEqual(len({cookie, cabecalho, sessao_local.SEGREDO}), 3)
+        self.assertEqual(
+            sessao_local.cabecalhos_sessao(8123),
+            {"Cookie": f"simpress_sessao_8123={cookie}", "X-Simpress-Sessao": cabecalho},
+        )
 
     def test_session_secret_validation_is_exact(self):
         self.assertTrue(sessao_local.valido(sessao_local.SEGREDO))
@@ -517,21 +551,68 @@ class LocalRequestSecurityTests(unittest.TestCase):
         client = TestClient(main.app, base_url=origin, client=("127.0.0.1", 1234), follow_redirects=False)
         self.addCleanup(client.close)
         self.assertEqual(client.get("/api/stats").status_code, 401)
-        for url in ("/bootstrap", "/bootstrap?t=errado"):
+        # Neither derived value opens /bootstrap: a leaked cookie or header never yields a new session.
+        for url in ("/bootstrap", "/bootstrap?t=errado", f"/bootstrap?t={sessao_local.cookie_derivado()}",
+                    f"/bootstrap?t={sessao_local.cabecalho_derivado()}"):
             with self.subTest(url=url):
                 response = client.get(url)
                 self.assertEqual(response.status_code, 403)
                 self.assertNotIn("set-cookie", response.headers)
         response = client.get(f"/bootstrap?t={sessao_local.SEGREDO}")
         self.assertEqual(response.status_code, 303)
-        self.assertEqual(response.headers["location"], "/")
+        self.assertEqual(response.headers["location"], f"/#sessao={sessao_local.cabecalho_derivado()}")
         self.assertEqual(response.headers["cache-control"], "no-store")
         cookie = response.headers["set-cookie"].lower()
-        self.assertIn(f"{sessao_local.nome_cookie(main.SERVER_PORT)}=", cookie)
+        self.assertIn(f"{sessao_local.nome_cookie(main.SERVER_PORT)}={sessao_local.cookie_derivado()};", cookie)
         for flag in ("httponly", "samesite=strict", "path=/"):
             self.assertIn(flag, cookie)
-        self.assertNotEqual(client.get("/api/stats").status_code, 401)
+        bruto = "".join(f"{nome}: {valor}\n" for nome, valor in response.headers.items()) + response.text
+        self.assertNotIn(sessao_local.SEGREDO, bruto)
+        # The cookie set by /bootstrap is not enough by itself; with the header from the fragment it is.
+        self.assertEqual(client.get("/api/stats").status_code, 401)
+        cabecalho = response.headers["location"].split("#sessao=", 1)[1]
+        self.assertNotEqual(client.get("/api/stats", headers={"X-Simpress-Sessao": cabecalho}).status_code, 401)
         self.assertNotIn("/bootstrap", main.app.openapi()["paths"])
+
+    @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
+    def test_download_needs_cookie_and_header(self):
+        from fastapi import FastAPI
+        from routers.entra_users import EntraUserServices, create_entra_users_router
+
+        app = FastAPI()
+        app.add_middleware(main.LocalRequestSafetyMiddleware)
+        app.include_router(create_entra_users_router(EntraUserServices(
+            import_csv=lambda conteudo: {}, status=lambda: {}, export_xlsx=lambda: b"xlsx-sintetico",
+            save_manual_name=lambda *args: {},
+        )))
+        client = TestClient(app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}", client=("127.0.0.1", 1234))
+        self.addCleanup(client.close)
+        sessao = sessao_local.cabecalhos_sessao(main.SERVER_PORT)
+        self.assertEqual(client.get("/api/usuarios-entra/exportar", headers={"Cookie": sessao["Cookie"]}).status_code, 401)
+        response = client.get("/api/usuarios-entra/exportar", headers=sessao)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"xlsx-sintetico")
+        self.assertIn("Nomes_Entra_PR.xlsx", response.headers["content-disposition"])
+
+    @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
+    def test_internal_clients_authenticate_with_cookie_and_header(self):
+        import os
+        import tempfile
+
+        from domains import assistant_api
+        from scripts import automacao_rotinas_chrome
+
+        status, _ = assistant_api.asgi_transport(lambda: main.app, main.SERVER_PORT)("GET", "/api/automacao/estado", None, None)
+        self.assertEqual(status, 200)
+        with tempfile.TemporaryDirectory() as pasta, \
+                patch.dict(os.environ, {"LOCALAPPDATA": pasta, "SIMPRESS_PORT": str(main.SERVER_PORT)}):
+            self.assertEqual(automacao_rotinas_chrome.cabecalho_sessao_simpress(), {})
+            sessao_local.gravar_segredo(main.SERVER_PORT)
+            headers = automacao_rotinas_chrome.cabecalho_sessao_simpress()
+        self.assertEqual(headers, sessao_local.cabecalhos_sessao(main.SERVER_PORT))
+        client = TestClient(main.app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}", client=("127.0.0.1", 1234))
+        self.addCleanup(client.close)
+        self.assertEqual(client.get("/api/automacao/estado", headers=headers).status_code, 200)
 
     def test_websocket_handshake_requires_loopback_host_and_same_origin(self):
         authority = f"localhost:{main.SERVER_PORT}".encode()

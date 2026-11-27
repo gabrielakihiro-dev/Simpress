@@ -233,9 +233,12 @@ test.describe("comportamento (1366 px)", () => {
     await page.route("**/api/usuarios-entra/exportar", route => route.fulfill({ body: "x", headers: { "Content-Disposition": "attachment; filename=nomes.xlsx" } }));
     await page.goto("/");
     await abrirEntra(page);
+    // Por fetch + blob (leva o X-Simpress-Sessao): o pedido vai à rota e o nome sai do Content-Disposition.
+    const pedido = page.waitForRequest("**/api/usuarios-entra/exportar");
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "Baixar XLSX compacto" }).click();
-    expect((await download).url()).toMatch(/\/api\/usuarios-entra\/exportar$/);
+    await pedido;
+    expect((await download).suggestedFilename()).toBe("nomes.xlsx");
   });
 
   // UX: invariante do envio real (só com enviar: true e confirmado: true, depois de "Enviar solicitação").

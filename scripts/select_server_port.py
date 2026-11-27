@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import socket
 import subprocess
@@ -30,6 +32,11 @@ def _read_secret(port: int) -> str | None:
         return None
 
 
+def _derive(secret: str, label: bytes) -> str:
+    """Same HMAC as security/sessao_local.py (this script must not import the app); tests check parity."""
+    return hmac.new(secret.encode("ascii"), label, hashlib.sha256).hexdigest()
+
+
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
         return None
@@ -39,9 +46,10 @@ def _probe_simpress(port: int) -> dict | None:
     """Return {"outdated": bool} when a Simpress answers on the port, else None.
 
     /openapi.json is off by default, so identity is checked with the session secret: the server that
-    wrote sessao_<port>.txt answers /bootstrap?t=<secret> with 303 and a cookie carrying that secret.
-    This is not a strong proof (the secret is sent before any proof, so a process that echoes `t` in
-    Set-Cookie would pass); it fits the accepted single-user local risk (security/sessao_local.py).
+    wrote sessao_<port>.txt answers /bootstrap?t=<secret> with 303 and a cookie carrying the value
+    derived from that secret (HMAC, security/sessao_local.py). This is not a strong proof (the secret
+    is sent before any proof, so a process that knows the derivation could answer); it fits the
+    single-user local threat model (security/sessao_local.py).
     The secret is never printed or logged. After the 303, any failure of the version check counts
     as a running server (never None), so the .bat does not start a second copy.
     """
@@ -56,8 +64,8 @@ def _probe_simpress(port: int) -> dict | None:
     secret = _read_secret(port)
     if not secret:
         return None
-    cookie_name = f"simpress_sessao_{port}"
-    cookie = {"Cookie": f"{cookie_name}={secret}"}
+    cookie = f"simpress_sessao_{port}={_derive(secret, b'simpress-sessao/cookie/v1')}"
+    session = {"Cookie": cookie, "X-Simpress-Sessao": _derive(secret, b"simpress-sessao/cabecalho/v1")}
     opener = build_opener(ProxyHandler({}), _NoRedirect)
     try:
         with opener.open(
@@ -65,7 +73,7 @@ def _probe_simpress(port: int) -> dict | None:
         ):
             return None  # a Simpress answers 303, never a plain 200
     except HTTPError as error:
-        if error.code != 303 or f"{cookie_name}={secret}" not in (error.headers.get("Set-Cookie") or ""):
+        if error.code != 303 or cookie not in (error.headers.get("Set-Cookie") or ""):
             return None
     except Exception:
         return None
@@ -73,7 +81,7 @@ def _probe_simpress(port: int) -> dict | None:
     # Identity checked: from here on, never None.
     try:
         with opener.open(
-            Request(f"http://{HOST}:{port}{CURRENT_PATH}", headers=cookie), timeout=HTTP_PROBE_TIMEOUT
+            Request(f"http://{HOST}:{port}{CURRENT_PATH}", headers=session), timeout=HTTP_PROBE_TIMEOUT
         ):
             return {"outdated": False}
     except HTTPError as error:

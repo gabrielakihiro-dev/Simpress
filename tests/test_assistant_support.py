@@ -495,7 +495,7 @@ class RealAppTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-local"}):
             import main
 
-            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT))
             with mock.patch.object(OpenRouterClient, "complete", fake_complete):
                 started = time.monotonic()
                 response = client.post("/api/assistente/mensagem", json={"texto": "quantos equipamentos?"})
@@ -521,7 +521,7 @@ class RealAppTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-local"}):
             import main
 
-            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT))
             headers = {"Content-Type": "audio/wav"}
             wav = b"RIFF" + bytes(4) + b"WAVE" + bytes(MAX_API_REQUEST_BYTES)  # above the generic /api/ limit
             with mock.patch.object(OpenRouterClient, "transcribe", fake_transcribe):
@@ -554,7 +554,7 @@ class RealAppTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-local"}):
             import main
 
-            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000), headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT))
             headers = {"X-Nome-Arquivo": quote("ata final.docx")}
             ok = client.post("/api/assistente/anexo", content=big_docx, headers=headers)
             too_big = client.post(

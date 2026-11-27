@@ -69,7 +69,7 @@ class LocalRequestSafetyServices:
     upload_admission: Callable[[], Any]
     idempotent_upload_wait_seconds: Callable[[], float]
     service_unavailable_errors: Tuple[Type[Exception], ...]
-    # Port that names the session cookie (security/sessao_local.py); /api/* needs it.
+    # Port that names the session cookie (security/sessao_local.py); /api/* needs it and X-Simpress-Sessao.
     session_port: Callable[[], int]
 
 
@@ -215,9 +215,8 @@ class LocalRequestSafetyMiddleware:
             await response(scope, receive, send)
             return
 
-        if path.startswith("/api/") and not sessao_local.valido(
-            sessao_local.cookie_do_scope(scope, services.session_port())
-        ):
+        # Counts the raw header list: the `headers` dict above keeps only the last duplicate.
+        if path.startswith("/api/") and not sessao_local.sessao_valida(scope, services.session_port()):
             response = JSONResponse(
                 status_code=401,
                 content={"detail": "Sessão local ausente ou expirada. Abra o Simpress pelo iniciar_servidor.bat."},

@@ -2317,14 +2317,14 @@ def montar_multipart(nome: str, conteudo: bytes) -> tuple[bytes, str]:
 
 
 def cabecalho_sessao_simpress() -> dict[str, str]:
-    """Cookie da sessão local para chamar /api/* do servidor que iniciou esta rotina (security/sessao_local.py)."""
+    """Cookie e X-Simpress-Sessao da sessão local para chamar /api/* do servidor que iniciou esta rotina (security/sessao_local.py)."""
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     from security import sessao_local
 
     porta = int(os.environ.get("SIMPRESS_PORT", "8000"))
     segredo = sessao_local.ler_segredo(porta)
-    return {"Cookie": sessao_local.cabecalho_cookie(porta, segredo)} if segredo else {}
+    return sessao_local.cabecalhos_sessao(porta, segredo) if segredo else {}
 
 
 def importar_dashboard_no_site(arquivo: Path) -> dict:

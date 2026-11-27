@@ -9,6 +9,7 @@ import "../comum/transfer-utils.ts";
 import "../comum/history-annotation-autosave.ts";
 import "../comum/api-errors.ts";
 import "../api.ts";
+import "../comum/links-endpoint.ts";
 import "../ui/ui-motion.ts";
 import "../ui/bento.ts";
 import "../ui/cursor.ts";

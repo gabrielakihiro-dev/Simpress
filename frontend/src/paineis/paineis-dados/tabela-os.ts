@@ -1,3 +1,4 @@
+import { apiFetch } from "../../api.ts";
 import * as modelo from "./chamados-os.ts";
 import type { Janela, Qualquer, Registro } from "./tipos";
 import { formatNumber, orderKey, pluralize, serialKey } from "./utilitarios.ts";
@@ -306,13 +307,11 @@ export function criarTabelaOs(win: Janela, doc: Qualquer, el: (tag: string, clas
     return section;
   }
 
+  // Erro sem detail continua "Falha <status>"; com detail, a mensagem do servidor; 2xx com JSON ilegível vira {}.
   function osSummaryRequest(url: Qualquer, options?: Qualquer) {
-    return win.fetch(url, { headers: { Accept: "application/json", ...(options?.headers || {}) }, ...options })
-      .then(async (response: Qualquer) => {
-        let data: Qualquer = {};
-        try { data = await response.json(); } catch (_) { /* handled as an HTTP error below */ }
-        if (!response.ok) throw new Error(data.detail || `Falha ${response.status}`);
-        return data;
+    return apiFetch(url, { ...options, headers: { Accept: "application/json", ...(options?.headers || {}) }, errorMessage: "", responseType: "response" })
+      .then((response: Qualquer) => response.json().catch(() => ({})), (error: Qualquer) => {
+        throw error?.status && !error.message ? new Error(`Falha ${error.status}`) : error;
       });
   }
 

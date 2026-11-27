@@ -229,3 +229,63 @@ test("Cadastrar regionais abre o painel Catálogo de unidades com o formulário 
   await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
   expect(errors).toEqual([]);
 });
+
+// Links do Endpoint (data-endpoint-tela, frontend/src/comum/links-endpoint.ts): /api/* exige o X-Simpress-Sessao, que um
+// <a href> não leva; o clique pede a URL por apiFetch e abre a aba externa. Só dados sintéticos (exemplo.invalid).
+// Os links da Comparação usam o mesmo atributo e ficam cobertos pelo teste estático (tests/frontend/test_api_so_por_apifetch.cjs).
+const ENDPOINT_EXTERNO = "https://exemplo.invalid/webclient#/uems/inventory/computers";
+const SESSAO = "a".repeat(64);
+
+async function abrirModalPlanilhas(page) {
+  await page.evaluate(() => abrirModalAtualizarPlanilhas());
+  const modal = page.locator("#modal-atualizar-planilhas");
+  await expect(modal).toBeVisible();
+  return modal.getByRole("link", { name: "Abrir inventário de computadores do Endpoint Central" });
+}
+
+test("o bundle guarda #sessao= e manda X-Simpress-Sessao em todo pedido /api/", async ({ page }) => {
+  const pedidos = [];
+  page.on("request", pedido => {
+    if (new URL(pedido.url()).pathname.startsWith("/api/")) pedidos.push(pedido.headers()["x-simpress-sessao"]);
+  });
+  await page.goto(`/#sessao=${SESSAO}`);
+  await expect.poll(() => pedidos.length).toBeGreaterThan(0);
+  expect(new URL(page.url()).hash).toBe("");
+  expect(await page.evaluate(() => localStorage.getItem("simpress_sessao"))).toBe(SESSAO);
+  expect(pedidos.every(valor => valor === SESSAO)).toBe(true);
+  // Recarregar sem o fragmento continua mandando o valor guardado (outra aba ou F5).
+  pedidos.length = 0;
+  await page.goto("/");
+  await expect.poll(() => pedidos.length).toBeGreaterThan(0);
+  expect(pedidos.every(valor => valor === SESSAO)).toBe(true);
+});
+
+test("o link Endpoint do modal pede a URL ao servidor e abre a aba externa", async ({ page }) => {
+  const pedidos = [];
+  await page.route("**/api/config/local/endpoint/*", route => {
+    pedidos.push([new URL(route.request().url()).pathname, route.request().headers()["x-simpress-sessao"]]);
+    return route.fulfill({ json: { url: ENDPOINT_EXTERNO } });
+  });
+  await page.context().route("https://exemplo.invalid/**", route => route.fulfill({ contentType: "text/html", body: "<title>externo</title>" }));
+  await page.goto(`/#sessao=${SESSAO}`);
+  const link = await abrirModalPlanilhas(page);
+  await expect(link).toHaveAttribute("data-endpoint-tela", "computadores");
+  await expect(link).toHaveAttribute("href", "#");
+  const aba = page.context().waitForEvent("page");
+  await link.click();
+  expect((await aba).url()).toBe(ENDPOINT_EXTERNO);
+  expect(pedidos).toEqual([["/api/config/local/endpoint/computadores", SESSAO]]);
+  expect(page.url()).not.toContain("/api/");
+});
+
+test("falha ao pedir a URL do Endpoint vira aviso, sem abrir aba nem navegar", async ({ page }) => {
+  await page.route("**/api/config/local/endpoint/*", route => route.fulfill({ status: 401, json: { detail: "Sessão local ausente ou expirada. Abra o Simpress pelo iniciar_servidor.bat." } }));
+  await page.goto("/");
+  const urlAntes = page.url();
+  let abas = 0;
+  page.context().on("page", () => { abas += 1; });
+  await (await abrirModalPlanilhas(page)).click();
+  await expect(page.locator("#toast-container")).toContainText("Sessão local ausente ou expirada");
+  expect(abas).toBe(0);
+  expect(page.url()).toBe(urlAntes);
+});

@@ -1,6 +1,7 @@
 // Estado da seção "Nomes do Microsoft Entra" (modal Atualizar planilhas), fora do componente: a aplicação
 // chama carregarEstadoEntra pela ponte na inicialização, antes ou depois de o React desenhar a seção.
 import { apiFetch } from "../../api";
+import { baixarDaApi } from "../../comum/baixar-api";
 import { lerEstado } from "../../estado-app";
 
 interface Estado {
@@ -102,6 +103,12 @@ export async function importarNomesEntra(evento?: { preventDefault?(): void }) {
   }
 }
 
-export function exportarNomesEntra() {
-  window.location.assign("/api/usuarios-entra/exportar");
+// Por apiFetch (leva o X-Simpress-Sessao), sem navegar; a falha vira aviso na tela.
+export async function exportarNomesEntra() {
+  try {
+    await baixarDaApi("/api/usuarios-entra/exportar", "Nomes_Entra_PR.xlsx", "Não foi possível baixar os nomes do Entra.");
+  } catch (erro) {
+    mudar({ status: mensagem(erro) });
+    app().showToast(mensagem(erro), "error");
+  }
 }

@@ -902,19 +902,33 @@ test("Relatório gerado: mostra o botão Baixar com o arquivo, clicável e sem r
       arquivos: [{ id: "0123456789abcdef", nome, formato: "xlsx", tamanho: 2048 }, { id: "<img src=x>", nome: "invalido.xlsx", formato: "xlsx", tamanho: 1 }],
     },
   });
+  // Download por fetch (leva o X-Simpress-Sessao), não por <a href>: o arquivo vem desta rota e o nome do Content-Disposition.
+  let falhar = false;
+  const pedidos = [];
+  await page.route("**/api/assistente/relatorio/**", route => {
+    pedidos.push(new URL(route.request().url()).pathname);
+    return falhar
+      ? route.fulfill({ status: 404, json: { detail: "Relatório expirado." } })
+      : route.fulfill({ body: "xlsx", headers: { "Content-Disposition": `attachment; filename="${nome}"` } });
+  });
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto("/");
   await abrirAssistente(page);
   await page.locator("#assistente-texto").fill("exporta as divergências de localidade em Excel");
   await page.locator("#assistente-enviar").click();
-  const botao = page.getByRole("link", { name: `Baixar ${nome}` });
+  const botao = page.getByRole("button", { name: `Baixar ${nome}` });
   await expect(botao).toBeVisible();
-  await expect(botao).toHaveAttribute("href", "/api/assistente/relatorio/0123456789abcdef");
-  await expect(botao).toHaveAttribute("download", nome);
   await expect(page.locator(".ck-assist__arquivo")).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const [download] = await Promise.all([page.waitForEvent("download"), botao.click()]);
   expect(download.suggestedFilename()).toBe(nome);
+  expect(pedidos).toEqual(["/api/assistente/relatorio/0123456789abcdef"]);
+  // Falha vira aviso no status do painel; a página continua no site.
+  falhar = true;
+  const urlAntes = page.url();
+  await botao.click();
+  await expect(page.locator("#assistente-status")).toHaveText("Relatório expirado.");
+  expect(page.url()).toBe(urlAntes);
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();

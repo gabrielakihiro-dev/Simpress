@@ -103,7 +103,7 @@ def _run_local_safety_middleware(
         state["messages"].append(message)
 
     headers = [(b"host", host.encode("ascii")) for host in host_values]
-    headers.append((b"cookie", sessao_local.cabecalho_cookie(main.SERVER_PORT).encode("ascii")))
+    headers += [(nome.lower().encode("ascii"), valor.encode("ascii")) for nome, valor in sessao_local.cabecalhos_sessao(main.SERVER_PORT).items()]
     if include_content_length:
         headers.append((b"content-length", str(len(body) if content_length is None else content_length).encode("ascii")))
     if origin is not None:
@@ -462,7 +462,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "raw_path": b"/api/equipamento/apelidos-modificados",
             "query_string": b"",
             "root_path": "",
-            "headers": [(b"host", b"localhost:8000"), (b"cookie", sessao_local.cabecalho_cookie(main.SERVER_PORT).encode("ascii"))],
+            "headers": [(b"host", b"localhost:8000"), *((nome.lower().encode("ascii"), valor.encode("ascii")) for nome, valor in sessao_local.cabecalhos_sessao(main.SERVER_PORT).items())],
             "server": ("localhost", 8000),
             "client": ("127.0.0.1", 12345),
         }

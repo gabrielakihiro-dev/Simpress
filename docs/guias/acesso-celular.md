@@ -14,7 +14,8 @@ Opcional e desligado por padrão. Só liga ao abrir `iniciar_servidor_celular.ba
 
 - O servidor escuta em `0.0.0.0` e aceita só IPs privados da LAN (nunca públicos nem link-local); proxy continua recusado.
 - O Host precisa ser `localhost`, `127.0.0.1` ou o IP do PC na rede.
-- `/api/*` continua exigindo o cookie de sessão, criado pelo link com token. O token muda a cada reinício; ele aparece só no console, nunca no log.
+- `/api/*` continua exigindo o cookie de sessão e o cabeçalho `X-Simpress-Sessao`, criados pelo link com token (o link é o mesmo). O token muda a cada reinício; ele aparece só no console, nunca no log.
+- O modo rede é HTTP puro: quem consegue ler o tráfego dessa rede vê o cookie e o cabeçalho.
 - Quem tem o link tem acesso total (CPF, SoftExpert, Outlook): use só em rede confiável.
 
 Código: `security/network.py`, `security/local_requests.py`, `main.py`. Testes: `tests/test_acesso_rede.py`.
