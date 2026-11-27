@@ -106,6 +106,7 @@ function DialogoAtualizar({ casca, limparPrevia }: { casca: HTMLElement; limparP
       </div>
 
       <footer className="ckp-rodape">
+        {/* Aviso de impacto atrás do ⓘ, no hover e no foco por teclado (Novo layout, nota n_janelas_planilhas, etapas 1 e 2). */}
         <span id="upload-impacto-aviso" className="info-tip nl-impacto"><button type="button" className="info-tip-trigger" aria-label="Sobre o impacto" aria-describedby="tip-upload-impacto"><svg className="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info" /></svg>Impacto</button><span id="tip-upload-impacto" role="tooltip" className="info-tip-text">Ao confirmar, as duas bases ativas serão substituídas pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</span></span>
         <p id="upload-planilhas-status" ref={status} className="ckp-rodape__status" role={s.status.role} aria-live={s.status.aoVivo} aria-atomic="true">{s.status.texto}</p>
         <span className="ck-espaco"></span>
@@ -125,7 +126,7 @@ function DialogoAtualizar({ casca, limparPrevia }: { casca: HTMLElement; limparP
 }
 
 function DialogoModelo({ casca }: { casca: HTMLElement }) {
-  const { modelo } = useSyncExternalStore(assinar, ler);
+  const modelo = useSyncExternalStore(assinar, () => ler().modelo);
   const transferencia = modelo.tipo === "transferencia";
 
   // data-tipo e aria-busy ficam no overlay (fora do React), como no código antigo; as ações leem o tipo do estado.

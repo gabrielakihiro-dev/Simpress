@@ -62,8 +62,8 @@ function porId<T extends HTMLElement = HTMLElement>(id: string): T {
 // ---------------------------------------------------------------------------------------------------------------------
 // Estado da tela (dialogos.tsx desenha por useSyncExternalStore). A fábrica o reinicia a cada criação.
 // ---------------------------------------------------------------------------------------------------------------------
-export interface StatusUpload { texto: string; role?: "status" | "alert"; aoVivo?: "polite" | "assertive"; erro: boolean }
-export interface EstadoTela {
+interface StatusUpload { texto: string; role?: "status" | "alert"; aoVivo?: "polite" | "assertive"; erro: boolean }
+interface EstadoTela {
   etapa: "arquivos" | "impacto";
   status: StatusUpload;
   previa: { texto: string; classe?: string };
@@ -109,8 +109,6 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
   const inventoryOperationKey = context.inventoryOperationKey ?? chaveOperacaoInventario;
 
   let inventoryUploadAttempt: { endpoint: File | undefined; details: File | undefined; key: string } | null = null;
-  // Travas síncronas: o disabled do React só vale depois do commit e um duplo clique rápido mandaria dois POST.
-  let planilhasOcupadas = false;
   estado = inicial();
   ouvintes.forEach(ouvinte => ouvinte());
 
@@ -229,10 +227,8 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
 
   // Trava a tela (botão com spinner, inputs e checkbox via estado.ocupado) e devolve a função que a libera.
   function travarEnvioPlanilhas(botao: "previa" | "confirmar", mensagem: string) {
-    planilhasOcupadas = true;
     mudar({ ocupado: { botao, mensagem } });
     return () => {
-      planilhasOcupadas = false;
       mudar({ ocupado: null });
     };
   }
@@ -251,8 +247,10 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     return formData;
   }
 
+  // Trava síncrona por estado.ocupado (mudar() grava na hora): o disabled do React só vale depois do commit e um duplo
+  // clique rápido mandaria dois POST. A prévia também não roda durante a confirmação (não haveria POST concorrente).
   async function previsualizarPlanilhas() {
-    if (planilhasOcupadas) return;
+    if (estado.ocupado) return;
     const endpointInput = porId<HTMLInputElement>("upload-endpoint-file");
     const detailsInput = porId<HTMLInputElement>("upload-details-file");
     const endpointFile = endpointInput.files?.[0];
@@ -347,8 +345,9 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     await app.mostrarResultadoNaAbaComparacao(comparison);
   }
 
+  // Só a própria confirmação trava aqui: durante a prévia, segue como antes e avisa "Gere uma prévia...".
   async function enviarPlanilhas() {
-    if (planilhasOcupadas) return;
+    if (estado.ocupado?.botao === "confirmar") return;
     const endpointInput = porId<HTMLInputElement>("upload-endpoint-file");
     const detailsInput = porId<HTMLInputElement>("upload-details-file");
     const endpointFile = endpointInput.files?.[0];

@@ -495,6 +495,11 @@ test("importação: prévia mostra o texto, alterna os botões e a etapa; escolh
 
 test("importação: durante o envio o botão mostra só o spinner e a mensagem, trava os controles e um duplo clique manda um POST", async ({ page }) => {
   const ambiente = await preparar(page);
+  await page.addInitScript(() => {
+    window.__rolagens = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function rolar(opcoes) { window.__rolagens.push([this.id, opcoes && opcoes.block]); return original.call(this, opcoes); };
+  });
   const previa = rotaSegurada(ambiente, "**/api/planilhas/previsualizar", { status: 200, json: PREVIA });
   await previa.instalar(page);
   await esperarReact(page);
@@ -535,6 +540,8 @@ test("importação: durante o envio o botão mostra só o spinner e a mensagem, 
   confirmar.liberar();
   await expect(modal.locator("#upload-planilhas-status")).toHaveText("Arquivo fictício inválido");
   await expect(modal.locator("#upload-planilhas-status")).toHaveAttribute("role", "alert");
+  await expect(modal.locator("#upload-planilhas-status")).toHaveAttribute("aria-live", "assertive");
+  await expect.poll(() => page.evaluate(() => window.__rolagens.some(([id, bloco]) => id === "upload-planilhas-status" && bloco === "nearest"))).toBe(true);
   await expect(modal.locator("#btn-previsualizar-planilhas")).toBeVisible(); // 422 invalida a prévia
   await expect(modal.locator("#auto-export-history-after-update")).toBeEnabled();
   expect(await botaoConfirmar.innerHTML()).toBe(originalConfirmar);
