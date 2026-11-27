@@ -54,8 +54,6 @@ const ROTULOS_TIPO: Record<string, string> = {
   apelido_usuario: "Apelido e usuário", transferencia: "Transferências", os: "OS", sebrae: "Chamados Sebrae", cobertura: "Cobertura",
 };
 const TIPOS = Object.keys(ROTULOS_TIPO);
-// O exemplo do contrato escreve "transferencias" em `indisponiveis`; aceito os dois.
-const CHAVE_FONTE: Record<string, string> = { transferencias: "transferencia" };
 export const FILTRO_TUDO = "tudo";
 
 export interface Linha {
@@ -149,7 +147,7 @@ function montarLinha(bruta: unknown): LinhaDoTempo {
   });
   const contagens = TIPOS.map(tipo => ({ tipo, rotulo: ROTULOS_TIPO[tipo], total: eventos.filter(e => e.tipo === tipo).length }))
     .filter(c => c.total > 0);
-  const indisponiveis = (Array.isArray(dados.indisponiveis) ? dados.indisponiveis : []).map(chave => doMapa(CHAVE_FONTE, chave) || String(chave));
+  const indisponiveis = (Array.isArray(dados.indisponiveis) ? dados.indisponiveis : []).map(String);
   const total = Number(dados.total);
   const limite = Number(dados.limite);
   return {
