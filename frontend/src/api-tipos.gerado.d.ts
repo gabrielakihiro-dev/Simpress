@@ -6,8 +6,27 @@ export type AgendamentoDashboardPayload = {
   "intervalo_minutos"?: 30 | 60 | 90 | 120 | null;
 };
 
+export type AgendamentoDashboardResumo = {
+  "bloqueio": unknown;
+  "ativo": boolean;
+  "intervalo_minutos": number;
+  "proxima_execucao": unknown;
+  "ultimo_disparo": unknown;
+  "aviso": string;
+};
+
 export type AgendamentoPayload = {
   "ativo": boolean;
+};
+
+export type AgendamentoSebraeInfo = {
+  "ativo": boolean;
+  "pronta": unknown;
+  "horario": string;
+  "fuso": string;
+  "proxima_execucao": string | null;
+  "ultimo_disparo": Record<string, unknown> | null;
+  "aviso": string;
 };
 
 export type ApelidoUndoPayload = {
@@ -111,12 +130,23 @@ export type BuscaWebPayload = {
   "ativa": boolean;
 };
 
+export type CancelamentoAutomacao = {
+  "metodo"?: string;
+  "mensagem"?: string;
+  "estado"?: EstadoAutomacao | null;
+};
+
 export type CancelarControleRemotoPayload = {
   "pedido": string;
 };
 
 export type CancelarPayload = {
   "session_id": string;
+};
+
+export type CapturaAutomacao = {
+  "nome"?: string;
+  "url"?: string;
 };
 
 export type CasoCobertura = {
@@ -331,6 +361,22 @@ export type EquipamentoCobertura = {
   "tipo": string;
 };
 
+export type EquipamentoPublico = {
+  "serial"?: unknown;
+  "modelo"?: unknown;
+  "tipo"?: unknown;
+  "apelido"?: unknown;
+  "idCliente"?: unknown;
+  "revisao"?: unknown;
+};
+
+export type EquipamentoSalvo = {
+  "sucesso": boolean;
+  "mensagem": string;
+  "equipamento": EquipamentoPublico;
+  "total_modificados": number;
+};
+
 export type EquipamentoUpdatePayload = {
   "serial": string;
   "novo"?: boolean;
@@ -352,6 +398,19 @@ export type EscolherEnderecoPayload = {
   "endereco": string;
 };
 
+export type EstadoAutomacao = {
+  "estado"?: string;
+  "rotina"?: unknown;
+  "inicio"?: unknown;
+  "origem"?: unknown;
+  "pid"?: unknown;
+  "cancelamento_pedido"?: unknown;
+  "aguardando_login"?: unknown;
+  "login_origem"?: string;
+  "log"?: LogParcialAutomacao | null;
+  "ultima"?: ExecucaoAutomacao | null;
+};
+
 export type EstadoMovimentacaoPayload = {
   "estado": "coletada" | "em_transito" | "recebida" | "recebida_com_divergencia" | "cancelada";
   "rev": number;
@@ -359,6 +418,20 @@ export type EstadoMovimentacaoPayload = {
   "data"?: string | null;
   "comprovante"?: string | null;
   "divergencia"?: DivergenciaPayload | null;
+};
+
+export type ExecucaoAutomacao = {
+  "id"?: string;
+  "rotina"?: string;
+  "origem"?: unknown;
+  "inicio"?: unknown;
+  "fim"?: unknown;
+  "status"?: string;
+  "codigo"?: unknown;
+  "mensagem"?: string;
+  "lotes"?: LoteAutomacao[];
+  "capturas"?: CapturaAutomacao[];
+  "log"?: string;
 };
 
 export type ExportarPayload = {
@@ -381,6 +454,14 @@ export type FinalizarPayload = {
 
 export type HTTPValidationError = {
   "detail"?: ValidationError[];
+};
+
+export type HistoricoAutomacao = {
+  "execucoes": ExecucaoAutomacao[];
+  "total": number;
+  "pagina": number;
+  "paginas": number;
+  "limite": number;
 };
 
 export type HostnameRemovalPayload = {
@@ -422,6 +503,25 @@ export type ListaLembretes = {
 
 export type ListaModelos = {
   "modelos": Record<string, ModeloSalvo>;
+};
+
+export type LogExecucaoAutomacao = {
+  "execucao": ExecucaoAutomacao;
+  "arquivo": string;
+  "linhas": string[];
+  "limitado": boolean;
+};
+
+export type LogParcialAutomacao = {
+  "arquivo"?: string;
+  "offset"?: unknown;
+  "linhas"?: string[];
+  "reiniciado"?: unknown;
+};
+
+export type LoteAutomacao = {
+  "id"?: string;
+  "status"?: string;
 };
 
 export type ManualAliasConflictResolutionPayload = {
@@ -499,6 +599,34 @@ export type OsObservacaoPayload = {
 
 export type OsRecusadaPayload = {
   "os": string;
+};
+
+export type PainelResposta = {
+  "base_importada"?: unknown;
+  "total_equipamentos"?: unknown;
+  "total_unidades"?: unknown;
+  "por_categoria"?: Record<string, unknown>[];
+  "sem_categoria"?: unknown;
+  "cidades_principais"?: Record<string, unknown>[];
+  "cidades_por_categoria"?: Record<string, Record<string, unknown>[]>;
+  "total_cidades"?: unknown;
+  "sem_cidade"?: unknown;
+  "ultima_atualizacao"?: unknown;
+  "arquivo_origem"?: unknown;
+  "ultima_comparacao"?: Record<string, unknown> | null;
+  "base_desatualizada"?: Record<string, unknown> | null;
+  "os_paradas"?: Record<string, unknown> | null;
+  "chamados_outro_tecnico"?: Record<string, unknown> | null;
+  "falhas_finalizacao_softexpert"?: Record<string, unknown> | null;
+  "divergencias_novas"?: unknown;
+  "sem_acesso_60_dias"?: unknown;
+  "backups_regionais"?: Record<string, unknown> | null;
+  "lembretes_agendados"?: Record<string, unknown> | null;
+};
+
+export type PendenciaSebrae = {
+  "numero": string;
+  "motivo": string;
 };
 
 export type PendenciaUsuarioPayload = {
@@ -616,6 +744,13 @@ export type ResolverPayload = {
   "tokens": string[];
 };
 
+export type ResumoSebrae = {
+  "agendamento": AgendamentoSebraeInfo;
+  "ultima_execucao": Record<string, unknown> | null;
+  "pendencias": PendenciaSebrae[];
+  "login_necessario": boolean;
+};
+
 export type RevPayload = {
   "rev": number;
 };
@@ -704,6 +839,10 @@ export type TransferenciaRegistrada = {
   "historico_id": unknown;
   "transferencia": unknown;
   "repetido": boolean;
+};
+
+export type UltimasAutomacao = {
+  "ultimas": Record<string, ExecucaoAutomacao | null>;
 };
 
 export type UnidadePayload = {
@@ -875,7 +1014,7 @@ export interface Rotas {
   "POST /api/automacao/cancelar": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: CancelamentoAutomacao;
   };
   "GET /api/automacao/capturas/{nome}": {
     consulta: never;
@@ -885,52 +1024,52 @@ export interface Rotas {
   "GET /api/automacao/dashboard/agendamento": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: AgendamentoDashboardResumo;
   };
   "PUT /api/automacao/dashboard/agendamento": {
     consulta: never;
     corpo: AgendamentoDashboardPayload;
-    resposta: unknown;
+    resposta: AgendamentoDashboardResumo;
   };
   "GET /api/automacao/estado": {
     consulta: { "offset"?: number; "arquivo"?: string; };
     corpo: never;
-    resposta: unknown;
+    resposta: EstadoAutomacao;
   };
   "GET /api/automacao/execucoes/{execucao_id}/log": {
     consulta: { "linhas"?: number; };
     corpo: never;
-    resposta: unknown;
+    resposta: LogExecucaoAutomacao;
   };
   "POST /api/automacao/executar": {
     consulta: never;
     corpo: RotinaPayload;
-    resposta: unknown;
+    resposta: EstadoAutomacao;
   };
   "GET /api/automacao/historico": {
     consulta: { "limite"?: number; "pagina"?: number; "data_inicio"?: string | null; "data_fim"?: string | null; "rotina"?: "os" | "inventarios" | "usuarios" | "ambas" | "login" | "sebrae" | "dashboard" | "enviar" | "fechar" | "antigos" | "ux_apelidos" | null; "status"?: "em_andamento" | "concluido" | "falha" | "cancelado" | "ocupada" | "interrompido" | null; };
     corpo: never;
-    resposta: unknown;
+    resposta: HistoricoAutomacao;
   };
   "GET /api/automacao/historico/ultimas": {
     consulta: { "rotina": ("os" | "inventarios" | "usuarios" | "ambas" | "login" | "sebrae" | "dashboard" | "enviar" | "fechar" | "antigos" | "ux_apelidos")[]; };
     corpo: never;
-    resposta: unknown;
+    resposta: UltimasAutomacao;
   };
   "PUT /api/automacao/sebrae/agendamento": {
     consulta: never;
     corpo: AgendamentoPayload;
-    resposta: unknown;
+    resposta: ResumoSebrae;
   };
   "GET /api/automacao/sebrae/resumo": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: ResumoSebrae;
   };
   "POST /api/automacao/ux-apelidos": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: EstadoAutomacao;
   };
   "POST /api/backups-regionais/confirmar": {
     consulta: never;
@@ -1190,12 +1329,12 @@ export interface Rotas {
   "POST /api/equipamento/salvar": {
     consulta: never;
     corpo: EquipamentoUpdatePayload;
-    resposta: unknown;
+    resposta: EquipamentoSalvo;
   };
   "GET /api/equipamento/{serial}": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: EquipamentoPublico;
   };
   "GET /api/equipamento/{serial}/dossie": {
     consulta: never;
@@ -1460,7 +1599,7 @@ export interface Rotas {
   "GET /api/painel": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: PainelResposta;
   };
   "POST /api/planilhas/atualizar": {
     consulta: never;

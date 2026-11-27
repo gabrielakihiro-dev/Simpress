@@ -62,10 +62,9 @@ STATUS_INCERTO = "incerto"
 MENSAGEM_INCERTO = "Finalizar foi clicado, mas o resultado não foi confirmado. Confira no SoftExpert; o site não clica de novo."
 MENSAGEM_INCERTO_NA_CENTRAL = "Ainda na central de tarefas: finalize à mão no SoftExpert e peça de novo para o site registrar."
 
-SUGESTOES_SHAREPOINT: Tuple[str, str, str] = (
+# Sem "arraste a cópia pendente" (26/11/2026): a cópia pendente é a crua do site, sem linhas de fora nem aba Laudos.
+SUGESTOES_SHAREPOINT: Tuple[str, str] = (
     "Confira se o login do SharePoint está ativo no Chrome de automação (porta 9333) e use \"Tentar substituir de novo\".",
-    "Se continuar falhando, abra a pasta DASHBOARD SEBRAE no SharePoint, arraste a cópia pendente para lá e renomeie-a para "
-    "\"Dashboard Operacional_SEBRAE.xlsx\".",
     "Antes de substituir, confira se ninguém alterou o Dashboard original no SharePoint nesse intervalo.",
 )
 

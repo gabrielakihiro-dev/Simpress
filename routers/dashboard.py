@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter
+from pydantic import BaseModel, ConfigDict
 
 from domains.history_insights import PENDING_CATEGORIES, PINNED_BASELINE_ID, compare_updates
 from domains.inventory_comparison import (
@@ -678,6 +679,36 @@ def _long_unused_summary(
     return result
 
 
+# Formato da resposta de GET /api/painel (response_model_exclude_unset): só o topo é tipado; os blocos de alerta são
+# calculados por funções acima e ficam como vêm (Any), para a validação nunca cortar nem converter um campo.
+class _Saida(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class PainelResposta(_Saida):
+    # Padrão em todo campo: chave ausente continua ausente (exclude_unset), nunca vira 500.
+    base_importada: Any = None
+    total_equipamentos: Any = None
+    total_unidades: Any = None
+    por_categoria: List[Dict[str, Any]] = []
+    sem_categoria: Any = None
+    cidades_principais: List[Dict[str, Any]] = []
+    cidades_por_categoria: Dict[str, List[Dict[str, Any]]] = {}
+    total_cidades: Any = None
+    sem_cidade: Any = None
+    ultima_atualizacao: Any = None
+    arquivo_origem: Any = None
+    ultima_comparacao: Optional[Dict[str, Any]] = None
+    base_desatualizada: Optional[Dict[str, Any]] = None
+    os_paradas: Optional[Dict[str, Any]] = None
+    chamados_outro_tecnico: Optional[Dict[str, Any]] = None
+    falhas_finalizacao_softexpert: Optional[Dict[str, Any]] = None
+    divergencias_novas: Any = None
+    sem_acesso_60_dias: Any = None
+    backups_regionais: Optional[Dict[str, Any]] = None
+    lembretes_agendados: Optional[Dict[str, Any]] = None
+
+
 @dataclass(frozen=True)
 class DashboardRouteExports:
     """Routes exposed to ``main`` for direct calls in tests and helpers."""
@@ -688,7 +719,7 @@ class DashboardRouteExports:
 def create_dashboard_router(services: DashboardServices) -> Tuple[APIRouter, DashboardRouteExports]:
     router = APIRouter()
 
-    @router.get("/api/painel")
+    @router.get("/api/painel", response_model=PainelResposta, response_model_exclude_unset=True)
     def obter_painel():
         """Resumo somente leitura da base para a página inicial."""
         return build_dashboard(services)
