@@ -82,6 +82,16 @@ class RegrasDeCategoriaTest(unittest.TestCase):
         self.assertEqual(C.sugerir("Instalar impressora", "", "", "Fulana Souza", TODAS, None), "INSTALAÇÃO")
         self.assertEqual(C.sugerir("Desligamento: devolver teclado", "", "", "Fulana Souza", TODAS, None), "DESLIGAMENTO")
 
+    def test_fone_e_headset_sao_periferico_em_qualquer_grafia_e_antes_de_instalacao(self):
+        for titulo in ("Troca de fone - Defeito", "Meu headset está com mal contato", "Head-set sem som",
+                       "Headfone com chiado", "Head phone quebrado", "Fone de ouvido", "Instalação do headset novo"):
+            with self.subTest(titulo):
+                self.assertEqual(C.sugerir(titulo, "", "", "Fulana Souza", TODAS, None), "PERIFÉRICO")
+                self.assertEqual(C.sugerir_responsavel(titulo, "", "", "Fulana Souza"), "SIMPRESS")
+        self.assertEqual(C.sugerir("Novo colaborador", "precisa de headset", "", "Fulana Souza", TODAS, None), "NOVO USUÁRIO")
+        self.assertEqual(C.sugerir("Desligamento", "devolver o headset", "", "Fulana Souza", TODAS, None), "DESLIGAMENTO")
+        self.assertEqual(C.sugerir("Headline do site", "", "", "Fulana Souza", TODAS, None), "OUTRO")
+
     def test_sistema_operacional_nao_e_sistema(self):
         self.assertEqual(C.sugerir("Atualizar o sistema operacional", "", "", "Fulana Souza", TODAS, None), "OUTRO")
         self.assertEqual(C.sugerir("O sistema de ponto caiu", "", "", "Fulana Souza", TODAS, None), "SISTEMA")
