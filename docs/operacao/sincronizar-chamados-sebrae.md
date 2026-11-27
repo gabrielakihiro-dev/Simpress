@@ -183,7 +183,7 @@ Regra do usuário de 24/11/2026: a DT ENCERRAMENTO (coluna R) de **todo** chamad
 - **Assistente:** `finalizar_chamado_softexpert(numero, encerramento[, descricao])` exige data e hora (`dd/MM/aaaa HH:mm`) e nunca usa a hora atual.
 - **R não gravado depois de finalizar:** se a coluna R não for gravada depois de um `ok` (chamado não achado ou ambíguo na coluna C, ou erro do lote), o sino mostra `Falha ao finalizar no SoftExpert` com o código `planilha` (`docs/operacao/alertas-os-divergencias.md`).
 - **Escrita no SharePoint:** a coluna R enviada ao SharePoint passa a ter o valor digitado pelo usuário, não o horário do SoftExpert. Escrita em sistema externo já autorizada pelo usuário: só a origem do valor mudou (24/11/2026). As salvaguardas do envio (cópia `Duplicata`, pasta conferida, `Keep both` recusado, `Save Conflict` sem nova tentativa) não mudam.
-- **Código:** `routers/sebrae_dashboard.py`, `scripts/sebrae_fechar.py`, `domains/sebrae_finalizacao.py`; front em `frontend/src/paineis/sebrae-dashboard/`; Assistente em `domains/assistant_tools.py`.
+- **Código:** `routers/sebrae_dashboard.py`, `domains/sebrae_dashboard_rotinas.py` (`encerramento_do_pedido`, `finalizar_marcados`), `scripts/sebrae_fechar.py`, `domains/sebrae_finalizacao.py`; front em `frontend/src/paineis/sebrae-dashboard/`; Assistente em `domains/assistant_tools.py`.
 - **Testes:** `tests/test_sebrae_finalizar_router.py`, `tests/test_sebrae_fechar.py`, `tests/test_sebrae_finalizacao.py`, `tests/test_assistant.py`, `tests/frontend/test_sebrae_dashboard_ui.cjs`.
 - **Não verificado nesta atualização:** esta mudança de documentação não rodou os testes nem um ensaio no SoftExpert real.
 

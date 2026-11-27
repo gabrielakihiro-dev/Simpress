@@ -640,7 +640,7 @@ def com_r_texto(conteudo, n, valor):
 
 
 class RGravadoNoDashboardTest(FinalizarBase):
-    """R lido do Dashboard importado (`_encerramento_do_pedido`): só vale com data e hora; só a data quebraria a gravação da coluna R."""
+    """R lido do Dashboard importado (`rotinas.encerramento_do_pedido`): só vale com data e hora; só a data quebraria a gravação da coluna R."""
 
     def importar_com_r(self, valor):
         self.importar(com_r_texto(montar((A, B, C), ultima=9, status=("EM ABERTO", "EM ABERTO", "FINALIZADO")), 2, valor))
