@@ -5,6 +5,7 @@ const AxeBuilder = require("@axe-core/playwright").default;
 // backend or the imports. Series, OS and tickets are fictional.
 
 const EQUIPAMENTO = { serial: "LENTO", modelo: "Notebook de teste", tipo: "Notebook", apelido: "TESTE-001", nome_pessoa: "Pessoa Teste" };
+// Still sent by the API in `os.historico` (kept for compatibility), no longer drawn.
 const TITULO_HISTORICO = "Mudanças da série nas importações de OS";
 const ERRO = "Não foi possível carregar o dossiê. Tente de novo.";
 
@@ -27,10 +28,24 @@ const EVENTOS = [
   { atualizado_em: "2026-11-03T08:00:00", tipo: "Importação inicial", mudancas: [{ campo: "OS Oracle", anterior: [], atual: ["OS-1001", "OS-1002"] }] },
 ];
 
-function dossie(serie, os = {}) {
+// Real shape of `linha_do_tempo`: `detalhes` already come formatted by the server ("Campo: a → b").
+const evento = (quando, tipo, titulo, detalhes = [], so_data = false) => ({ quando, so_data, tipo, titulo, detalhes });
+const EVENTOS_OS_LINHA = EVENTOS.map(e => evento(e.atualizado_em, "os", e.tipo, e.mudancas.map(m => `${m.campo}: ${m.anterior.join(", ") || "(vazio)"} → ${m.atual.join(", ") || "(vazio)"}`)));
+const linhaDoTempo = (eventos, extra = {}) => ({ eventos, total: eventos.length, limite: 200, indisponiveis: [], ...extra });
+// Newest first, as the API sends: the screen must keep this order.
+const EVENTOS_MISTOS = [
+  evento("2026-11-26T16:40:00-03:00", "sebrae", "Chamado encerrado no Dashboard", ["UTIC-2026-812 · FINALIZADO"]),
+  evento("2026-11-20T23:59:59", "cobertura", "Movimentação recebida", ["Cidade Teste"], true),
+  evento("2026-11-12T10:00:00", "apelido_usuario", "Usuário alterado", ["Fulano Teste → Ciclano Teste"]),
+  ...EVENTOS_OS_LINHA,
+  evento("2026-11-02T08:00:00", "transferencia", "Transferência registrada", ["Cidade A → Cidade B"]),
+];
+
+function dossie(serie, os = {}, linha = linhaDoTempo(EVENTOS_OS_LINHA)) {
   return {
     serie,
     modelo: "Notebook de teste",
+    ...(linha === undefined ? {} : { linha_do_tempo: linha }),
     os: {
       estado: "ok", mensagem: "", total_importacoes: 3, ultima_importacao_em: "2026-11-10T08:00:00", presente_na_ultima: true,
       ultima_vez_observada_em: null, ordens: ORDENS, historico: { titulo: TITULO_HISTORICO, eventos: EVENTOS, total: EVENTOS.length }, ...os,
@@ -136,19 +151,21 @@ test("opens with the serial, the title, the table and the history", async ({ pag
   await expect(segunda.nth(4)).toHaveText("—");
   await expect(segunda.nth(5)).toHaveText("CH-2002 Dashboard");
   await expect(modal(page).getByRole("button", { name: /^Ver OS/ })).toHaveCount(2);
-  await expect(page.locator("#dossie-historico-titulo")).toHaveText(TITULO_HISTORICO);
-  await expect(page.locator("#dossie-historico-lista > li")).toHaveCount(2);
-  await expect(page.locator("#dossie-historico-lista > li").first()).toContainText("05/11/2026");
-  await expect(page.locator("#dossie-historico-lista > li").first()).toContainText("Dados alterados");
-  await expect(page.locator("#dossie-historico-lista > li").first().locator("time")).toHaveAttribute("datetime", "2026-11-05T09:30:00");
-  const mudancasPrimeiro = page.locator("#dossie-historico-lista > li").first().locator("ul > li");
+  await expect(page.locator("#dossie-historico")).toHaveCount(0); // the old list left the screen: its events are in the timeline
+  await expect(page.locator("#dossie-linha-titulo")).toHaveText("Linha do tempo");
+  const eventosLinha = page.locator("#dossie-linha-lista > li.dossie-equip__ev");
+  await expect(eventosLinha).toHaveCount(2);
+  await expect(eventosLinha.first()).toContainText("05/11/2026");
+  await expect(eventosLinha.first()).toContainText("Dados alterados");
+  await expect(eventosLinha.first().locator("time")).toHaveAttribute("datetime", "2026-11-05T09:30:00");
+  const mudancasPrimeiro = eventosLinha.first().locator("ul.dossie-equip__mudancas > li");
   await expect(mudancasPrimeiro).toHaveText(["Status Oracle: Aberto, Em fila → Em atendimento", "Fila Oracle: (vazio) → Fila Teste"]);
-  const eventoInicial = page.locator("#dossie-historico-lista > li").nth(1);
+  const eventoInicial = eventosLinha.nth(1);
   await expect(eventoInicial).toContainText("Importação inicial");
-  await expect(eventoInicial.locator("ul > li")).toHaveText(["OS Oracle: (vazio) → OS-1001, OS-1002"]);
-  await expect(page.locator("#dossie-historico-lista")).not.toContainText("[object");
-  await expect(page.locator("#dossie-historico-lista")).not.toContainText("OS-1001,OS-1002");
-  await expect(page.locator("#dossie-historico-vazio")).toBeHidden();
+  await expect(eventoInicial.locator("ul.dossie-equip__mudancas > li")).toHaveText(["OS Oracle: (vazio) → OS-1001, OS-1002"]);
+  await expect(page.locator("#dossie-linha-lista")).not.toContainText("[object");
+  await expect(page.locator("#dossie-linha-lista")).not.toContainText("OS-1001,OS-1002");
+  await expect(page.locator("#dossie-linha-vazio")).toBeHidden();
 });
 
 test("Ver OS closes the dialog and opens the OS in the OS tab with the series of the report row", async ({ page }) => {
@@ -173,7 +190,7 @@ test("Ver OS falls back to the open series when the order carries none", async (
 test("without OS in the latest import there is no table and no Ver OS", async ({ page }) => {
   await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {
     ordens: [], presente_na_ultima: false, ultima_vez_observada_em: "2026-11-05T09:30:00", historico: { titulo: TITULO_HISTORICO, eventos: [], total: 0 },
-  }) }));
+  }, linhaDoTempo([])) }));
   await abrirDossie(page);
   await expect(page.locator("#dossie-os-importacoes")).toHaveText("Importações disponíveis: 3");
   await expect(page.locator("#dossie-os-observada")).toContainText("Última vez observada em");
@@ -181,20 +198,21 @@ test("without OS in the latest import there is no table and no Ver OS", async ({
   await expect(modal(page)).not.toContainText(/encerrad/i);
   await expect(page.locator("#dossie-os-ordens")).toBeHidden();
   await expect(modal(page).getByRole("button", { name: /Ver OS/ })).toHaveCount(0);
-  await expect(page.locator("#dossie-historico-titulo")).toHaveText(TITULO_HISTORICO);
-  await expect(page.locator("#dossie-historico-vazio")).toHaveText("Sem mudanças registradas.");
-  await expect(page.locator("#dossie-historico-lista > li")).toHaveCount(0);
+  await expect(page.locator("#dossie-linha-titulo")).toHaveText("Linha do tempo");
+  await expect(page.locator("#dossie-linha-vazio")).toHaveText("Sem eventos para esta série.");
+  await expect(page.locator("#dossie-linha-lista > li")).toHaveCount(0);
 });
 
 for (const [estado, mensagem] of [["sem_base", "Sem base importada"], ["sem_registros", "Sem registros para esta série"], ["indisponivel", "Fonte indisponível"]]) {
   test(`state ${estado} shows only its message`, async ({ page }) => {
-    await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", { estado, mensagem, ordens: [], historico: { titulo: "", eventos: [], total: 0 } }) }));
+    await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", { estado, mensagem, ordens: [], historico: { titulo: "", eventos: [], total: 0 } }, linhaDoTempo([])) }));
     await abrirDossie(page);
     await expect(page.locator("#dossie-os-mensagem")).toHaveText(mensagem);
     await expect(page.locator("#dossie-serie")).toHaveText("LENTO"); // the header stays
     await expect(page.locator("#dossie-os-importacoes")).toBeHidden();
     await expect(page.locator("#dossie-os-ordens")).toBeHidden();
-    await expect(page.locator("#dossie-historico")).toBeHidden();
+    await expect(page.locator("#dossie-historico")).toHaveCount(0);
+    await expect(page.locator("#dossie-linha-lista > li")).toHaveCount(0); // no OS event without OS
     await expect(modal(page).getByRole("button", { name: /Ver OS/ })).toHaveCount(0);
   });
 }
@@ -389,4 +407,194 @@ test("narrow screens show one column of cards, wide screens show the table, neve
     expect(medidas.cabecalho).not.toBe("absolute"); // header visible: real table
     expect(new Set(medidas.tops).size).toBe(1); // one line
   }
+});
+
+// ---- Linha do tempo (Dossiê 360) ----
+const eventosDaLinha = page => page.locator("#dossie-linha-lista > li.dossie-equip__ev");
+const pilulas = page => page.locator('[role="group"][aria-label="Filtrar a linha do tempo"] button.dossie-equip__pilula');
+
+test("the timeline keeps the API order (newest first) and shows only the day for day-only events", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_MISTOS)) }));
+  await abrirDossie(page);
+  await expect(eventosDaLinha(page)).toHaveCount(EVENTOS_MISTOS.length);
+  await expect(eventosDaLinha(page).locator(".dossie-equip__ev-titulo")).toHaveText(EVENTOS_MISTOS.map(e => e.titulo));
+  await expect(eventosDaLinha(page).locator("time")).toHaveText(["26/11/2026 16:40", "20/11/2026", "12/11/2026 10:00", "05/11/2026 09:30", "03/11/2026 08:00", "02/11/2026 08:00"].map(t => new RegExp(`^${t.replace(/\//g, "\\/")}`)));
+  const cobertura = eventosDaLinha(page).nth(1);
+  await expect(cobertura.locator("time")).toHaveText("20/11/2026"); // day only, no hour
+  await expect(cobertura.locator(".ck-tag")).toHaveText("Cobertura");
+  await expect(eventosDaLinha(page).first().locator("time")).toHaveAttribute("datetime", "2026-11-26T16:40:00-03:00");
+});
+
+test("filters list only the types with events plus Tudo, with counts, and switch the list", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_MISTOS)) }));
+  await abrirDossie(page);
+  await expect(page.getByRole("group", { name: "Filtrar a linha do tempo" })).toBeVisible();
+  // Fixed order, no "Cobertura" pill missing: every type here has events.
+  await expect(pilulas(page)).toHaveText(["Tudo6", "Apelido e usuário1", "Transferências1", "OS2", "Chamados Sebrae1", "Cobertura1"]);
+  await expect(pilulas(page).first()).toHaveAttribute("aria-pressed", "true");
+  await expect(pilulas(page).nth(3)).toHaveAttribute("aria-pressed", "false");
+
+  await pilulas(page).nth(3).click(); // OS
+  await expect(pilulas(page).nth(3)).toHaveAttribute("aria-pressed", "true");
+  await expect(pilulas(page).first()).toHaveAttribute("aria-pressed", "false");
+  await expect(eventosDaLinha(page).locator(".dossie-equip__ev-titulo")).toHaveText(["Dados alterados", "Importação inicial"]);
+  await pilulas(page).nth(4).click(); // Chamados Sebrae
+  await expect(eventosDaLinha(page).locator(".dossie-equip__ev-titulo")).toHaveText(["Chamado encerrado no Dashboard"]);
+  await expect(pilulas(page).nth(3)).toHaveAttribute("aria-pressed", "false");
+
+  // Closing and opening again goes back to Tudo.
+  await page.locator("#dossie-fechar").click();
+  await expect(modal(page)).toBeHidden();
+  await page.locator("#btn-ver-dossie").click();
+  await expect(eventosDaLinha(page)).toHaveCount(6);
+  await expect(pilulas(page).first()).toHaveAttribute("aria-pressed", "true");
+  await expect(pilulas(page).nth(4)).toHaveAttribute("aria-pressed", "false");
+});
+
+test("only the types that have events get a pill", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo([EVENTOS_MISTOS[0], EVENTOS_MISTOS[5]])) }));
+  await abrirDossie(page);
+  await expect(pilulas(page)).toHaveText(["Tudo2", "Transferências1", "Chamados Sebrae1"]);
+});
+
+test("a failed source shows the notice and the OS section stays intact", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_OS_LINHA, { indisponiveis: ["transferencia", "sebrae"] })) }));
+  await abrirDossie(page);
+  await expect(page.locator("#dossie-linha-indisponivel")).toHaveText("Fonte indisponível: Transferências, Chamados Sebrae.");
+  await expect(eventosDaLinha(page)).toHaveCount(2);
+  await expect(page.locator("#dossie-os-importacoes")).toHaveText("Importações disponíveis: 3");
+  await expect(linhas(page)).toHaveCount(2);
+});
+
+test("without linha_do_tempo in the answer the OS section still works", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, undefined) }));
+  await abrirDossie(page);
+  await expect(page.locator("#dossie-status")).toBeHidden();
+  await expect(page.locator("#dossie-os-importacoes")).toHaveText("Importações disponíveis: 3");
+  await expect(linhas(page)).toHaveCount(2);
+  await expect(modal(page).getByRole("button", { name: /^Ver OS/ })).toHaveCount(2);
+  await expect(eventosDaLinha(page)).toHaveCount(0);
+  await expect(page.locator("#dossie-linha-indisponivel")).toHaveText("Fonte indisponível: Apelido e usuário, Transferências, OS, Chamados Sebrae, Cobertura.");
+});
+
+test("a series without events says so and shows no filters", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo([])) }));
+  await abrirDossie(page);
+  await expect(page.locator("#dossie-linha-vazio")).toBeVisible();
+  await expect(page.locator("#dossie-linha-vazio")).toHaveText("Sem eventos para esta série.");
+  await expect(eventosDaLinha(page)).toHaveCount(0);
+  await expect(pilulas(page)).toHaveCount(0);
+  await expect(page.locator("#dossie-linha-indisponivel")).toBeHidden();
+  await expect(page.locator("#dossie-linha-limite")).toBeHidden();
+});
+
+test("above the limit the screen says how many of the total it shows", async ({ page }) => {
+  const muitos = Array.from({ length: 200 }, (_, i) => evento(new Date(Date.UTC(2026, 10, 25, 12) - i * 3600_000).toISOString().replace(".000Z", ""), "os", `Evento ${i}`));
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(muitos, { total: 205 })) }));
+  await abrirDossie(page);
+  await expect(eventosDaLinha(page)).toHaveCount(200);
+  await expect(page.locator("#dossie-linha-limite")).toHaveText("Mostrando os 200 eventos mais recentes de 205.");
+  await expect(pilulas(page)).toHaveText(["Tudo200", "OS200"]);
+});
+
+test("Imprimir calls window.print", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_MISTOS)) }));
+  await abrirDossie(page);
+  await page.evaluate(() => { window.__imprimiu = 0; window.print = () => { window.__imprimiu += 1; }; });
+  await expect(modal(page).getByRole("button", { name: "Imprimir" })).toBeVisible();
+  await page.locator("#dossie-imprimir").click();
+  expect(await page.evaluate(() => window.__imprimiu)).toBe(1);
+  await expect(modal(page)).toBeVisible(); // printing does not close the dialog
+});
+
+for (const tema of ["dark", "light"]) {
+  test(`print media (${tema} theme): only the dossier, no controls, active filter in the header, no screen-only details`, async ({ page }) => {
+    await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_MISTOS)) }));
+    await abrirDossie(page);
+    await page.locator("html").evaluate((raiz, valor) => { raiz.dataset.theme = valor; }, tema);
+    await expect(page.locator("#dossie-filtro-impresso")).toBeHidden(); // on screen the header line is not drawn
+    await expect(page.locator(".dossie-equip__so-tela")).toBeVisible();
+    await page.emulateMedia({ media: "print" });
+    await expect(modal(page)).toBeVisible();
+    await expect(page.locator("#dossie-os-ordens")).toBeVisible();
+    await expect(page.locator('[role="group"][aria-label="Filtrar a linha do tempo"]')).toBeHidden();
+    await expect(pilulas(page).first()).toBeHidden();
+    await expect(page.locator("#dossie-imprimir")).toBeHidden();
+    await expect(page.locator("#dossie-fechar")).toBeHidden();
+    await expect(page.locator("#dossie-filtro-impresso")).toBeVisible();
+    await expect(page.locator("#dossie-filtro-impresso")).toHaveText("Filtro: Tudo");
+    await expect(page.locator(".dossie-equip__so-tela")).toBeHidden();
+    await expect(eventosDaLinha(page).filter({ hasText: "Usuário alterado" }).locator(".dossie-equip__ev-titulo")).toBeVisible();
+    await expect(page.locator("#input-serial")).toBeHidden(); // the rest of the app does not print
+    const medidas = await page.evaluate(() => {
+      const veu = document.querySelector("#modal-dossie-equipamento");
+      const dialogo = veu.querySelector(".ck-dialogo");
+      return {
+        posicao: getComputedStyle(veu).position, fundoVeu: getComputedStyle(veu).backgroundColor,
+        fundo: getComputedStyle(dialogo).backgroundColor, texto: getComputedStyle(document.querySelector(".dossie-equip__ev-titulo")).color,
+        altura: getComputedStyle(dialogo).maxHeight, rolagem: dialogo.scrollHeight - dialogo.clientHeight,
+      };
+    });
+    expect(medidas).toMatchObject({ posicao: "static", fundoVeu: "rgb(255, 255, 255)", fundo: "rgb(255, 255, 255)", texto: "rgb(17, 17, 17)", altura: "none" });
+    expect(medidas.rolagem).toBeLessThanOrEqual(0);
+  });
+}
+
+test("print media prints the active filter label", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_MISTOS)) }));
+  await abrirDossie(page);
+  await pilulas(page).nth(4).click(); // Chamados Sebrae
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator("#dossie-filtro-impresso")).toHaveText("Filtro: Chamados Sebrae");
+  await expect(eventosDaLinha(page)).toHaveCount(1);
+});
+
+test("a 360 px phone has no horizontal scroll with the timeline in both themes", async ({ page }) => {
+  const longo = evento("2026-11-26T16:40:00-03:00", "sebrae", "Chamado encerrado no Dashboard", ["UTIC-2026-812 · " + "FINALIZADO".repeat(12)]);
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo([longo, ...EVENTOS_MISTOS.slice(1)], { indisponiveis: ["transferencia", "cobertura"] })) }));
+  await abrirHome(page);
+  await buscar(page, "LENTO");
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.locator("#btn-ver-dossie").click();
+  await expect(eventosDaLinha(page)).toHaveCount(EVENTOS_MISTOS.length);
+  for (const tema of ["dark", "light"]) {
+    await page.emulateMedia({ colorScheme: tema });
+    await page.locator("html").evaluate((raiz, valor) => { raiz.dataset.theme = valor; }, tema);
+    await modal(page).evaluate(async el => { await Promise.all(el.getAnimations({ subtree: true }).map(a => a.finished.catch(() => undefined))); });
+    const medidas = await page.evaluate(() => {
+      const d = document.querySelector("#modal-dossie-equipamento > .ck-dialogo");
+      return {
+        pagina: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        dialogo: d.getBoundingClientRect().right - document.documentElement.clientWidth, corpo: d.scrollWidth - d.clientWidth,
+        filhos: [...document.querySelectorAll("#dossie-linha .dossie-equip__ev, #dossie-linha .dossie-equip__pilula")].filter(el => el.getBoundingClientRect().right > d.getBoundingClientRect().right + 1).length,
+      };
+    });
+    expect(medidas).toEqual({ pagina: expect.any(Number), dialogo: expect.any(Number), corpo: expect.any(Number), filhos: 0 });
+    expect(medidas.pagina).toBeLessThanOrEqual(0);
+    expect(medidas.dialogo).toBeLessThanOrEqual(0);
+    expect(medidas.corpo).toBeLessThanOrEqual(0);
+    const resultado = await new AxeBuilder({ page }).include("#dossie-linha").withRules(["color-contrast", "button-name"]).analyze();
+    expect(resultado.violations.flatMap(({ nodes }) => nodes.map(({ target, failureSummary }) => ({ target, failureSummary })))).toEqual([]);
+  }
+});
+
+test("the pills work with the keyboard and show a visible focus ring", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_MISTOS)) }));
+  await abrirDossie(page);
+  await expect(eventosDaLinha(page)).toHaveCount(6);
+  await expect(page.locator("#dossie-fechar")).toBeFocused();
+  await page.keyboard.press("Shift+Tab"); // Imprimir
+  await expect(page.locator("#dossie-imprimir")).toBeFocused();
+  await page.keyboard.press("Shift+Tab"); // last pill: Cobertura
+  await expect(pilulas(page).last()).toBeFocused();
+  const anel = await pilulas(page).last().evaluate(el => ({ estilo: getComputedStyle(el).outlineStyle, largura: getComputedStyle(el).outlineWidth, foco: el.matches(":focus-visible") }));
+  expect(anel).toEqual({ estilo: "solid", largura: "2px", foco: true });
+  await page.keyboard.press("Enter");
+  await expect(pilulas(page).last()).toHaveAttribute("aria-pressed", "true");
+  await expect(eventosDaLinha(page).locator(".dossie-equip__ev-titulo")).toHaveText(["Movimentação recebida"]);
+  await expect(pilulas(page).last()).toBeFocused(); // the focus stays on the pill after the list changes
+  await page.keyboard.press("Shift+Tab"); // Chamados Sebrae
+  await page.keyboard.press("Space");
+  await expect(pilulas(page).nth(4)).toHaveAttribute("aria-pressed", "true");
+  await expect(eventosDaLinha(page).locator(".dossie-equip__ev-titulo")).toHaveText(["Chamado encerrado no Dashboard"]);
 });
