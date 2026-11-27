@@ -122,7 +122,7 @@ const MYPY_TARGETS = [
   "scripts/cleanup_local_temps.py",
   "scripts/check_update.py",
   "scripts/gerar_tipos_api.py",
-  // Rotinas do Chrome; o mypy segue os imports (sebrae_fechar, sebrae_leitura, staged_computers_endpoint).
+  // Rotinas do Chrome; o mypy segue os imports (sebrae_fechar, sebrae_leitura, staged_computers_endpoint, avisos_windows).
   "scripts/automacao_rotinas_chrome.py",
   "scripts/sebrae_softexpert.py",
   "scripts/verificar_usuarios_endpoint.py",
