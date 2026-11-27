@@ -1,6 +1,6 @@
 # 20. Saúde local (Prontidão da base)
 
-Aprovado pelo usuário em 26/11/2026. Contrato da API em `docs/arquitetura/CONTRATOS_API_BACKEND.md` (seção "Saúde local"); ferramenta do Assistente em `docs/cockpit-prompts/15-assistente.md`; configuração das contas em `docs/cockpit-prompts/19-configuracao-local.md`.
+Aprovado pelo usuário em 26/11/2026. Complementos aprovados pelo usuário em 27/11/2026: "Carregando a saúde local…", "Não foi possível medir o espaço em disco.", "Não foi possível gerar a prévia da limpeza.", "Não foi possível concluir a limpeza.", "Não foi possível concluir a limpeza com segurança." (503), "Confirme a limpeza antes de aplicar." (422), "Tente de novo; se continuar, reinicie o servidor local.", "Não foi possível contar as gravações interrompidas. Reinicie o servidor local; enquanto isso, a limpeza fica bloqueada.", selo "N inválidos", concordância de número na confirmação e cartões abaixo de 768 px. Contrato da API em `docs/arquitetura/CONTRATOS_API_BACKEND.md` (seção "Saúde local"); ferramenta do Assistente em `docs/cockpit-prompts/15-assistente.md`; configuração das contas em `docs/cockpit-prompts/19-configuracao-local.md`.
 
 ## Objetivo
 
