@@ -30,7 +30,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
 from domains.sebrae_chamados import (
@@ -298,7 +298,7 @@ def _so_tipo(erro: BaseException) -> str:
     return f"Falha inesperada na página ({_rotinas().resumo_erro_de_terceiro(erro)})."
 
 
-class SoftExpertErro(_rotinas().RotinaErro):
+class SoftExpertErro(_rotinas().RotinaErro):  # type: ignore[misc]  # base dinâmica de _rotinas() (cópia do __main__); estática mudaria a classe
     """Falha de leitura do SoftExpert; ``motivo`` é um código estável para o registro de pendências."""
 
     motivo = MOTIVO_FORMULARIO_INDISPONIVEL
@@ -323,7 +323,7 @@ class ChamadoNaoEncontrado(SoftExpertErro):
     motivo = MOTIVO_NAO_ENCONTRADO
 
 
-class EtapaInstavelSX(SoftExpertErro, _rotinas().EtapaInstavel):
+class EtapaInstavelSX(SoftExpertErro, _rotinas().EtapaInstavel):  # type: ignore[misc]  # base dinâmica de _rotinas() (cópia do __main__); estática mudaria a classe
     """Falha de navegação recuperável: etapa_resiliente refaz do zero antes de desistir.
 
     Herda de SoftExpertErro para que, se as tentativas se esgotarem, o motivo relatado em
@@ -736,7 +736,7 @@ def _frames(page: "Page") -> List["Frame"]:
     return [] if page.is_closed() else list(page.frames)
 
 
-def campos_do_registro(controles: List[Mapping[str, Any]]) -> Dict[str, str]:
+def campos_do_registro(controles: Sequence[Mapping[str, Any]]) -> Dict[str, str]:
     """Número, título, solicitante e descrição a partir dos controles (rótulo, valor) do Registro de Chamados."""
     campos = {"numero": "", "titulo": "", "solicitante": "", "descricao": ""}
     for controle in controles:
@@ -758,7 +758,7 @@ def campos_do_registro(controles: List[Mapping[str, Any]]) -> Dict[str, str]:
     return campos
 
 
-def detalhes_concluidos(controles: List[Mapping[str, Any]]) -> str:
+def detalhes_concluidos(controles: Sequence[Mapping[str, Any]]) -> str:
     """Texto do atendimento já concluído: textarea somente leitura cujo rótulo não tem ``*`` (o editável tem)."""
     alvo = _sem_acentos(ROTULOS_CAMPOS["detalhes_atendimento_realizado"][0])
     for controle in controles:
@@ -1491,7 +1491,7 @@ def _botao_unico(
 ) -> "Locator":
     """O único botão visível que ``montar`` acha em todos os frames; zero ou mais de um é falha."""
     def procurar() -> Any:
-        achados = []
+        achados: List["Locator"] = []
         for frame in _frames(page):
             try:
                 candidato = montar(frame).filter(visible=True)
