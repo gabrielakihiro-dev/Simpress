@@ -40,6 +40,13 @@ class _NaoEncontrado(str):
     """Reason text for a ticket missing from the task center (e.g. closed by another technician); still a plain str for callers."""
 
 
+class _LoginNaoConcluido(Exception):
+    """The re-login wait ran out: every next ticket would wait the whole login time again, so the run stops."""
+
+
+LOGIN_NAO_CONCLUIDO = f"{MARCA_LOGIN_NAO_CONCLUIDO}: entre no SoftExpert e execute de novo."
+
+
 def _fechar_aba(pagina: Optional["Page"]) -> None:
     try:
         if pagina is not None and not pagina.is_closed():
@@ -60,7 +67,12 @@ def _ler_chamado(
             except modulo.SessaoExpirada:
                 rotinas.log("Sebrae", f"{numero}: sessão expirada; aguardando novo login.")
                 pagina.goto(modulo.SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=rotinas.CARREGAMENTO_MS)
-                modulo.garantir_login(pagina, permitir_sso=True)
+                try:
+                    modulo.garantir_login(pagina, permitir_sso=True)
+                except rotinas.RotinaErro as erro:  # same test as sebrae_rotina._traduzindo; other errors keep their path
+                    if str(erro).startswith(MARCA_LOGIN_NAO_CONCLUIDO):
+                        raise _LoginNaoConcluido() from None
+                    raise
                 return modulo.extrair_chamado(context, pagina, numero)
         except modulo.ChamadoNaoEncontrado as erro:
             return _NaoEncontrado(erro)  # a missing ticket does not change on a retry
@@ -132,7 +144,7 @@ def executar(
             pagina = modulo.abrir_softexpert(context)
             itens = modulo.listar_chamados(pagina)
         except modulo.SessaoExpirada:
-            raise rotinas.RotinaErro(f"{MARCA_LOGIN_NAO_CONCLUIDO}: entre no SoftExpert e execute de novo.") from None
+            raise rotinas.RotinaErro(LOGIN_NAO_CONCLUIDO) from None
         triagem = triar_novos({item.numero: item.texto for item in itens}, existentes["numeros"])
         log(
             f"Lista: {len(itens)} chamado(s); {len(triagem.ignorados)} já no Dashboard, "
@@ -151,6 +163,8 @@ def executar(
             # Saved after each ticket: a cancel or a crash keeps what was already read.
             sebrae_novos.salvar_novos(caminhos.novos, lidos, triagem.pendentes, len(triagem.ignorados), erros)
         sebrae_novos.salvar_novos(caminhos.novos, lidos, triagem.pendentes, len(triagem.ignorados), erros)
+    except _LoginNaoConcluido:
+        raise rotinas.RotinaErro(LOGIN_NAO_CONCLUIDO) from None
     finally:
         _fechar_aba(pagina)
         if triagem is not None:  # also after a cancel: the history shows what that run did read
@@ -196,7 +210,7 @@ def executar_antigos(
             try:
                 pagina = modulo.abrir_softexpert(context)
             except modulo.SessaoExpirada:
-                raise rotinas.RotinaErro(f"{MARCA_LOGIN_NAO_CONCLUIDO}: entre no SoftExpert e execute de novo.") from None
+                raise rotinas.RotinaErro(LOGIN_NAO_CONCLUIDO) from None
         for numero in a_ler:
             rotinas.verificar_cancelamento(f"Cancelado antes de ler {numero}.")
             try:
@@ -211,6 +225,8 @@ def executar_antigos(
                     _guardar_credenciais(state_dir, lido, log)
                     resultado["lidos"].append(numero)
                     log(f"{numero}: antigo lido.")
+            except _LoginNaoConcluido:
+                raise rotinas.RotinaErro(LOGIN_NAO_CONCLUIDO) from None
             except Exception as erro:  # noqa: BLE001 - one old ticket never stops the others; log only the type
                 resultado["falhas"][numero] = type(erro).__name__
                 log(f"{numero}: antigo não lido ({type(erro).__name__}).")

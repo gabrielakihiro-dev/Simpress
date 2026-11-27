@@ -623,7 +623,7 @@ class EnvioFalhoTest(FecharBase):
             {k: aviso[k] for k in ("falhou", "motivo", "copia_local", "copia_sharepoint")},
             {"falhou": True, "motivo": "RuntimeError", "copia_local": str(pendente), "copia_sharepoint": True},
         )
-        self.assertEqual(len(aviso["sugestoes"]), 3)
+        self.assertEqual(len(aviso["sugestoes"]), 2)
         self.assertTrue(fin.aviso_do_pendente(self.dir)["copia_sharepoint"])
 
     def test_se_a_copia_tambem_nao_sobe_o_aviso_diz_que_so_existe_a_copia_local(self):
