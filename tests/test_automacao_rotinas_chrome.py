@@ -2612,6 +2612,7 @@ AVISOS_ENVIO_SUCESSO = [
     "2 itens carregados",
     "Upload complete",
     "Upload concluído",
+    "Dashboard Operacional_SEBRAE (pendente 2026-11-26 101500-n1).xlsx carregado para DASHBOARD SEBRAE",
 ]
 AVISOS_ENVIO_NAO_SUCESSO = [
     "Dashboard Operacional_SEBRAE.xlsx wasn't uploaded to DASHBOARD SEBRAE",
@@ -2634,6 +2635,13 @@ AVISOS_ENVIO_NAO_SUCESSO = [
     "Dashboard Operacional_SEBRAE.xlsx",
     "Uploaded",
     "Uploaded by Juliana",
+    # 26/11/2026: nomes de arquivo da pasta (get_by_text também os lê) nunca confirmam o envio
+    "Relatório carregado para revisão.xlsx",
+    "Relatório carregado para revisão",
+    "Envio concluído março.xlsx",
+    "Upload concluído - fotos.xlsx",
+    "Uploaded notes to RH.xlsx",
+    "Planilha de abril 2 itens carregados.xlsx",
 ]
 
 

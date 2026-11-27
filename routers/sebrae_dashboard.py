@@ -222,7 +222,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Nomes dos representantes regionais (padrão local e alterados); arquivo ilegível vale só o padrão."""
         try:
             salvos, _ = local_setup.load_regional_representatives(REGIONAL_REPRESENTATIVES_FILE)
-        except Exception:  # noqa: BLE001 - só serve para mascarar nomes; o padrão continua valendo
+        except Exception as erro:  # noqa: BLE001 - só serve para mascarar nomes; o padrão continua valendo
+            logger.warning("Representantes regionais ilegíveis; vale só o padrão (%s).", type(erro).__name__)
             salvos = {}
         # O padrão vem do arquivo local (o código tem os nomes em branco): sem ele os nomes reais deixariam de ser mascarados.
         padroes_efetivos, _ = local_setup.effective_regional_representative_defaults(REGIONAL_REPRESENTATIVE_DEFAULTS_FILE)
@@ -542,6 +543,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
         with lock_paths([_base_guard()]):
             _exigir_versao(payload.versao_importacao)
+            # fechar/enviar (ou o pedido esperando) gravam D e R na mesma saída: refazê-la agora a deixaria sem o recém-finalizado
+            _exigir_sem_finalizacao("Aguarde a finalização ou o envio em andamento antes de atualizar o Dashboard. Nada foi gravado.")
             confirmados = dict.fromkeys(payload.confirmar_outro_tecnico, "") if payload.finalizar_softexpert else None
             importado, resultado, conteudo, gravada, edicoes = _gravar_atualizacao(payload, exigir_encerramento=True, confirmados=confirmados)
             fechar = (
@@ -680,12 +683,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return {n: novo for n, (novo, atual) in textos.items() if novo and not sebrae_dashboard_gravacao.h_ja_gravado(novo, atual)}
 
     def _reaplicar_encerramentos(conteudo: bytes) -> bytes:
-        """A saída é refeita da cópia importada a cada "Atualizar": as datas de encerramento registradas ao finalizar (o R que o usuário informou) voltam à coluna R."""
+        """A saída é refeita da cópia importada a cada "Atualizar": D=FINALIZADO e o R registrados ao finalizar voltam à linha do chamado.
+
+        Decisão do usuário (26/11/2026): linha que a cópia importada já traz com D FINALIZADO e R válido (``dd/MM/aaaa HH:mm``) não
+        muda, nem D nem R, mesmo com R diferente do registrado (o R digitado à mão vale). A gravação logo depois da ``fechar`` não passa por aqui."""
         encerramentos = fin.encerramentos_registrados(_pasta_estado())
         if not encerramentos:
             return conteudo
         try:
-            return sebrae_dashboard_gravacao.registrar_encerramentos(conteudo, encerramentos)[0].conteudo
+            return sebrae_dashboard_gravacao.registrar_encerramentos(conteudo, encerramentos, manter_finalizados=True)[0].conteudo
         except Exception as erro:  # noqa: BLE001 - a atualização não pode falhar por isso; log só o tipo
             logger.warning("Datas de encerramento não reaplicadas à saída (%s).", type(erro).__name__)
             return conteudo
@@ -741,6 +747,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             return None
         ativo = services.runner().state()
         return ativo if ativo.get("estado") == "em_andamento" else None
+
+    def _exigir_sem_finalizacao(mensagem: str) -> None:
+        """409 com pedido de finalização esperando ou ``fechar``/``enviar`` rodando (outras rotinas, como ``antigos``, não bloqueiam).
+
+        Estado do executor ilegível: 503, sem gravar (não dá para saber se a ``fechar`` está gravando a mesma saída)."""
+        try:
+            ativa = _rotina_em_andamento()
+        except Exception as erro:  # noqa: BLE001
+            logger.warning("Estado do executor de rotinas ilegível (%s).", type(erro).__name__)
+            raise DomainBusyError("Não foi possível conferir se há rotina em execução. Tente de novo.") from erro
+        if ativa is None and services.runner is not None and (orfaos := fin.descartar_job_orfao(_pasta_estado())) is not None:  # mesma regra de ``_exigir_rotina_livre``
+            logger.warning("Pedido de finalização órfão descartado (%s chamado(s)).", orfaos)
+        if fin.job_pendente(_pasta_estado()) or (ativa is not None and ativa.get("rotina") in ("fechar", "enviar")):
+            raise DomainConflictError(mensagem)
 
     def _exigir_rotina_livre(pasta) -> None:
         """409 quando há pedido de finalização esperando ou uma rotina rodando; um runner sem estado legível deixa o ``start`` decidir."""
@@ -852,19 +872,19 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     @router.put("/api/sebrae/chamados/{numero}/os-recusada")
     def recusar_os(numero: str, payload: OsRecusadaPayload):
         """Recusa (ou mantém) a OS sugerida: o par chamado + OS nunca mais é sugerido nem trocado sozinho (só local)."""
-        sebrae_os_recusadas.recusar(_pasta_estado(), numero, payload.os)
+        sebrae_os_recusadas.recusar(_pasta_estado(), fin.validar_numero(numero), payload.os)  # só UTIC-AAAA-N: linha:N não identifica o chamado
         return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
     @router.put("/api/sebrae/chamados/{numero}/os-manter")
     def manter_os(numero: str, payload: OsRecusadaPayload):
         """Mantém a OS que já está na E (aviso "sem relação" encerrado); só local, nada é gravado no Dashboard."""
-        sebrae_os_recusadas.manter(_pasta_estado(), numero, payload.os)
+        sebrae_os_recusadas.manter(_pasta_estado(), fin.validar_numero(numero), payload.os)  # só UTIC-AAAA-N: linha:N não identifica o chamado
         return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
     @router.put("/api/sebrae/chamados/{numero}/os-remover")
     def remover_os(numero: str, payload: OsRecusadaPayload):
         """Recusa a OS e manda limpar a E: a próxima gravação do Dashboard esvazia só a E que ainda for essa OS."""
-        sebrae_os_recusadas.remover(_pasta_estado(), numero, payload.os)
+        sebrae_os_recusadas.remover(_pasta_estado(), fin.validar_numero(numero), payload.os)  # só UTIC-AAAA-N: linha:N não identifica o chamado
         return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
     @router.put("/api/sebrae/chamados/{numero}/destaque")
@@ -1031,10 +1051,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Grava as escolhas por conflito (``sharepoint`` ou ``site``); com ``enviar`` inicia a rotina ``enviar`` de novo.
 
         Exige a ``versao_importacao`` atual (409 se ausente ou antiga). ``site`` num conflito com ``aceita_site`` falso é 422."""
-        _exigir_versao(payload.versao_importacao)
         pasta = _pasta_estado()
         arquivo = fin.caminho_conflitos(pasta)
-        with lock_paths([arquivo]):
+        with lock_paths([_base_guard()]), lock_paths([arquivo]):  # mesma ordem da importação: uma reimportação não entra entre conferir e gravar
+            _exigir_versao(payload.versao_importacao)
             dados = fin.ler_conflitos(pasta) or {}
             conflitos = [conflito for conflito in dados.get("conflitos") or [] if isinstance(conflito, dict)]
             ids = {str(conflito.get("id")) for conflito in conflitos}
@@ -1137,7 +1157,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         blank); an off-list A/B it already has is kept. The title (G) goes only when typed, already masked.
 
         With ``exigir_encerramento``: D=FINALIZADO without a valid R (none sent, none stored) is refused (rule of 24/11/2026: the
-        closing date is always typed by the user, never the current time)."""
+        closing date is always typed by the user, never the current time). A stored R without the time, not sent again, counts as
+        blank (26/11/2026): it never blocks an edit of A, B, J or S and, blank, it is never rewritten."""
         if not payload.edicoes:
             return {}
         abertos = {c.numero: c for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)}
@@ -1150,6 +1171,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 raise DomainValidationError("Há chamados repetidos na atualização.", status_code=422)
             enviados = item.model_dump(exclude={"numero"})
             mesclados = {letra: str(enviados.get(letra) or "") or atual.valores.get(letra, "") for letra in MANUAIS}
+            if not str(enviados.get("R") or "").strip() and not fin.encerramento_valido(mesclados.get("R")):
+                mesclados["R"] = ""  # regra de 25/11/2026: R guardado só com a data é falta de R; não trava a edição e não é regravado
             try:
                 validados = sebrae_novos.validar_manuais(mesclados, exigir=False)
                 sebrae_novos.validar_listas(validados, listas, atual.valores)
