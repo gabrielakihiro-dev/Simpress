@@ -1,9 +1,11 @@
 // Automação -> "Chamados novos do SoftExpert": importa o Dashboard, lista os novos e baixa uma cópia atualizada do
 // Dashboard (chamados novos e alterações nos antigos em aberto). Porte fiel do antigo frontend/src/legado/features/sebrae-dashboard.js:
 // mesmos IDs, ARIA, textos, toasts e corpos de POST. Depende só do contexto recebido (app, dom, modelo). A tela segue
-// montada à mão no DOM (sem JSX), porque o resto da Automação procura esses elementos pelo ID.
+// montada à mão no DOM (sem JSX), porque o resto da Automação procura esses elementos pelo ID; só os chips da última leitura
+// dos antigos saem do React (leitura.tsx), a partir da loja que renderizarAntigos e abrirFalhas escrevem.
 import { baixarDaApi } from "../../comum/baixar-api.ts";
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
+import { criarLojaLeitura } from "./leitura-loja.ts";
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
@@ -31,6 +33,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     fechar: { emAndamento: false, mensagemInicio: "", numeros: [], pulados: [], resultado: null, sharepoint: null, token: 0, recarregado: "" },
     antigos: { emAndamento: false, resultado: null, mensagem: "", token: 0, anteriorEm: null },
   };
+  // Chips da última leitura dos antigos: o DOM nasce em leitura.tsx a partir desta loja.
+  const leitura = context.lojaLeitura ?? criarLojaLeitura();
 
   if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
     if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
@@ -2362,67 +2366,26 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   function renderizarAntigos() {
     const a = estado.antigos;
     definirTexto("sebrae-antigos-leitura-status", a.mensagem || resumoLeituraAntigos(a.resultado, a.emAndamento, formatarDataHora(a.resultado?.em), a.anteriorEm));
-    const lista = el("sebrae-antigos-leitura-falhas");
-    if (lista) {
-      const falhas = a.emAndamento ? [] : Object.entries(a.resultado?.falhas || {});
-      // UTIC e motivo em dois spans: o texto continua "UTIC: motivo" para quem lê, e o CSS põe um embaixo do outro
-      lista.replaceChildren(...falhas.map(([numero, motivo]) => {
-        const li = document.createElement("li");
-        li.append(dom.createTextElement("span", "sebrae-falha__utic", numero), ": ", dom.createTextElement("span", "sebrae-falha__motivo", String(motivo)));
-        return li;
-      }));
-      lista.hidden = falhas.length === 0;
-    }
     const botao = el("btn-sebrae-ler-antigos");
     if (botao) a.emAndamento ? botao.setAttribute("aria-busy", "true") : botao.removeAttribute("aria-busy");
-    renderizarChipsLeitura();
+    // Chips e lista de falhas (leitura.tsx): somem durante a leitura; sem falhas, o popover fecha.
+    const resultado = a.emAndamento ? null : a.resultado;
+    leitura.atualizar({ resultado, falhasAbertas: leitura.ler().falhasAbertas && Object.keys(resultado?.falhas || {}).length > 0 });
   }
 
-  const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
-
-  /** Chips da última leitura dos antigos na barra do topo: horário, N lidos, N falhas (abre o popover) e N sem UTIC. */
-  function renderizarChipsLeitura() {
-    const grupo = el("sebrae-leitura");
-    if (!grupo) return;
-    const a = estado.antigos;
-    const r = a.emAndamento ? null : a.resultado;
-    grupo.hidden = !r;
-    const chip = (id: string, texto: string) => {
-      const no = el(id);
-      if (!no) return;
-      no.hidden = !texto;
-      const destino = no.querySelector<ElementoSebrae>("span") || no;
-      destino.textContent = texto;
-    };
-    const horario = r?.em ? new Date(r.em) : null;
-    const hora = horario && !Number.isNaN(horario.getTime())
-      ? horario.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(",", "") : "";
-    const falhas = Object.keys(r?.falhas || {}).length;
-    chip("sebrae-leitura-hora", r ? `${hora}${r.concluido ? "" : `${hora ? " · " : ""}interrompida`}` : "");
-    chip("sebrae-leitura-lidos", r ? plural((r.lidos || []).length, "lido", "lidos") : "");
-    chip("sebrae-leitura-falhas", falhas ? plural(falhas, "falha", "falhas") : "");
-    chip("sebrae-leitura-sem-utic", r && r.sem_utic > 0 ? `${r.sem_utic} sem UTIC` : "");
-    if (!falhas) abrirFalhas(false);
-  }
-
-  function abrirFalhas(abrir: boolean) {
-    const popover = el("sebrae-falhas-popover");
-    if (!popover) return;
-    popover.hidden = !abrir;
-    el("btn-sebrae-falhas")?.setAttribute("aria-expanded", String(abrir));
-  }
+  const abrirFalhas = (abrir: boolean) => leitura.atualizar({ falhasAbertas: abrir });
 
   /** O chip `N falhas` abre e fecha o popover; Esc e clique fora fecham. */
   function instalarFalhas() {
     const botao = el("btn-sebrae-falhas");
-    botao?.addEventListener("click", () => abrirFalhas(Boolean(el("sebrae-falhas-popover")?.hidden)));
+    botao?.addEventListener("click", () => abrirFalhas(!leitura.ler().falhasAbertas));
     document.addEventListener?.("keydown", evento => {
-      if (evento.key !== "Escape" || el("sebrae-falhas-popover")?.hidden !== false) return;
+      if (evento.key !== "Escape" || !leitura.ler().falhasAbertas) return;
       abrirFalhas(false);
       botao?.focus();
     });
     document.addEventListener?.("click", evento => {
-      if (el("sebrae-falhas-popover")?.hidden === false && !(evento.target as ElementoSebrae).closest?.("#sebrae-leitura-falhas")) abrirFalhas(false);
+      if (leitura.ler().falhasAbertas && !(evento.target as ElementoSebrae).closest?.("#sebrae-leitura-falhas")) abrirFalhas(false);
     });
   }
 
