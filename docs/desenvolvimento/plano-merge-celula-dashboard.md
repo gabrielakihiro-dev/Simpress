@@ -76,7 +76,7 @@ Data: 11/11/2026. Branch `claude/dashboard-merge-celula-1a44e3`. Plano aprovado 
 - Objetivo: listar conflitos e escolher por célula.
 - Mudanças:
   - `GET /api/sebrae/dashboard/conflitos` → `{conflitos, escolhas, criado_em}` (vazio se não há). `GET /api/sebrae/finalizar-softexpert` ganha `conflitos` (contagem).
-  - `POST /api/sebrae/dashboard/conflitos` `{escolhas: {id: "sharepoint"|"site"}, enviar: bool}` grava escolhas de ids existentes (422 para id ou valor inválido) e, com `enviar`, inicia a rotina `enviar` (mesmas travas de `_enviar_apos_atualizar`).
+  - `POST /api/sebrae/dashboard/conflitos` `{escolhas: {id: "sharepoint"|"site"}, enviar: bool}` grava escolhas de ids existentes (422 para id ou valor inválido) e, com `enviar`, inicia a rotina `enviar` (mesmas travas de `enviar_apos_atualizar`, em `domains/sebrae_dashboard_rotinas.py`).
   - Front: módulo novo `static/js/features/sebrae-conflitos.js` e partial novo incluído perto de `#sebrae-sharepoint-aviso`. Lista "Chamado X, coluna Y: SharePoint diz A, site quer B" com escolha por célula e botão de reenviar. Em `sebrae-dashboard.js`, no máximo um gancho de uma linha fora de `renderizarSharepoint`.
   - Assistente: padrão de erro novo em `domains/assistant_api.py` para a mensagem de conflito (só contagem).
 - Arquivos: `routers/sebrae_dashboard.py`, `static/js/features/sebrae-conflitos.js`, `frontend/partials/` (partial novo + include), `static/index.html` se o carregamento de módulos exigir, `domains/assistant_api.py`, testes de router e de UI.
