@@ -1,4 +1,5 @@
 import contextlib
+import importlib.util
 import hashlib
 import io
 import itertools
@@ -2493,7 +2494,10 @@ class EnviarDashboardTests(unittest.TestCase):
 
     def test_locked_notice_pattern_is_narrow(self):
         for texto in (self.TOAST, "O arquivo está bloqueado para uso compartilhado por pessoa@exemplo.invalid",
-                      "The file is checked out to pessoa@exemplo.invalid", "Arquivo em uso por pessoa@exemplo.invalid"):
+                      "The file is checked out to pessoa@exemplo.invalid", "Arquivo em uso por pessoa@exemplo.invalid",
+                      # variantes do aviso (revisão de 27/11/2026)
+                      "The file is checked out for editing by a@b.c", "The file is locked by a@b.c", "O arquivo está bloqueado por a@b.c",
+                      "O arquivo está sendo editado por a@b.c", "The file is in use by a@b.c", "O arquivo foi bloqueado para edição por a@b.c"):
             self.assertRegex(texto, automacao._AVISO_DASHBOARD_BLOQUEADO)
         for texto in ("Sign in user", "Relatório locked.xlsx", "Dashboard Operacional_SEBRAE.xlsx", "Uploading 1 item to DASHBOARD SEBRAE"):
             self.assertNotRegex(texto, automacao._AVISO_DASHBOARD_BLOQUEADO)
@@ -2506,24 +2510,30 @@ class EnviarDashboardTests(unittest.TestCase):
         oculto = _PaginaDeElementos([(self.TOAST, False, False)])
         self.assertFalse(automacao._aviso_de_bloqueio_visivel(oculto))
 
-    def test_excel_tab_with_the_dashboard_in_the_same_chrome_is_detected(self):
-        def pagina(*abas):
+    def test_excel_tab_with_the_dashboard_open_for_editing_is_detected_by_the_url_only(self):
+        def pagina(*urls):
             page = MagicMock()
-            page.context.pages = [page, *(SimpleNamespace(title=lambda t=t: t, url=u) for t, u in abas)]
+            abas = []
+            for url in urls:
+                aba = MagicMock(url=url)
+                aba.title.side_effect = AssertionError("title() pode travar numa aba ocupada")
+                abas.append(aba)
+            page.context.pages = [page, *abas]
             return page
 
-        excel = ("Dashboard Operacional_SEBRAE.xlsx", "https://exemplo.invalid/_layouts/15/Doc.aspx?sourcedoc=x&action=edit")
-        pelo_titulo = ("Dashboard Operacional_SEBRAE - Excel", "https://exemplo.invalid/x")
-        pela_url = ("Microsoft Excel", "https://exemplo.invalid/:x:/r/sites/pasta/Dashboard%20Operacional_SEBRAE.xlsx?web=1")
-        for aba in (excel, pelo_titulo, pela_url):
-            with self.subTest(aba=aba):
-                self.assertTrue(automacao._aba_do_dashboard_aberta(pagina(aba)))
-        copia = ("Dashboard Operacional_SEBRAE - Copiar.xlsx", "https://exemplo.invalid/_layouts/15/Doc.aspx?action=edit")
-        pasta = ("DASHBOARD SEBRAE - OneDrive", "https://exemplo.invalid/sites/pasta-do-dashboard")
-        outra_planilha = ("Relatório.xlsx - Excel", "https://exemplo.invalid/_layouts/15/Doc.aspx?action=edit")
-        self.assertFalse(automacao._aba_do_dashboard_aberta(pagina(copia, pasta, outra_planilha)))
-        propria = MagicMock()
-        propria.title.return_value, propria.url = excel
+        doc = "https://exemplo.invalid/sites/x/_layouts/15/Doc.aspx?sourcedoc=%7B1%7D&file=Dashboard%20Operacional_SEBRAE.xlsx&action=default"
+        edicao = doc.replace("action=default", "action=edit")
+        atalho = "https://exemplo.invalid/:x:/r/sites/x/Shared%20Documents/DASHBOARD%20SEBRAE/Dashboard%20Operacional_SEBRAE.xlsx?d=w1&web=1"
+        for url in (doc, edicao, atalho):
+            with self.subTest(url=url):
+                self.assertTrue(automacao._aba_do_dashboard_aberta(pagina(url)))
+        so_visualizacao = [doc.replace("action=default", "action=view"), doc.replace("action=default", "action=embedview")]
+        copia = doc.replace("Operacional_SEBRAE.xlsx", "Operacional_SEBRAE%20-%20Copiar.xlsx")
+        pasta = "https://exemplo.invalid/sites/pasta-do-dashboard/Forms/AllItems.aspx?id=/DASHBOARD%20SEBRAE"
+        outra = doc.replace("Dashboard%20Operacional_SEBRAE.xlsx", "Relat%C3%B3rio.xlsx")
+        baixado = "file:///C:/Downloads/Dashboard%20Operacional_SEBRAE.xlsx"
+        self.assertFalse(automacao._aba_do_dashboard_aberta(pagina(*so_visualizacao, copia, pasta, outra, baixado)))
+        propria = MagicMock(url=doc)
         propria.context.pages = [propria]  # a aba da própria rotina não conta
         self.assertFalse(automacao._aba_do_dashboard_aberta(propria))
 
@@ -2572,22 +2582,36 @@ class EnviarDashboardTests(unittest.TestCase):
         marcar.assert_called_once()
 
     def test_locked_notice_waits_goes_back_by_goto_checks_and_chooses_again_without_retry(self):
-        # O toast não some: espera, goto na pasta (nunca reload), confere o SharePoint e escolhe de novo; Replace só depois.
+        # O toast não some: goto na pasta LOGO (o "Retry" some; nunca reload), espera, grava o fim da espera, confere o SharePoint e
+        # escolhe de novo; Replace só depois.
         page = self._pagina({"substituir"})
         ordem = []
-        page.goto.side_effect = lambda *_a, **_k: ordem.append("goto")
+        voltas_no_aviso = []
+        page.goto.side_effect = lambda *_a, **_k: ordem.append(("goto", voltas_no_aviso[-1] == page.wait_for_timeout.call_count))
         escolhas = page.expect_file_chooser
-        retomar = MagicMock(side_effect=lambda: ordem.append("retomar"))
+
+        def em_uso():
+            if escolhas.call_count == 1 and not page.goto.called:
+                voltas_no_aviso.append(page.wait_for_timeout.call_count)
+                return True
+            return False
+
+        def retomar_():
+            liberado = automacao.MARCA_DASHBOARD_LIBERADO in str(automacao.log.call_args_list)
+            ordem.append("retomar depois do fim da espera" if liberado else "retomar")
+
+        retomar = MagicMock(side_effect=retomar_)
         marcar = MagicMock(side_effect=lambda: ordem.append("incerto"))
         page.locators["substituir"] = MagicMock()
         page.locators["substituir"].filter.return_value.first.click.side_effect = lambda *_a, **_k: ordem.append("replace")
         self._enviar(
             page, espera=automacao.EsperaDashboard(), ao_retomar=retomar, marcar_incerto=marcar,
-            em_uso=lambda: escolhas.call_count == 1 and not page.goto.called,
-            dialogo=lambda: page.goto.called, concluido=lambda: self._substituiu(page),
+            em_uso=em_uso, dialogo=lambda: page.goto.called, concluido=lambda: self._substituiu(page),
         )
-        self.assertEqual(ordem, ["goto", "retomar", "incerto", "replace"])
-        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
+        # ("goto", True): nenhuma espera entre ver o aviso e voltar à pasta
+        self.assertEqual(ordem, [("goto", True), "retomar depois do fim da espera", "incerto", "replace"])
+        self.assertGreater(page.wait_for_timeout.call_count, voltas_no_aviso[-1] + 30)  # a espera vem depois do goto
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_PASTA_MS)
         page.reload.assert_not_called()
         self.assertEqual(escolhas.call_count, 2)
         self.avisar.assert_called_once()
@@ -2640,6 +2664,18 @@ class EnviarDashboardTests(unittest.TestCase):
             self._enviar(page, concluido=False, marcar_incerto=marcar)
         marcar.assert_not_called()
 
+    def test_guard_exhausted_before_replace_fails_without_marking_uncertain(self):
+        page = self._pagina({"substituir"})
+        marcar = MagicMock()
+        guarda = automacao.RotinaErro("Substituir o Dashboard no SharePoint: o cursor do sistema se moveu antes do clique; não cliquei.")
+        with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
+                self.assertRaises(automacao.EnvioNaoIniciado) as erro:
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        self.assertIn("não cliquei", str(erro.exception))
+        marcar.assert_not_called()
+        page.locators["substituir"].filter.return_value.first.click.assert_not_called()
+        page.keyboard.press.assert_called_with("Escape")
+
     def test_unexpected_failure_after_choosing_the_file_marks_uncertain(self):
         page = self._pagina({"substituir"})
         marcar = MagicMock()
@@ -2658,7 +2694,8 @@ class EnviarDashboardTests(unittest.TestCase):
 
     # Rotina enviar inteira com o estado real do registro; só o navegador e o acompanhamento do upload são simulados.
 
-    def _rodar_com_dashboard_aberto(self, *, aba=lambda: False, acompanhar=("ok",), cancelar=lambda: False, baixados=None, envio_preparado=False):
+    def _rodar_com_dashboard_aberto(self, *, aba=lambda: False, acompanhar=("ok",), cancelar=lambda: False, baixados=None, envio_preparado=False,
+                                    duplicar_falha=None):
         """``acompanhar``: por escolha do arquivo, "bloqueado" (toast antes do Replace) ou "ok" (Replace e concluído).
 
         Devolve (código ou exceção, registro, mocks)."""
@@ -2677,9 +2714,14 @@ class EnviarDashboardTests(unittest.TestCase):
             return destino
 
         def acompanhar_envio(_page, espera, incerto):
-            if roteiro.pop(0) == "bloqueado":
+            passo = roteiro.pop(0)
+            if passo == "bloqueado":
                 return True
+            if passo == "guarda":
+                raise automacao.EnvioNaoIniciado("a guarda estourou antes do Replace")
             incerto()
+            if passo == "erro":
+                raise RuntimeError("falha depois do Replace")
             return False
 
         def verificar(*_a):
@@ -2691,22 +2733,30 @@ class EnviarDashboardTests(unittest.TestCase):
                 patch.object(automacao, "DASHBOARD_SAIDA_DIR", raiz / "sebrae_dashboard_saida"), \
                 patch.object(automacao, "aguardar_login"), patch.object(automacao, "esperar_visivel", return_value=True), \
                 patch.object(automacao, "verificar_cancelamento", side_effect=verificar), \
-                patch.object(automacao, "duplicar_dashboard_na_pasta") as duplicar, \
+                patch.object(automacao, "duplicar_dashboard_na_pasta", side_effect=duplicar_falha) as duplicar, \
                 patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=baixar) as baixar_mock, \
                 patch.object(automacao, "conferir_dashboard_do_sharepoint", return_value=None), \
                 patch.object(automacao, "guardar_backup_do_dashboard"), \
                 patch.object(automacao, "_aba_do_dashboard_aberta", side_effect=lambda _p: aba()), \
                 patch.object(automacao, "_aviso_de_bloqueio_visivel", return_value=False), \
                 patch.object(automacao, "_acompanhar_envio", side_effect=acompanhar_envio) as acompanhar_mock, \
-                patch.object(automacao, "registrar_erro"), patch.object(automacao, "log"), \
+                patch.object(automacao, "registrar_erro") as registrar, patch.object(automacao, "log") as log, \
                 patch.object(automacao.time, "monotonic", side_effect=itertools.count(0, 1)), redirect_stdout(io.StringIO()):
-            self.page, self.duplicar = page, duplicar
+            self.page, self.duplicar, self.log_rotina = page, duplicar, log
             try:
                 resultado = automacao.rodar_rotina_enviar(MagicMock(), arquivo if envio_preparado else None, envio_id=envio_id)
             except BaseException as erro:  # RotinaCancelada é BaseException
                 resultado = erro
         registro = fin.ler_envio(raiz)
-        return resultado, registro, {"duplicar": duplicar, "baixar": baixar_mock, "acompanhar": acompanhar_mock, "page": page}
+        self.logs_rotina = [str(c.args[1]) for c in log.call_args_list]
+        return resultado, registro, {"duplicar": duplicar, "baixar": baixar_mock, "acompanhar": acompanhar_mock, "page": page, "registrar": registrar}
+
+    def _espera_fechada(self):
+        """O painel não fica preso: depois do último "AÇÃO NECESSÁRIA" há uma linha "Dashboard liberado"."""
+        abertos = [i for i, t in enumerate(self.logs_rotina) if t.startswith(automacao.MARCA_DASHBOARD_ABERTO)]
+        fins = [i for i, t in enumerate(self.logs_rotina) if t.startswith(automacao.MARCA_DASHBOARD_LIBERADO)]
+        self.assertTrue(abertos, "a espera nem começou")
+        self.assertTrue(fins and fins[-1] > abertos[-1], self.logs_rotina)
 
     def test_cancel_while_waiting_before_the_duplicate_fails_the_send(self):
         resultado, registro, mocks = self._rodar_com_dashboard_aberto(aba=lambda: True, cancelar=lambda: self.avisar.called, envio_preparado=True)
@@ -2714,6 +2764,8 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(registro["status"], "falhou")
         mocks["duplicar"].assert_not_called()
         self.avisar.assert_called_once()
+        self._espera_fechada()
+        self.assertIn(automacao.MSG_DASHBOARD_ESPERA_ENCERRADA, self.logs_rotina)
 
     def test_cancel_while_waiting_between_the_duplicate_and_the_upload_fails_the_send(self):
         resultado, registro, mocks = self._rodar_com_dashboard_aberto(
@@ -2724,6 +2776,7 @@ class EnviarDashboardTests(unittest.TestCase):
         mocks["duplicar"].assert_called_once()
         mocks["acompanhar"].assert_not_called()
         mocks["page"].expect_file_chooser.assert_not_called()
+        self._espera_fechada()
 
     def test_cancel_while_waiting_after_the_locked_notice_fails_the_send(self):
         resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado",), cancelar=lambda: self.avisar.called)
@@ -2731,6 +2784,8 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(registro["status"], "falhou")
         mocks["acompanhar"].assert_called_once()
         mocks["page"].goto.assert_not_called()
+        self._espera_fechada()
+        mocks["registrar"].assert_not_called()  # depois de escolher o arquivo, nenhuma captura (LGPD)
 
     def test_total_deadline_in_the_routine_fails_the_send(self):
         with patch.object(automacao, "ESPERA_DASHBOARD_LIVRE_S", 30):
@@ -2738,6 +2793,7 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(str(resultado), automacao.MSG_DASHBOARD_CONTINUOU_ABERTO)
         self.assertEqual(registro["status"], "falhou")
         mocks["acompanhar"].assert_not_called()
+        self._espera_fechada()
 
     def test_sharepoint_changed_during_the_wait_stops_without_a_new_duplicate_or_choice(self):
         resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado", "ok"), baixados=[b"conferido", b"editado por terceiro"])
@@ -2748,6 +2804,7 @@ class EnviarDashboardTests(unittest.TestCase):
         mocks["acompanhar"].assert_called_once()
         mocks["page"].expect_file_chooser.assert_called_once()
         self.assertEqual(mocks["baixar"].call_count, 2)
+        self._espera_fechada()
 
     def test_unchanged_sharepoint_after_the_locked_notice_sends_and_concludes(self):
         resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado", "ok"), baixados=[b"conferido", b"conferido"])
@@ -2757,28 +2814,89 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(mocks["page"].expect_file_chooser.call_count, 2)
         self.avisar.assert_called_once()
 
-    def test_failure_before_any_choice_never_leaves_the_send_uncertain(self):
+    def test_locked_notice_until_the_attempt_limit_fails_the_send_and_never_leaves_it_uncertain(self):
         with patch.object(automacao, "TENTATIVAS_ENVIO_BLOQUEADO", 2):
             resultado, registro, _ = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado",) * 2, baixados=[b"c"] * 5)
         self.assertEqual(str(resultado), automacao.MSG_DASHBOARD_TENTATIVAS)
         self.assertEqual(registro["status"], "falhou")
+        self._espera_fechada()
 
-    def test_no_screenshot_while_the_locked_notice_with_an_email_is_on_screen(self):
+    def test_guard_exhausted_before_replace_leaves_the_send_failed(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("guarda",))
+        self.assertIsInstance(resultado, automacao.EnvioNaoIniciado)
+        self.assertEqual(registro["status"], "falhou")
+        mocks["registrar"].assert_not_called()
+
+    def test_cancel_between_the_steps_of_the_resume_downloads_nothing(self):
+        liberado = lambda: automacao.MARCA_DASHBOARD_LIBERADO in str(self.log_rotina.call_args_list)  # noqa: E731
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado", "ok"), cancelar=liberado)
+        self.assertIsInstance(resultado, automacao.RotinaCancelada)
+        self.assertEqual(registro["status"], "falhou")
+        self.assertEqual(mocks["baixar"].call_count, 1)  # só o download conferido; a retomada parou antes de baixar
+        mocks["page"].goto.assert_called_once()
+
+    def test_no_screenshot_after_the_upload_starts_but_one_before(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("erro",))
+        self.assertIsInstance(resultado, RuntimeError)
+        self.assertEqual(registro["status"], "incerto")
+        mocks["registrar"].assert_not_called()
+        resultado, _, mocks = self._rodar_com_dashboard_aberto(duplicar_falha=RuntimeError("antes do envio"))
+        self.assertIsInstance(resultado, RuntimeError)
+        mocks["registrar"].assert_called_once()
+
+    def test_pending_copy_takes_no_screenshot_once_the_upload_starts(self):
         copia = Path(self.enterContext(tempfile.TemporaryDirectory())) / "Dashboard Operacional_SEBRAE (pendente 2026-11-27 1000).xlsx"
         copia.write_bytes(b"x")
-        for toast, capturas in ((True, 0), (False, 1)):
+        for toast in (True, False):  # o aviso pode ter uma variante que o padrão não reconhece: falha fechada
             with self.subTest(toast=toast), patch.object(automacao, "nova_aba"), patch.object(automacao, "aguardar_login"), \
-                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=automacao.EnvioNaoIniciado(automacao.MSG_COPIA_BLOQUEADA)), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=RuntimeError("falha no envio")), \
                     patch.object(automacao, "_aviso_de_bloqueio_visivel", return_value=toast), \
                     patch.object(automacao, "registrar_erro") as registrar, patch.object(automacao, "log"):
-                with self.assertRaises(automacao.EnvioNaoIniciado):
+                with self.assertRaises(RuntimeError):
                     automacao.enviar_copia_pendente(MagicMock(), copia)
-            self.assertEqual(registrar.call_count, capturas)
+            registrar.assert_not_called()
+        with patch.object(automacao, "nova_aba"), patch.object(automacao, "aguardar_login", side_effect=RuntimeError("login")), \
+                patch.object(automacao, "_aviso_de_bloqueio_visivel", return_value=False), \
+                patch.object(automacao, "registrar_erro") as registrar, patch.object(automacao, "log"):
+            with self.assertRaises(RuntimeError):
+                automacao.enviar_copia_pendente(MagicMock(), copia)
+        registrar.assert_called_once()  # antes do envio a captura continua
 
     def test_new_failure_messages_keep_the_text_the_assistant_recognizes(self):
         for mensagem in (automacao.MSG_DASHBOARD_CONTINUOU_ABERTO, automacao.MSG_DASHBOARD_TENTATIVAS, automacao.MSG_COPIA_BLOQUEADA,
                          automacao.MSG_BLOQUEIO_DEPOIS_DO_REPLACE):
             self.assertIn("em uso ou bloqueado", mensagem)
+
+
+TOAST_HTML = """<!doctype html><html><body>
+<div role="grid"><div role="row"><div role="gridcell">Relatório locked for shared use.xlsx</div></div>
+<div role="row"><div role="gridcell">Dashboard Operacional_SEBRAE.xlsx</div></div></div>
+<div id="toast" class="od-Notification">The file <a href="#">https://exemplo.invalid/Dashboard Operacional_SEBRAE.xlsx</a>
+is locked for shared use by pessoa@exemplo.invalid [membership]. <button>Retry</button></div>
+<div id="oculto" style="display:none">O arquivo está bloqueado por pessoa@exemplo.invalid</div>
+</body></html>"""
+
+
+@unittest.skipUnless(importlib.util.find_spec("playwright") is not None, "playwright não está instalado")
+class AvisoDeBloqueioNoNavegadorTests(unittest.TestCase):
+    """O XPath e o regex rodam no navegador de verdade (Chromium headless do Playwright, página sintética)."""
+
+    def test_toast_outside_the_list_is_seen_and_a_file_name_inside_a_row_is_not(self):
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Exception as erro:
+                self.skipTest(f"Chromium do Playwright indisponível: {type(erro).__name__}")
+            try:
+                page = browser.new_page()
+                page.set_content(TOAST_HTML)
+                self.assertTrue(automacao._aviso_de_bloqueio_visivel(page))
+                page.evaluate("document.getElementById('toast').remove()")
+                self.assertFalse(automacao._aviso_de_bloqueio_visivel(page))  # só o nome na lista e o aviso oculto sobraram
+            finally:
+                browser.close()
 
 
 class PastaDashboardNaoConfiguradaTests(unittest.TestCase):
