@@ -5,6 +5,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -15,6 +16,8 @@ import unicodedata
 from uuid import uuid4
 
 from core.integrity import atomic_write_json
+
+logger = logging.getLogger(__name__)
 
 SESSION_TTL = 30 * 60
 HISTORY_NAME = "ux_chamados_historico.json"
@@ -174,7 +177,8 @@ class ChamadosUX:
     def _fechar(portal: PortalUX, aba: str) -> None:
         try:
             portal.fechar(aba)
-        except Exception:
+        except Exception as erro:
+            logger.debug("Falha ao fechar a aba do UX (%s).", type(erro).__name__)
             pass  # best effort: a failed close must never mask the result of the request
 
     def _fechar_pendentes(self, portal: PortalUX) -> None:
@@ -191,7 +195,8 @@ class ChamadosUX:
         try:
             with self._conectar() as portal:
                 self._fechar_pendentes(portal)
-        except Exception:
+        except Exception as erro:
+            logger.warning("Não foi possível fechar as abas pendentes do UX (%s).", type(erro).__name__)
             pass  # Chrome busy or closed: the tabs stay listed for the next connection
 
     def _sessao(self, session_id: str, serial: str) -> Sessao:
@@ -322,7 +327,8 @@ class ChamadosUX:
                 raise ValueError()
             registro.update(os=os, estado="enviado")
             atomic_write_json(self._history, historico)
-        except Exception:
+        except Exception as erro:
+            logger.warning("Estado do envio ao UX ficou incerto (%s).", type(erro).__name__)
             return {"status": "incerto", "serial": serial, "mensagem": INCERTO}
         finally:
             self._fechar(portal, sessao.aba)  # the session is over, whatever the outcome; never clicks again

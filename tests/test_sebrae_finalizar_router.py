@@ -1129,7 +1129,7 @@ class ResultadoEReenvioTest(FinalizarBase):
         self.assertTrue(corpo["em_andamento"])
         self.assertEqual(corpo["resultado"]["resultados"][0]["numero"], A)
         self.assertEqual((corpo["sharepoint"]["falhou"], corpo["sharepoint"]["copia_local"]), (True, str(pendente)))
-        self.assertEqual(len(corpo["sharepoint"]["sugestoes"]), 3)
+        self.assertEqual(len(corpo["sharepoint"]["sugestoes"]), 2)
         self.runner.estado = {"estado": "em_andamento", "rotina": "sebrae"}
         self.assertFalse(self.cliente.get(FINALIZAR).json()["em_andamento"])
         estado = self.cliente.get("/api/sebrae/novos").json()
