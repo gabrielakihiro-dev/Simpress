@@ -15,7 +15,8 @@ from core.errors import DomainBusyError, DomainError
 from core.logging_setup import redact_reference
 from domains import ticket_import
 from domains.alias_changes import validate_equipment_serial
-from domains.equipment_dossier import build_os_section, empty_os_section
+from domains import equipment_dossier
+from domains.equipment_dossier import DossierSources, build_os_section, build_timeline, empty_os_section
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.history_annotations import (
     MAX_ANNOTATION_LENGTH,
@@ -56,6 +57,76 @@ from core.integrity import AtomicFileTransaction, FileBusyError, FileTransaction
 
 
 logger = logging.getLogger(__name__)
+
+
+class _Out(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class DossieMudanca(_Out):
+    campo: Any = None
+    anterior: Any = None
+    atual: Any = None
+
+
+class DossieEventoOs(_Out):
+    atualizado_em: str
+    tipo: str
+    mudancas: List[DossieMudanca]
+
+
+class DossieHistoricoOs(_Out):
+    titulo: str
+    eventos: List[DossieEventoOs]
+    total: int
+
+
+class DossieUtic(_Out):
+    chamado: str
+    origem: str
+
+
+class DossieOrdem(_Out):
+    fonte: str
+    serie: str
+    os: str
+    status: str
+    fila: str
+    dias_aberta: Optional[int]
+    utic: Optional[DossieUtic]
+
+
+class DossieOs(_Out):
+    estado: str
+    mensagem: str
+    total_importacoes: int
+    ultima_importacao_em: str
+    presente_na_ultima: bool
+    ultima_vez_observada_em: Optional[str]
+    ordens: List[DossieOrdem]
+    historico: DossieHistoricoOs
+
+
+class DossieEvento(_Out):
+    quando: str
+    so_data: bool
+    tipo: Literal["apelido_usuario", "transferencia", "os", "sebrae", "cobertura"]
+    titulo: str
+    detalhes: List[str]
+
+
+class DossieLinhaDoTempo(_Out):
+    eventos: List[DossieEvento]
+    total: int
+    limite: int
+    indisponiveis: List[str]
+
+
+class Dossie(_Out):
+    serie: str
+    modelo: str
+    os: DossieOs
+    linha_do_tempo: DossieLinhaDoTempo
 
 
 class TicketTimelineAnnotationPayload(BaseModel):
@@ -139,12 +210,14 @@ def create_operations_router(
     ticket_os_marks_file: Optional[Callable[[], Path]] = None,
     ticket_os_marks_sources: Optional[Callable[[], FontesMarcas]] = None,
     equipment_header: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None,
+    dossier_sources: Optional[DossierSources] = None,
 ):
     """Build the operations routes; ``ticket_import_services`` shares the import with the inbox.
 
     ``dashboard_vinculos(report)`` proposes links derived from the Sebrae Dashboard (``origem: "dashboard"``).
     ``ticket_os_marks_sources()`` gives what the server knows now for the marks of finalized OS (``FontesMarcas``).
-    ``equipment_header(serial)`` gives ``{"serie", "modelo"}`` of a registered equipment, else ``None`` (dossier route)."""
+    ``equipment_header(serial)`` gives ``{"serie", "modelo"}`` of a registered equipment, else ``None`` (dossier route).
+    ``dossier_sources`` reads the other sources of the dossier timeline (none wired = no events from them)."""
     router = APIRouter()
 
     @router.get("/api/operacoes/pendencias")
@@ -453,9 +526,26 @@ def create_operations_router(
             raise HTTPException(status_code=404, detail="Não há histórico para esta série.")
         return {"serie": events[-1]["serie"], "eventos": events, "total": len(events)}
 
-    @router.get("/api/equipamento/{serial}/dossie")
+    def dossier_source(kind: str, read: Optional[Callable[[], Any]], missing: List[str]) -> List[Any]:
+        """Events of one source; a failure marks it in ``missing`` and never reaches the others (log: key and error type)."""
+        try:
+            return read() if read else []
+        except Exception as error:  # noqa: BLE001 - never log source data
+            logger.warning("Dossiê do equipamento: fonte %s indisponível (%s).", kind, type(error).__name__)
+            missing.append(kind)
+            return []
+
+    def dossier_links() -> List[Dict[str, Any]]:
+        """Every link of the series' tickets: manual, finalização and Dashboard (a failure propagates)."""
+        manual = read_ticket_os_links(ticket_os_links_path())["vinculos"]
+        marked: List[Dict[str, Any]] = []
+        if ticket_os_marks_file is not None:
+            marked = vinculos_da_finalizacao(ler_marcas(ticket_os_marks_path(), ticket_os_marks_fontes()), load_ticket_report())
+        return [*manual.values(), *marked, *derived_ticket_os_links(manual)]
+
+    @router.get("/api/equipamento/{serial}/dossie", response_model=Dossie)
     def get_equipment_dossier(serial: str):
-        """Read-only: header from the registry plus the OS section; the order of the checks is part of the contract."""
+        """Read-only: header from the registry, the OS section and the timeline; the order of the checks is part of the contract."""
         try:
             clean_serial = validate_equipment_serial(serial)
         except ValueError as error:
@@ -474,7 +564,25 @@ def create_operations_router(
         except HTTPException as error:
             logger.warning("Dossiê do equipamento: fonte de OS indisponível (HTTP %s).", error.status_code)
             section = empty_os_section("indisponivel")
-        return {"serie": header["serie"], "modelo": header["modelo"], "os": section}
+        key = equipment_dossier.series_key(clean_serial)
+        src = dossier_sources or DossierSources()
+        apelidos, transferencias, cobertura, encerrados = src.apelidos, src.transferencias, src.cobertura, src.sebrae_encerrados
+        missing: List[str] = []
+        sources: Dict[str, Optional[List[Any]]] = {
+            "apelido_usuario": dossier_source("apelido_usuario", (
+                lambda: equipment_dossier.alias_user_events(apelidos(), key)) if apelidos else None, missing),
+            "transferencia": dossier_source("transferencia", (
+                lambda: equipment_dossier.transfer_events(transferencias(), key)) if transferencias else None, missing),
+            "os": equipment_dossier.os_events(section),
+            "sebrae": dossier_source("sebrae", lambda: equipment_dossier.sebrae_events(
+                dossier_links(), encerrados() if encerrados else None, key), missing),
+            "cobertura": dossier_source("cobertura", (
+                lambda: equipment_dossier.coverage_events(*cobertura(), key)) if cobertura else None, missing),
+        }
+        if section["estado"] == "indisponivel":
+            missing.append("os")
+        timeline = build_timeline({kind: None if kind in missing else events for kind, events in sources.items()})
+        return {"serie": header["serie"], "modelo": header["modelo"], "os": section, "linha_do_tempo": timeline}
 
     @router.put("/api/operacoes/chamados/linha-do-tempo/{event_id}/{item_id}")
     def save_ticket_timeline_annotation(event_id: str, item_id: str, payload: TicketTimelineAnnotationPayload):

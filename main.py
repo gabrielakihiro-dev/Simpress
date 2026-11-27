@@ -112,7 +112,9 @@ from routers.coverage import CoverageServices, create_coverage_router
 from domains.coverage_store import CoberturaStore, EstadoIlegivel as CoberturaIlegivel, manutencao_dos_chamados
 from routers.backups_regionais import BackupsRegionaisServices, create_backups_regionais_router, ler_painel_backups
 from routers.dashboard import DashboardServices, create_dashboard_router
+from domains.equipment_dossier import DossierSources
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
+from routers.transfer_history import read_history as read_transfer_history
 from routers.local_setup import create_local_setup_router
 from routers.configuracao_local import create_configuracao_local_router
 from routers.pacote_local import create_pacote_local_router
@@ -245,6 +247,7 @@ from routers.assistant import AssistantRouteServices, create_assistant_router
 from routers.automation import AutomationRouteServices, create_automation_router
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos, sebrae_finalizacao, sebrae_os_recusadas, os_marcas_finalizacao
+from domains import sebrae_arquivo
 from domains.chrome_automation import ChromeAutomationRunner, default_contract
 from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
 from domains.dashboard_agendamento import AgendadorDashboard
@@ -2255,6 +2258,20 @@ def _equipment_dossier_header(serial: str) -> Optional[Dict[str, Any]]:
         return None if equipment is None else {"serie": clean_serial, "modelo": str(equipment.get("modelo") or "")}
 
 
+def _dossier_sources() -> DossierSources:
+    """Reads of the other timeline sources of the dossier; the history of transfers comes raw (no ``nome_pessoa``)."""
+    def coverage() -> Any:
+        store = CoberturaStore(COVERAGE_FILE, COVERAGE_ARCHIVE_FILE, TRANSACTION_ROOT)
+        return store.ler(), store.ler_arquivados()
+
+    return DossierSources(
+        apelidos=load_alias_history,
+        transferencias=lambda: read_transfer_history(TRANSFER_HISTORY_FILE),
+        cobertura=coverage,
+        sebrae_encerrados=lambda: sebrae_arquivo.ler(sebrae_novos.caminho_arquivo(sebrae_novos.caminhos_padrao(STATE_DIR))),
+    )
+
+
 operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=_inventory_history_exports.history_annotation_view,
@@ -2271,6 +2288,7 @@ operations_router = create_operations_router(
     ticket_os_marks_file=lambda: os_marcas_finalizacao.caminho_marcas(STATE_DIR),
     ticket_os_marks_sources=_marcas_fontes,
     equipment_header=_equipment_dossier_header,
+    dossier_sources=_dossier_sources(),
 )
 app.include_router(operations_router)
 
