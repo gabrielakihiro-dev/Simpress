@@ -186,9 +186,9 @@ async def _asgi_call(
     headers: List[Tuple[bytes, bytes]] = [
         (b"host", f"127.0.0.1:{port}".encode("ascii")),
         (b"accept", b"application/json"),
-        # Same process as the server, so this SEGREDO is the live one (security/sessao_local.py).
-        (b"cookie", sessao_local.cabecalho_cookie(port).encode("ascii")),
     ]
+    # Same process as the server, so this SEGREDO is the live one (security/sessao_local.py).
+    headers += [(nome.lower().encode("ascii"), valor.encode("ascii")) for nome, valor in sessao_local.cabecalhos_sessao(port).items()]
     if tipo_corpo:
         headers += [(b"content-type", tipo_corpo.encode("ascii")), (b"content-length", str(len(payload)).encode("ascii"))]
     scope = {

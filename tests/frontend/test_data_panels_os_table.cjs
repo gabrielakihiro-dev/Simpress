@@ -41,35 +41,36 @@ const win = {
   showToast: (mensagem, tipo) => { toasts.push([mensagem, tipo]); },
   getComputedStyle: () => ({ display: "" }),
   console: { warn() {} },
-  fetch: async (url, options = {}) => {
-    requests.push([options.method || "GET", url]);
-    if (url === "/api/equipamentos/usuarios-logados") corposUsuarios.push(JSON.parse(options.body));
-    if (falhar) throw new Error("Failed to fetch");
-    if (url === "/api/operacoes/chamados/observacoes") {
-      if (options.method === "PUT") {
-        const body = JSON.parse(options.body);
-        putsObs.push(body);
-        return { ok: true, json: async () => ({ ...body, observacao: body.observacao.trim(), atualizado_em: "2026-11-07T10:00:00-03:00" }) };
-      }
-      return { ok: observacoes !== null, json: async () => (observacoes ? { observacoes } : { detail: "Falha" }) };
-    }
-    if (url === "/api/operacoes/chamados/marcas-finalizacao") {
-      if (options.method === "PUT") {
-        const body = JSON.parse(options.body);
-        putsMarcas.push(body);
-        if (falhaMarca) return { ok: false, status: falhaMarca.status, json: async () => ({ detail: falhaMarca.detail }) };
-        return { ok: true, json: async () => ({ marca: body }) };
-      }
-      return { ok: marcas !== null, json: async () => (marcas ? { marcas } : { detail: "Falha" }) };
-    }
-    const json = url === "/api/operacoes/chamados" ? report
-      : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos }
-      : url === "/api/equipamentos/usuarios-logados" ? { usuarios }
-      : null;
-    return { ok: json !== null, json: async () => json || {} };
-  },
 };
 doc.dispatchEvent = evento => { eventos.push(evento.type); return true; };
+// tabela-os.ts e paineis.ts pedem por apiFetch (api.ts), que usa o fetch global.
+globalThis.fetch = async (url, options = {}) => {
+  requests.push([options.method || "GET", url]);
+  if (url === "/api/equipamentos/usuarios-logados") corposUsuarios.push(JSON.parse(options.body));
+  if (falhar) throw new Error("Failed to fetch");
+  if (url === "/api/operacoes/chamados/observacoes") {
+    if (options.method === "PUT") {
+      const body = JSON.parse(options.body);
+      putsObs.push(body);
+      return { ok: true, json: async () => ({ ...body, observacao: body.observacao.trim(), atualizado_em: "2026-11-07T10:00:00-03:00" }) };
+    }
+    return { ok: observacoes !== null, json: async () => (observacoes ? { observacoes } : { detail: "Falha" }) };
+  }
+  if (url === "/api/operacoes/chamados/marcas-finalizacao") {
+    if (options.method === "PUT") {
+      const body = JSON.parse(options.body);
+      putsMarcas.push(body);
+      if (falhaMarca) return { ok: false, status: falhaMarca.status, json: async () => ({ detail: falhaMarca.detail }) };
+      return { ok: true, json: async () => ({ marca: body }) };
+    }
+    return { ok: marcas !== null, json: async () => (marcas ? { marcas } : { detail: "Falha" }) };
+  }
+  const json = url === "/api/operacoes/chamados" ? report
+    : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos }
+    : url === "/api/equipamentos/usuarios-logados" ? { usuarios }
+    : null;
+  return { ok: json !== null, json: async () => json || {} };
+};
 panels.install(win);
 
 const settle = () => new Promise(resolve => setImmediate(resolve));

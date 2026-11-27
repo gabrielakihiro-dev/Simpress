@@ -2567,16 +2567,19 @@ def serve_favicon():
 
 @app.get("/bootstrap", include_in_schema=False)
 def bootstrap_session(t: str = ""):
-    """Turn the launcher's per-boot secret into the session cookie that /api/* requires."""
+    """Turn the launcher's per-boot secret into the session cookie and header value that /api/* requires."""
     if not sessao_local.valido(t):
         return JSONResponse(
             status_code=403,
             content={"detail": "Link de abertura inválido. Abra o Simpress pelo iniciar_servidor.bat."},
             headers={"Cache-Control": "no-store"},
         )
-    response = RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store"})
+    # The fragment never reaches the server or the Referer; api.ts moves it to localStorage and clears the bar.
+    response = RedirectResponse(
+        f"/#sessao={sessao_local.cabecalho_derivado()}", status_code=303, headers={"Cache-Control": "no-store"}
+    )
     response.set_cookie(
-        sessao_local.nome_cookie(SERVER_PORT), sessao_local.SEGREDO,
+        sessao_local.nome_cookie(SERVER_PORT), sessao_local.cookie_derivado(),
         httponly=True, samesite="strict", path="/",
     )
     return response

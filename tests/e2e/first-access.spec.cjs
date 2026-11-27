@@ -229,3 +229,83 @@ test("Cadastrar regionais abre o painel Catálogo de unidades com o formulário 
   await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
   expect(errors).toEqual([]);
 });
+
+// Links do Endpoint (data-endpoint-tela, frontend/src/comum/links-endpoint.ts): /api/* exige o X-Simpress-Sessao, que um
+// <a href> não leva; o clique pede a URL por apiFetch e abre a aba externa. Só dados sintéticos (exemplo.invalid).
+// Os links da Comparação usam o mesmo atributo e ficam cobertos pelo teste estático (tests/frontend/test_api_so_por_apifetch.cjs).
+const ENDPOINT_EXTERNO = "https://exemplo.invalid/webclient#/uems/inventory/computers";
+const SESSAO = "a".repeat(64);
+
+async function abrirModalPlanilhas(page) {
+  await page.evaluate(() => abrirModalAtualizarPlanilhas());
+  const modal = page.locator("#modal-atualizar-planilhas");
+  await expect(modal).toBeVisible();
+  return modal.getByRole("link", { name: "Abrir inventário de computadores do Endpoint Central" });
+}
+
+test("o bundle guarda #sessao= e manda X-Simpress-Sessao em todo pedido /api/", async ({ page }) => {
+  const pedidos = [];
+  page.on("request", pedido => {
+    if (new URL(pedido.url()).pathname.startsWith("/api/")) pedidos.push(pedido.headers()["x-simpress-sessao"]);
+  });
+  await page.goto(`/#sessao=${SESSAO}`);
+  await expect.poll(() => pedidos.length).toBeGreaterThan(0);
+  expect(new URL(page.url()).hash).toBe("");
+  // Gravado só depois de um /api/* 2xx com o valor (a fixture responde 200).
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("simpress_sessao"))).toBe(SESSAO);
+  expect(pedidos.every(valor => valor === SESSAO)).toBe(true);
+  // Recarregar sem o fragmento continua mandando o valor guardado (outra aba ou F5).
+  pedidos.length = 0;
+  await page.goto("/");
+  await expect.poll(() => pedidos.length).toBeGreaterThan(0);
+  expect(pedidos.every(valor => valor === SESSAO)).toBe(true);
+});
+
+test("o link Endpoint do modal abre a aba no clique e a leva à URL pedida ao servidor", async ({ page }) => {
+  const pedidos = [];
+  await page.route("**/api/config/local/endpoint/*", async route => {
+    pedidos.push([new URL(route.request().url()).pathname, route.request().headers()["x-simpress-sessao"]]);
+    // A aba já existe antes da resposta: um servidor lento não faz o navegador tratá-la como pop-up.
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return route.fulfill({ json: { url: ENDPOINT_EXTERNO } });
+  });
+  await page.context().route("https://exemplo.invalid/**", route => route.fulfill({ contentType: "text/html", body: "<title>externo</title>" }));
+  await page.goto(`/#sessao=${SESSAO}`);
+  const link = await abrirModalPlanilhas(page);
+  await expect(link).toHaveAttribute("data-endpoint-tela", "computadores");
+  await expect(link).toHaveAttribute("href", "#");
+  const urlAntes = page.url();
+  for (const botao of ["left", "middle"]) {
+    const aba = page.context().waitForEvent("page");
+    await link.click({ button: botao });
+    const nova = await aba;
+    await nova.waitForURL(ENDPOINT_EXTERNO);
+    expect(await nova.evaluate(() => window.opener)).toBeNull();
+  }
+  expect(pedidos).toEqual([["/api/config/local/endpoint/computadores", SESSAO], ["/api/config/local/endpoint/computadores", SESSAO]]);
+  expect(page.url()).toBe(urlAntes);
+  // Só as duas abas externas: o clique do meio não abriu o /# do Simpress.
+  expect(page.context().pages()).toHaveLength(3);
+});
+
+test("falha ao pedir a URL do Endpoint fecha a aba aberta e vira aviso, sem navegar", async ({ page }) => {
+  await page.route("**/api/config/local/endpoint/*", route => route.fulfill({ status: 401, json: { detail: "Sessão local ausente ou expirada. Abra o Simpress pelo iniciar_servidor.bat." } }));
+  await page.goto("/");
+  const urlAntes = page.url();
+  const aba = page.context().waitForEvent("page");
+  await (await abrirModalPlanilhas(page)).click();
+  const nova = await aba;
+  await expect(page.locator("#toast-container")).toContainText("Sessão local ausente ou expirada");
+  await expect.poll(() => nova.isClosed()).toBe(true);
+  expect(page.url()).toBe(urlAntes);
+});
+
+test("com a nova aba bloqueada pelo navegador, o link do Endpoint avisa e não pede a URL", async ({ page }) => {
+  let pedidos = 0;
+  await page.route("**/api/config/local/endpoint/*", route => { pedidos += 1; return route.fulfill({ json: { url: ENDPOINT_EXTERNO } }); });
+  await page.addInitScript(() => { window.open = () => null; });
+  await page.goto("/");
+  await (await abrirModalPlanilhas(page)).click();
+  await expect(page.locator("#toast-container")).toContainText("Não foi possível abrir o Endpoint Central.");
+  expect(pedidos).toBe(0);
+});

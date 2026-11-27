@@ -604,6 +604,10 @@ export type LimpezaPayload = {
   "confirmado"?: boolean;
 };
 
+export type LinkEndpoint = {
+  "url": string;
+};
+
 export type ListaLembretes = {
   "lembretes": Lembrete[];
 };
@@ -1460,7 +1464,7 @@ export interface Rotas {
   "GET /api/config/local/endpoint/{tela}": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: LinkEndpoint;
   };
   "GET /api/config/representantes-regionais": {
     consulta: never;

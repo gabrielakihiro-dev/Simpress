@@ -75,7 +75,7 @@ function DialogoAtualizar({ casca, limparPrevia }: { casca: HTMLElement; limparP
         </div>
         <div className="ckp-cab__acoes">
           <nav className="ckp-sistemas" aria-label="Acessar sistemas de origem das planilhas">
-            <a className="ckp-sistema" href="/api/config/local/endpoint/computadores" target="_blank" rel="noopener noreferrer" aria-label="Abrir inventário de computadores do Endpoint Central"><svg className="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external" /></svg>Endpoint</a>
+            <a className="ckp-sistema" href="#" data-endpoint-tela="computadores" aria-label="Abrir inventário de computadores do Endpoint Central"><svg className="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external" /></svg>Endpoint</a>
             <a className="ckp-sistema" href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" aria-label="Abrir Meus Equipamentos da Simpress"><svg className="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external" /></svg>Simpress</a>
           </nav>
           <button type="button" className="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharModalAtualizarPlanilhas" aria-label="Fechar (Esc)"><svg className="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x" /></svg></button>

@@ -1,5 +1,6 @@
 // Ações dos termos de entrega e devolução: abas, leitura do formulário, PDF pela janela de impressão, limpar e
 // preencher (pelo lembrete e pela busca de série da Home). Os campos têm dado pessoal: nada vai para log nem storage.
+import { urlDeBlobDaApi } from "../../comum/baixar-api";
 import { avisar as avisarToast, formVazio, interno, ler, mudar, mudarAgora, porId, type AbaPainel, type FormTermo } from "./estado";
 import { TERMOS, termosDadosDoLembrete, termosLimparParte, termosNomeArquivo, type DadosTermo, type NomeTermo } from "./termos-puro";
 import { appAntigo, type EventoTecla, type Registro } from "./tipos";
@@ -76,22 +77,34 @@ export function lerValidado(termo: string): DadosTermo | null {
 }
 
 // Carrega a assinatura numa <img> fora da página; qualquer falha (404, 422, imagem inválida, tempo) devolve null
-// e o PDF sai como antes, com a linha em branco.
+// e o PDF sai como antes, com a linha em branco. Vem como blob: um <img src=/api/...> não leva o X-Simpress-Sessao.
 async function carregarAssinatura(): Promise<HTMLImageElement | null> {
   const img = document.createElement("img");
   img.className = "tp__assinatura-img";
   img.alt = "";
-  img.src = URL_ASSINATURA;
+  const controle = new AbortController();
   let relogio: ReturnType<typeof setTimeout> | undefined;
   try {
     const limite = new Promise<never>((_, rejeitar) => { relogio = setTimeout(rejeitar, TEMPO_ASSINATURA_MS); });
-    await Promise.race([img.decode(), limite]);
+    const carga = async () => {
+      img.src = await urlDeBlobDaApi(URL_ASSINATURA, controle.signal);
+      // Chegou depois dos 3 s: a impressão já seguiu sem a imagem, então só libera o blob.
+      if (controle.signal.aborted) return liberarAssinatura(img);
+      await img.decode();
+    };
+    await Promise.race([carga(), limite]);
     return img;
   } catch {
+    controle.abort();
+    liberarAssinatura(img);
     return null;
   } finally {
     clearTimeout(relogio);
   }
+}
+
+function liberarAssinatura(img: HTMLImageElement | null) {
+  if (img?.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
 }
 
 // lerAgora é chamado antes e depois da espera pela assinatura; aoFalhar recebe a mensagem de erro.
@@ -101,10 +114,10 @@ async function imprimirTermo(termo: string, lerAgora: () => DadosTermo | null, a
   if (!lerAgora()) return;
   const pedido = (interno.pdfPendente = { termo });
   const assinatura = await carregarAssinatura();
-  if (interno.pdfPendente !== pedido) return;
+  if (interno.pdfPendente !== pedido) return liberarAssinatura(assinatura);
   interno.pdfPendente = null;
   const dados = lerAgora();
-  if (!dados) return;
+  if (!dados) return liberarAssinatura(assinatura);
   const serie = dados.campos[TERMOS[termo].campoSerie];
   interno.encerrarImpressao?.();
   const tituloOriginal = document.title;
@@ -114,6 +127,7 @@ async function imprimirTermo(termo: string, lerAgora: () => DadosTermo | null, a
     mudarAgora({ folha: null });
     alvo.hidden = true;
     document.title = tituloOriginal;
+    liberarAssinatura(assinatura);
     if (interno.encerrarImpressao === encerrar) interno.encerrarImpressao = null;
   };
   interno.encerrarImpressao = encerrar;

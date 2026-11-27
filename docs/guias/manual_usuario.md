@@ -63,6 +63,13 @@ Sem algum desses arquivos o sistema abre normalmente; só as funções que depen
 4. Quando o servidor estiver pronto, o navegador abre o Simpress sozinho (o terminal mostra a linha **`Site: http://127.0.0.1:8000`**). Se a porta 8000 estiver ocupada, o iniciador usa outra (entre 8001 e 8099). Abra o Simpress sempre pelo `iniciar_servidor.bat`: digitar o endereço à mão em outro navegador mostra **"Sessão local ausente ou expirada"**, porque só o navegador aberto pelo iniciador recebe a sessão local (ela muda a cada início do servidor).
 5. **Deixe a janela preta (terminal) aberta** enquanto usa o sistema. Para encerrar, volte a ela e pressione `Ctrl+C`.
 
+**Sessão local (26/11/2026):**
+
+- Ao abrir pelo `.bat`, a barra de endereço mostra por um instante `/#sessao=…` e logo volta a `http://127.0.0.1:<porta>/`. É normal: a página guarda esse valor e o apaga da barra.
+- Se você limpar os "dados do site" (ou cookies e armazenamento) do Simpress no navegador, a tela passa a mostrar "Sessão local ausente ou expirada", mesmo com o navegador aberto. Abra de novo pelo `iniciar_servidor.bat`.
+- Downloads como o relatório do Assistente, a cópia do Dashboard do Sebrae e os nomes do Entra (**Baixar XLSX compacto**) baixam sem sair da página; se falharem, aparece um aviso na tela, em vez de uma página de erro.
+- Para quem desenvolve: com `SIMPRESS_ENABLE_DOCS=1`, o "Try it out" do `/docs` responde 401, porque ele não manda o cabeçalho da sessão.
+
 **Como confirmar:** a página do Simpress carrega no navegador. Se o Simpress já estava aberto, o iniciador apenas abre a instância existente, sem iniciar uma segunda cópia.
 
 **Primeiro acesso:** a base começa vazia, com a mensagem **Base ainda não importada**. Isso é esperado; siga a seção 4.

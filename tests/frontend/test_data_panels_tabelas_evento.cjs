@@ -35,8 +35,9 @@ const win = {
   CustomEvent: class { constructor(type) { this.type = type; } },
   getComputedStyle: () => ({ display: "" }),
   console: { warn() {} },
-  fetch: async () => ({ ok: false, json: async () => ({}) }),
 };
+// tabela-os.ts e paineis.ts pedem por apiFetch (api.ts), que usa o fetch global.
+globalThis.fetch = async () => ({ ok: false, json: async () => ({}) });
 panels.install(win);
 
 function el(tag, className, text) {

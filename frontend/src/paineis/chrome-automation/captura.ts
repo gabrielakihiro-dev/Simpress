@@ -1,5 +1,6 @@
 // Diálogo "Ampliar captura" da falha de uma execução. Fica fora do React de propósito: o <dialog> é criado uma vez
 // no <body> (ids automacao-captura-*) e reaproveitado, como no módulo antigo.
+// url: endereço blob: já carregado por componentes.tsx (um <img src=/api/...> não leva o X-Simpress-Sessao).
 export interface Captura { nome: string; url: string }
 
 function criar<K extends keyof HTMLElementTagNameMap>(tag: K, classe: string, texto = ""): HTMLElementTagNameMap[K] {

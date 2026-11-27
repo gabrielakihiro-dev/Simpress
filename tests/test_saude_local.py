@@ -134,9 +134,9 @@ class SaudeLocalBase(unittest.TestCase):
         return app
 
     def _cliente(self, *, com_cookie: bool = True) -> TestClient:
-        cookies = {sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO} if com_cookie else None
+        headers = sessao_local.cabecalhos_sessao(main.SERVER_PORT) if com_cookie else None
         client = TestClient(self._app(), base_url=f"http://127.0.0.1:{main.SERVER_PORT}",
-                            client=("127.0.0.1", 1234), cookies=cookies)
+                            client=("127.0.0.1", 1234), headers=headers)
         self.addCleanup(client.close)
         return client
 

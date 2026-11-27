@@ -8,7 +8,7 @@ Fonte única das regras para agentes (Claude Code, Codex, Cursor e Antigravity);
 
 - FastAPI local: `main.py`, `routers/` (HTTP), `domains/` (regras), `core/`, `security/`, `scripts/` (rotinas e automação); front em `static/` (JS antigo) e React em migração (`frontend/src/`, gerado em `static/dist/`; plano `docs/planos/migracao-react-vite.md`).
 - Só local (exceção opt-in: `iniciar_servidor_celular.bat`, `docs/guias/acesso-celular.md`), dados em `data/`, sem backend remoto nem Supabase; migrar para serviço externo começa por análise que não altera código nem dados; preserve auditoria, sincronização, restauração e reversibilidade.
-- `/api/*` só responde com o cookie `simpress_sessao_<porta>`, criado por `GET /bootstrap?t=<segredo>` (`security/sessao_local.py`); sem ele, 401. Todo cliente interno novo precisa enviá-lo.
+- `/api/*` exige cookie `simpress_sessao_<porta>` e cabeçalho `X-Simpress-Sessao` (`GET /bootstrap?t=<segredo>`, `security/sessao_local.py`); sem eles, 401. Cliente interno: `cabecalhos_sessao`; front: só `apiFetch`.
 
 ## Regras gerais
 
