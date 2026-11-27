@@ -1536,7 +1536,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       }
     });
     // número, aria-label e data-zero de cada aba, selo de Destaques e resultado do filtro: abas.tsx
-    abasTela.atualizar({ abas, resultado: termo ? `${encontrados.size} chamado(s) encontrado(s)` : "" });
+    abasTela.atualizar({ abas, resultado: termo ? `${encontrados.size} chamado(s) encontrado(s)` : "", versao: abasTela.ler().versao + 1 });
     atualizarMestre();
   }
 

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useSyncExternalStore } from "react";
+import { Fragment, useLayoutEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { LojaAbas } from "./lojas";
 
@@ -8,10 +8,11 @@ import type { LojaAbas } from "./lojas";
 export interface AlvosAbas { abas: Record<string, { botao: HTMLElement; contagem: HTMLElement }>; resultado: HTMLElement }
 
 export function ContagensAbas({ alvos, loja }: { alvos: AlvosAbas; loja: LojaAbas }) {
-  const { abas, resultado } = useSyncExternalStore(loja.assinar, loja.ler);
+  const { abas, resultado, versao } = useSyncExternalStore(loja.assinar, loja.ler);
   useLayoutEffect(() => {
     if (!abas) return;
     for (const [aba, { botao }] of Object.entries(alvos.abas)) {
+      if (!abas[aba]) continue; // aba sem número na loja: o botão fica como estava
       const { n, rotulo } = abas[aba];
       botao.setAttribute("aria-label", rotulo);
       if (n) botao.removeAttribute("data-zero");
@@ -19,13 +20,14 @@ export function ContagensAbas({ alvos, loja }: { alvos: AlvosAbas; loja: LojaAba
     }
     // selo âmbar segue o número exibido na aba (com filtro, o que bateu), como no artefato aprovado
     const destaques = alvos.abas.destaques.contagem;
-    if (abas.destaques.n > 0) destaques.setAttribute("data-status", "alerta");
+    if ((abas.destaques?.n ?? 0) > 0) destaques.setAttribute("data-status", "alerta");
     else destaques.removeAttribute("data-status");
   }, [alvos, abas]);
   return (
     <>
-      {Object.entries(alvos.abas).map(([aba, { contagem }]) => createPortal(String(abas?.[aba].n ?? 0), contagem, aba))}
-      {createPortal(resultado, alvos.resultado)}
+      {Object.entries(alvos.abas).map(([aba, { contagem }]) => createPortal(String(abas?.[aba]?.n ?? 0), contagem, aba))}
+      {/* key nova a cada aplicarVisao: o texto da região role=status é trocado mesmo igual, como o textContent fazia */}
+      {createPortal(<Fragment key={versao}>{resultado}</Fragment>, alvos.resultado)}
     </>
   );
 }

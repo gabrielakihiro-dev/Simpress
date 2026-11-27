@@ -1723,7 +1723,6 @@ test("o botão do chamado novo alterna, chama o PUT e acende selo, classe e a ab
   const chamadas = [];
   const { el } = await renderizarCartoes(CARGA_CARTOES, null, chamadas);
   const secao = el["sebrae-destaques-lista"];
-  const aba = el["sebrae-aba-destaques"];
   const numero = "UTIC-2026-1378";
   const [botao] = botoesDestaque(el["sebrae-novos-lista"], numero);
   const [artigo] = artigosDe(numero);

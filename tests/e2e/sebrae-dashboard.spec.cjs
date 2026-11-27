@@ -1100,7 +1100,7 @@ test("destaque: marcar e tirar anuncia o resultado, acende e apaga a aba Destaqu
   await expect(contagem).toHaveText("1");
   await expect(contagem).toHaveAttribute("data-status", "alerta");
   await expect(abaDestaques).not.toHaveAttribute("data-zero", /.*/);
-  await expect(painel.locator("#sebrae-finalizados-contagem")).not.toHaveAttribute("data-status", /.*/); // o selo âmbar é só de Destaques
+  for (const aba of ["novos", "antigos", "finalizados"]) await expect(painel.locator(`#sebrae-${aba}-contagem`)).not.toHaveAttribute("data-status", /.*/); // o selo âmbar é só de Destaques
   // Novo layout: o botão "Recolher chamado" não aparece mais (a lista é o mestre). Em Destaques, fecha o item original (o `details` fica escondido) para o cartão morar só ali.
   await abaDestaques.click();
   await itemFinalizado.evaluate(no => { no.open = false; });
