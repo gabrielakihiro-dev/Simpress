@@ -174,6 +174,17 @@ Contagem de lembretes pendentes atrasados e de hoje, mostrada no sino; só núme
 _Evitar_: `alarme` ou `aviso nativo` (o sino não dispara alarme)
 _Regra_: [docs/operacao/alertas-os-divergencias.md, "7. Lembretes agendados"](./docs/operacao/alertas-os-divergencias.md)
 
+### Dados locais
+
+**Pacote local**:
+Arquivo `.zip` deste computador que junta configurações, históricos e planilhas atuais, para guardar ou levar para outra máquina (aprovado em 26/11/2026). Não inclui chaves, senhas nem registros de ações irreversíveis.
+_Evitar_: `backup` (colide com Backups (F3) e com as cópias `_backups` das importações)
+_Regra_: [docs/cockpit-prompts/19-configuracao-local.md, "Pacote local (aprovado em 26/11/2026)"](./docs/cockpit-prompts/19-configuracao-local.md)
+
+**Pacote de desfazer**:
+Pacote local que a própria restauração cria antes de gravar, com o estado de antes; restaurá-lo volta esse estado.
+_Regra_: [docs/cockpit-prompts/19-configuracao-local.md, "Pacote local (aprovado em 26/11/2026)"](./docs/cockpit-prompts/19-configuracao-local.md)
+
 ## Relações
 
 - EquipamentosDetalhes define quais equipamentos existem; InvAll e Endpoint só auxiliam hostname e comparação.

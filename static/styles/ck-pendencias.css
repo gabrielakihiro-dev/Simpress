@@ -215,3 +215,39 @@ select.ck-entrada { appearance: none; padding-right: 28px; background-image: lin
 /* Medidas que a referência escrevia inline; a CSP do projeto proíbe style="". */
 [data-ckp="campo-flex"] { flex: 1 1 220px; }
 [data-ckp="icone-22"] { width: 22px; height: 22px; }
+
+/* Pacote local (Configuração local): tabela rola dentro da caixa; cartões abaixo de 768 px. */
+.ckp-pacote__aviso { padding: 8px 12px; border: 1px solid var(--cor-alerta-fundo); border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-ui); line-height: 1.45; }
+.ckp-pacote__caixa { max-width: 100%; overflow-x: auto; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); }
+.ckp-pacote__tabela { width: 100%; border-collapse: collapse; font-size: var(--fs-ui); }
+.ckp-pacote__tabela th, .ckp-pacote__tabela td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--cor-borda-suave); vertical-align: middle; }
+.ckp-pacote__tabela th { color: var(--cor-texto-mudo); font-weight: var(--peso-medio); white-space: nowrap; }
+.ckp-pacote__tabela tbody tr:last-child td { border-bottom: 0; }
+.ckp-pacote__nome { overflow-wrap: anywhere; }
+.ckp-pacote__previa { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ckp-pacote__totais { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-ui); color: var(--cor-texto-suave); }
+.ckp-pacote__itens { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; font-size: var(--fs-ui); }
+.ckp-pacote__itens li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--cor-borda-suave); overflow-wrap: anywhere; }
+.ckp-pacote__acao-rotulo { flex: none; color: var(--cor-texto-mudo); }
+.ckp-pacote__itens li[data-acao="apagar"] .ckp-pacote__acao-rotulo { color: var(--cor-erro-texto); }
+.ckp-pacote__links { margin: 0; padding: 0 0 0 18px; font-size: var(--fs-ui); color: var(--cor-texto-suave); line-height: 1.5; }
+.ckp-pacote__links li, .ckp-pacote__invalidos { overflow-wrap: anywhere; }
+.ckp-pacote__detalhes { font-size: var(--fs-ui); color: var(--cor-texto-suave); }
+.ckp-pacote__detalhes summary { cursor: pointer; min-height: var(--altura-controle-sm); display: flex; align-items: center; }
+.ckp-pacote__detalhes p { margin: 6px 0 0; line-height: 1.5; }
+.ckp-pacote__previa:focus-within, .ckp-pacote__previa h4:focus { outline: none; }
+.ckp-pacote__previa h4:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .ckp-pacote__previa { animation: ck-surgir var(--duracao) var(--curva); }
+}
+@media (max-width: 767.98px) {
+  .ckp-pacote__caixa { border: 0; overflow: visible; }
+  .ckp-pacote__tabela, .ckp-pacote__tabela tbody, .ckp-pacote__tabela tr, .ckp-pacote__tabela td { display: block; }
+  .ckp-pacote__tabela thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .ckp-pacote__tabela tr { margin-bottom: 8px; padding: 6px 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+  .ckp-pacote__tabela td { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border: 0; }
+  .ckp-pacote__tabela td[data-rotulo]::before { content: attr(data-rotulo); flex: none; color: var(--cor-texto-mudo); }
+  .ckp-pacote__acao { padding-top: 8px; }
+  .ckp-pacote__btn { min-height: 44px; }
+  .ckp-pacote__acao .ckp-pacote__btn { width: 100%; }
+}

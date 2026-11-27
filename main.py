@@ -39,6 +39,7 @@ import core.config
 from core.errors import DomainBusyError, DomainError
 from core.config import (
     ALIAS_HISTORY_FILE,
+    APP_VERSION,
     AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS,
     AUTOMATIC_INVENTORY_INBOX_DIR,
     AUTOMATIC_TICKET_IMPORT_POLL_SECONDS,
@@ -116,6 +117,9 @@ from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_rout
 from routers.transfer_history import read_history as read_transfer_history
 from routers.local_setup import create_local_setup_router
 from routers.configuracao_local import create_configuracao_local_router
+from routers.pacote_local import create_pacote_local_router
+from domains import pacote_local as pacote_local_domain
+from domains.pacote_local import PacoteLocalServices
 from domains.monthly_report import sebrae_sources_from_state
 from routers.monthly_report import (
     MonthlyReportServices,
@@ -166,10 +170,12 @@ from domains.inventory_comparison import (
 from domains.inventory_inbox import (
     AutomaticInventoryInbox,
     automatic_inventory_import_worker as run_automatic_inventory_import_worker,
+    try_worker_lock as try_inventory_inbox_lock,
 )
 from domains.ticket_inbox import (
     AutomaticTicketInbox,
     automatic_ticket_import_worker as run_automatic_ticket_import_worker,
+    try_worker_lock as try_ticket_inbox_lock,
 )
 from domains.ticket_import import TicketImportServices, TicketWorkbookSource, import_ticket_workbooks
 from domains.history_annotations import (
@@ -1208,7 +1214,7 @@ API_DOCS_ENABLED = os.environ.get("SIMPRESS_ENABLE_DOCS", "").strip() == "1"
 app = FastAPI(
     title="Simpress Transferência de Equipamentos - SEBRAE/PR",
     description="Sistema inteligente para emissão automatizada de planilhas oficiais de transferência de equipamentos.",
-    version="1.3.0",
+    version=APP_VERSION,
     lifespan=lifespan,
     docs_url="/docs" if API_DOCS_ENABLED else None,
     redoc_url="/redoc" if API_DOCS_ENABLED else None,
@@ -2130,6 +2136,25 @@ app.include_router(create_configuracao_local_router(
     env_file=lambda: BASE_DIR / ".env",
     backups_directory=lambda: STATE_DIR / "config_backups",
 ))
+app.include_router(create_pacote_local_router(PacoteLocalServices(
+    base_dir=lambda: BASE_DIR,
+    arquivo_config=lambda: BASE_DIR / "config" / "pacote_local.json",
+    app_version=APP_VERSION,
+    max_upload_bytes=MAX_UPLOAD_BYTES,
+    inventory_state_transaction=lambda targets: inventory_state_transaction(targets),
+    load_database=lambda **kwargs: load_database(**kwargs),
+    publish_database_state=lambda state: publish_database_state(state),
+    validate_uploaded_workbook=lambda data, role: validate_uploaded_workbook(data, role),
+    # Same test as the idle-close: a run started by the site or outside it (lock file of the routines script).
+    automacao_em_andamento=lambda: endpoint_lookup_domain.automation.ler_trava() is not None or _automation_run_starting(),
+    upload_admission=lambda: UPLOAD_ADMISSION,
+    travas_importacao=lambda: [
+        try_inventory_inbox_lock(AUTOMATIC_INVENTORY_INBOX_DIR / ".importador.lock"),
+        try_ticket_inbox_lock(AUTOMATIC_TICKET_INBOX_DIR / ".importador.lock"),
+    ],
+    transacao_pendente=lambda: get_transaction_recovery_block() is not None,
+    estado_vazio=lambda: prepare_database_state({}, [], {}),
+)))
 
 inventory_history_router, _inventory_history_exports = create_inventory_history_router(InventoryHistoryServices(
     manual_aliases_by_serial=_manual_aliases_by_serial,
@@ -2382,7 +2407,9 @@ def get_chrome_automation_runner() -> ChromeAutomationRunner:
     global _chrome_automation_runner
     with _chrome_automation_runner_lock:
         if _chrome_automation_runner is None:
-            _chrome_automation_runner = ChromeAutomationRunner(default_contract(BASE_DIR, STATE_DIR, LOG_DIR))
+            _chrome_automation_runner = ChromeAutomationRunner(
+                default_contract(BASE_DIR, STATE_DIR, LOG_DIR), bloqueado=pacote_local_domain.RESTAURANDO.is_set,
+            )
         return _chrome_automation_runner
 
 

@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from pathlib import Path
 
 
+# Versão do app: FastAPI (main.py) e manifesto do Pacote local (domains/pacote_local.py).
+APP_VERSION = "1.3.0"
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 STATE_DIR = DATA_DIR / "state"
