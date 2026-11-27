@@ -261,7 +261,7 @@ Qualquer falha é 422 `Pacote recusado: <motivo>`, sem gravar nada. Motivos: `ma
 
 - A prévia devolve `links_alterados: [{rotulo, antes, depois}]` (vazia quando nada muda), só para contas, cliente, representantes e instruções do Assistente que seriam criados ou substituídos.
 - Links de `config/contas_automacao.json` (rótulos de `LINKS`): `antes` e `depois` são só o domínio (`urlsplit(...).hostname`, com `\` lido como `/`, como o Chrome faz; sem esquema, porta, caminho, query, usuário ou token); vazio ou inválido = `null`. Contas (rótulos de `CONTAS`), campos do cliente (`Contrato`, `CNPJ de faturamento`, `Séries dos notebooks do próprio cliente`), `Representantes regionais`, `Representantes regionais (padrão)` e `Instruções do Assistente`: só o rótulo, com `antes` e `depois` `null`. Nada disso vai para log.
-- Tela (texto proposto): lista abaixo do aviso aprovado; link `<rótulo>: <antes ou (vazio)> → <depois ou (vazio)>`; demais `<rótulo>: alterado`. Com `invalidos`: `Voltam exatamente como estavam, mesmo com conteúdo inválido: <nomes>.`
+- Tela (textos aprovados pelo usuário em 27/11/2026): lista abaixo do aviso aprovado; link `<rótulo>: <antes ou (vazio)> → <depois ou (vazio)>`; demais `<rótulo>: alterado`. Com `invalidos`: `Voltam exatamente como estavam, mesmo com conteúdo inválido: <nomes>.`
 
 ### Só neste computador
 
