@@ -118,6 +118,11 @@ const TABELA = {
       "removerChaveAssistenteConfiguracaoLocal",
     ],
   },
+  // Saúde local (Prontidão da base): ponte para o painel React em frontend/src/paineis/saude-local/.
+  saudeLocal: {
+    painel: "saude-local",
+    assincronas: ["abrirSaudeLocal", "fecharSaudeLocal", "atualizarSaudeLocal", "previaLimpezaSaudeLocal", "limparSaudeLocal", "baixarDiagnosticoSaudeLocal"],
+  },
   // Resumo (painel de ferramenta "comparacao"): ativos por regional, com filtro por categoria.
   // Migrado para React no Bloco 3 (piloto): o cartão vive em frontend/src/paineis/resumo-ativos/.
   // Chamado ao abrir o painel (cockpit-tool-panels espera por ele): como no cartão antigo, nunca rejeita.

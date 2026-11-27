@@ -316,3 +316,39 @@ select.nl-campo__inp { appearance: none; padding-right: 36px; background: var(--
 @keyframes nl-sobe { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes nl-gaveta { from { transform: translateX(100%); } to { transform: none; } }
 @keyframes nl-folha-sobe { from { transform: translateY(100%); } to { transform: none; } }
+
+/* ---------- 11. Saúde local (modal-saude-local; desenho aprovado em 26/11/2026) ---------- */
+.sl-corpo { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sl-secao__cab { flex-wrap: wrap; row-gap: 8px; }
+.sl-secao__cab .ck-btn { flex: none; }
+.sl-mono { font-family: var(--fonte-mono, ui-monospace, monospace); font-size: 12px; overflow-wrap: anywhere; }
+.sl-nome, .sl-bloco { display: block; overflow-wrap: anywhere; }
+.sl-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.sl-sub { margin: 0 0 6px; color: var(--nl-mut); font-size: 12px; font-weight: 500; }
+.sl-lista { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; color: var(--nl-tx2); font-size: 13px; overflow-wrap: anywhere; }
+.sl-lista li::before { content: "+"; margin-right: 6px; color: var(--nl-etx); font-weight: 600; }
+.sl-lista[data-tipo="nao"] li::before { content: "\2212"; color: var(--nl-rtx); }
+.sl-disco { display: grid; grid-template-columns: minmax(0, auto) minmax(120px, 1fr); align-items: center; gap: 16px; }
+.sl-disco__num { margin: 0; color: var(--nl-tx); font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.sl-trilho, .sl-barra { display: block; overflow: hidden; border-radius: 999px; background: var(--nl-card2); border: 1px solid var(--nl-bd); }
+.sl-trilho { height: 10px; }
+.sl-barra { height: 6px; margin-top: 6px; }
+.sl-trilho > span, .sl-barra > span { display: block; height: 100%; border-radius: inherit; background: rgb(var(--nl-i)); transform: scaleX(var(--sl-p, 0)); transform-origin: left; }
+.sl-detalhes > summary { cursor: pointer; margin-bottom: 8px; color: var(--nl-itx); font-size: 13px; }
+.sl-detalhes > summary:focus-visible { outline: 2px solid rgb(var(--nl-i)); outline-offset: 2px; border-radius: 6px; }
+.sl-aviso { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid rgba(var(--nl-ac), .4); border-radius: var(--nl-raio-tabela); background: rgba(var(--nl-ac), .08); color: var(--nl-tx); font-size: 13px; overflow-wrap: anywhere; --nl-ac: var(--nl-a); }
+.sl-aviso[data-tipo="ok"] { --nl-ac: var(--nl-e); }
+.sl-aviso[data-tipo="erro"] { --nl-ac: var(--nl-r); }
+.sl-aviso > span { color: var(--nl-mut); }
+.sl-totais { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; color: var(--nl-mut); font-size: 13px; }
+.sl-totais strong { color: var(--nl-tx); font-weight: 600; }
+@media (max-width: 639.98px) {
+  .sl-duas, .sl-disco { grid-template-columns: minmax(0, 1fr); }
+  .sl-secao__cab .ck-btn { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  #modal-saude-local .nl-tabela__lin { animation: nl-aparece 200ms var(--nl-curva) both; }
+  #modal-saude-local :is(.ck-badge, .sl-aviso) { animation: nl-aparece 200ms var(--nl-curva) both; }
+  #modal-saude-local :is(.sl-trilho, .sl-barra) > span { animation: nl-barra 700ms var(--nl-curva) 200ms both; }
+}
+@keyframes nl-barra { from { transform: scaleX(0); } to { transform: scaleX(var(--sl-p, 0)); } }

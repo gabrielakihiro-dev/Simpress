@@ -17,7 +17,7 @@ globalThis.localStorage = {
   setItem: (chave, valor) => armazenado.set(chave, String(valor)),
 };
 
-const { apiFetch } = require("../../frontend/src/api.ts");
+const { apiFetch, apiRota } = require("../../frontend/src/api.ts");
 
 function mockFetch(t) {
   const original = global.fetch;
@@ -50,6 +50,13 @@ test("mesma origem leva X-Simpress-Sessao; outra origem não", async t => {
   assert.equal(calls[1][1].headers.get("X-Simpress-Sessao"), VALOR);
   assert.equal(calls[2][1].headers, undefined);
   assert.deepEqual(calls[3][1].headers, { Accept: "application/json" });
+});
+
+test("apiRota com consulta continua levando X-Simpress-Sessao (passa pelo apiFetch)", async t => {
+  const calls = mockFetch(t);
+  await apiRota("GET /api/automacao/estado", { consulta: { offset: 3, arquivo: "x" } });
+  assert.equal(calls[0][0], "/api/automacao/estado?offset=3&arquivo=x");
+  assert.equal(calls[0][1].headers.get("X-Simpress-Sessao"), VALOR);
 });
 
 test("o valor é relido a cada pedido: um novo /bootstrap em outra aba vale na hora", async t => {

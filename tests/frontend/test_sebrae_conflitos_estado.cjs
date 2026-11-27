@@ -1,4 +1,4 @@
-// Conflitos de edição do Dashboard (F5): estado do painel React com a API falsa. O estado.ts importa o apiFetch em
+// Conflitos de edição do Dashboard (F5): estado do painel React com a API falsa. O estado.ts importa apiFetch e apiRota em
 // tempo de execução e guarda window ao carregar, então o teste redireciona "../../api" para uma API falsa
 // (module.registerHooks) e cria window antes do require. O estado do módulo é compartilhado entre os testes do
 // arquivo: cada um começa com uma lista vazia (reiniciar) e usa ids próprios.
@@ -16,7 +16,11 @@ Module.registerHooks({
   },
   load(url, contexto, proximo) {
     if (url === "simpress-teste:api") {
-      return { format: "module", shortCircuit: true, source: "export const apiFetch = (...argumentos) => globalThis.__apiFetchFalso(...argumentos);" };
+      return { format: "module", shortCircuit: true, source: [
+        "export const apiFetch = (...argumentos) => globalThis.__apiFetchFalso(...argumentos);",
+        // apiRota real: "MÉTODO /caminho" vira URL e method; aqui cai na mesma API falsa.
+        "export const apiRota = (rota, opcoes = {}) => { const [method, url] = rota.split(\" \"); return globalThis.__apiFetchFalso(url, { ...opcoes, method }); };",
+      ].join("\n") };
     }
     return proximo(url, contexto);
   },
