@@ -956,6 +956,18 @@ class PastasDoPacoteTests(PacoteLocalBase):
         self.assertIn("pacote_local: anexos do Sebrae fora (histórico de finalização ilegível)", "\n".join(logs.output))
         self.assertNotIn("UTIC", "\n".join(logs.output))
 
+    def test_falha_inesperada_ao_ler_chamados_deixa_so_os_anexos_fora(self):
+        self.gravar(ANEXO, PDF)
+        self.gravar(LEMBRETES, {"lembretes": []})
+        with mock.patch.object(sebrae_finalizacao, "abertos_nao_finalizados", side_effect=ValueError("UTIC-2026-1")):
+            with self.assertLogs("domains.pacote_local", level=logging.WARNING) as logs:
+                resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        with zipfile.ZipFile(self.pasta / resposta.json()["arquivo"]) as pacote:
+            self.assertEqual(set(pacote.namelist()), {"manifesto.json", LEMBRETES})
+        self.assertIn("pacote_local: anexos do Sebrae fora (ValueError)", "\n".join(logs.output))
+        self.assertNotIn("UTIC", "\n".join(logs.output))
+
     def test_anexo_grande_demais_sem_o_nome_na_mensagem(self):
         self.gravar(f"{ANEXOS}/UTIC-2026-1/Fulano Sintetico.pdf", PDF)
         self.montar(max_upload_bytes=10)

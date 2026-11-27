@@ -499,11 +499,12 @@ def _arquivos_das_pastas(base: Path) -> List[str]:
 
 def _sem_anexos_fechados(services: PacoteLocalServices, rels: List[str]) -> List[str]:
     """Na exportação, ``sebrae_anexos`` só leva PDF de chamado em aberto e não finalizado (``<numero>/...``). Histórico
-    de finalização ilegível: nenhum anexo vai, e o resto do pacote segue."""
+    de finalização ilegível (ou outra falha ao ler os chamados): nenhum anexo vai, e o resto do pacote segue."""
     try:
         abertos = services.chamados_sebrae_abertos()
-    except DomainBusyError:
-        logger.warning("pacote_local: anexos do Sebrae fora (histórico de finalização ilegível)")
+    except Exception as erro:  # noqa: BLE001 - um arquivo do Sebrae ruim não derruba o pacote inteiro
+        motivo = "histórico de finalização ilegível" if isinstance(erro, DomainBusyError) else type(erro).__name__
+        logger.warning("pacote_local: anexos do Sebrae fora (%s)", motivo)
         abertos = frozenset()
 
     def entra(rel: str) -> bool:

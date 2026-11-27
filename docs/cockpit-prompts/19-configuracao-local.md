@@ -326,7 +326,7 @@ Nota: a tupla `FORA` existe para documentar. A inclusão no pacote é decidida s
 
 - O conteúdo do pacote fica em memória durante a validação (até 300 MB). Se os pacotes crescerem, trocar por releitura do zip.
 - Um PDF atual inválido de chamado em aberto bloqueia a exportação com `conteúdo inválido em anexo do Sebrae`, e a mensagem não diz qual é o arquivo.
-- Histórico de finalização (`sebrae_finalizacao.json`) ilegível: o pacote sai sem nenhum PDF de chamado, sem aviso na tela. O aviso vai só ao log do servidor, com texto fixo e sem número de chamado.
+- Histórico de finalização (`sebrae_finalizacao.json`) ilegível, ou outra falha ao ler os chamados em aberto: o pacote sai sem nenhum PDF de chamado, sem aviso na tela. O aviso vai só ao log do servidor, com texto fixo (ou só o tipo do erro) e sem número de chamado.
 - Os logs de falha de limpeza e recuperação de `core/integrity.py` podem levar o nome de um PDF criado na restauração.
 - Restaurar não devolve marcas de ações irreversíveis: o que ficou de fora continua como está hoje. Depois de restaurar, confira o Sebrae e a OS antes de agir.
 - Os tipos da tela vêm de `frontend/src/api-tipos.gerado.d.ts` (`PacoteLocal*`); regenere com `python scripts/gerar_tipos_api.py` ao mudar o contrato.
