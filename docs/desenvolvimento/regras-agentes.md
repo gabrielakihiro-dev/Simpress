@@ -153,6 +153,37 @@ Quando o usuário pedir um prompt para analisar ou melhorar algo no sistema, sig
 - Como usar: suba o `ui-fixture` e peça "use a skill playwright-teste" (fluxo em `.claude/skills/playwright-teste`).
 - LGPD: aponte só para a fixture em `127.0.0.1:8765`, nunca para o app real; os snapshots do navegador vão ao modelo e poderiam levar dado pessoal.
 
+## Capturas de referência win32 (Playwright)
+
+- Quando: PR que muda uma tela de propósito e a CI ui-browser falha só em `*-win32.png`. A sessão na nuvem roda em Linux e não gera win32: peça ao usuário o nome do spec e a lista de capturas esperadas. Nunca pule, apague nem afrouxe o teste.
+- Passos no PowerShell, na pasta do Simpress, com `git status` limpo antes:
+
+```
+git fetch origin
+git checkout <branch-do-PR>
+git pull
+npm.cmd ci
+$env:PYTHON = "$PWD\.venv\Scripts\python.exe"
+npx.cmd playwright test <spec>.spec.cjs --update-snapshots
+git status
+git add tests/e2e/<spec>.spec.cjs-snapshots/<padrão>-win32.png
+git commit -m "Atualiza capturas de <tela>"
+git push
+git checkout main
+```
+
+- Se o PR só mexe nas capturas de "baseline", acrescente `--grep "baseline"` ao comando do Playwright.
+- Armadilhas já vistas:
+  - `npm` ou `npx` dão "execução de scripts foi desabilitada": use `npm.cmd` e `npx.cmd`. Não mude a política do Windows.
+  - "No module named 'openpyxl'" no WebServer: o Playwright usou o Python do sistema. Defina `$env:PYTHON` para o `.venv` (vale só naquela janela). Se a `.venv` não existir, rode `iniciar_servidor.bat` uma vez.
+  - "Executable doesn't exist": navegador ausente. Rode `npx.cmd playwright install chromium`.
+- Conferência:
+  - `git status` deve listar só os `*-win32.png` esperados como modified.
+  - Abra uma imagem e veja a mudança visual pretendida antes do commit.
+  - Nunca use `git add .` ou `git add -A`: arquivos locais como `config/modelos_chamado.json` e `data/state/...` aparecem como untracked e não entram.
+- Não toca `data/`: o teste usa a fixture com dados sintéticos na porta 8765.
+- Exemplo real: PRs #407 (Prontidão, `react-bf3`, 4 capturas `prontidao-aberta-*`) e #409 (Dossiê, `react-g3`, 6 capturas `dossie-*`), em 27/11/2026.
+
 ## Sessões na nuvem (claude.ai/code)
 
 Pedido do usuário (25/11/2026): a nuvem tem os mesmos plugins e skills que o `instalar_primeira_vez.bat` instala no notebook.
