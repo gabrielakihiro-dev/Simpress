@@ -86,7 +86,7 @@ def _motivo_codigo(status: str, codigo: Any, textos: List[str]) -> Optional[str]
     return "playwright_ausente" if codigo == 3 else "desconhecido"
 
 
-def _sem_acento_minusculo(texto: str) -> str:  # same as assistant_tools._sem_acento (that module imports this one)
+def _sem_acento_minusculo(texto: str) -> str:  # same as assistant_tools._sem_acento (that module imports assistant_api, so no import from there)
     return "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn").lower()
 
 

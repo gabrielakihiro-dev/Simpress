@@ -78,8 +78,8 @@ Data: 11/11/2026. Branch `claude/dashboard-merge-celula-1a44e3`. Plano aprovado 
   - `GET /api/sebrae/dashboard/conflitos` → `{conflitos, escolhas, criado_em}` (vazio se não há). `GET /api/sebrae/finalizar-softexpert` ganha `conflitos` (contagem).
   - `POST /api/sebrae/dashboard/conflitos` `{escolhas: {id: "sharepoint"|"site"}, enviar: bool}` grava escolhas de ids existentes (422 para id ou valor inválido) e, com `enviar`, inicia a rotina `enviar` (mesmas travas de `_enviar_apos_atualizar`).
   - Front: módulo novo `static/js/features/sebrae-conflitos.js` e partial novo incluído perto de `#sebrae-sharepoint-aviso`. Lista "Chamado X, coluna Y: SharePoint diz A, site quer B" com escolha por célula e botão de reenviar. Em `sebrae-dashboard.js`, no máximo um gancho de uma linha fora de `renderizarSharepoint`.
-  - Assistente: padrão de erro novo em `domains/assistant_api.py` para a mensagem de conflito (só contagem).
-- Arquivos: `routers/sebrae_dashboard.py`, `static/js/features/sebrae-conflitos.js`, `frontend/partials/` (partial novo + include), `static/index.html` se o carregamento de módulos exigir, `domains/assistant_api.py`, testes de router e de UI.
+  - Assistente: padrão de erro novo em `_MOTIVOS` (`domains/assistant_api_comum.py`) para a mensagem de conflito (só contagem).
+- Arquivos: `routers/sebrae_dashboard.py`, `static/js/features/sebrae-conflitos.js`, `frontend/partials/` (partial novo + include), `static/index.html` se o carregamento de módulos exigir, `domains/assistant_api_comum.py`, testes de router e de UI.
 - Critérios de aceite: rotas respondem conforme contrato; escolha inválida 422; tela mostra e envia escolhas; nenhum dado pessoal em `static/**`.
 - Verificar: testes de router focados, `npm run test:ui:e2e`.
 - Proibidos: `renderizarSharepoint`, demais funções de `sebrae-dashboard.js`.

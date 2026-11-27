@@ -561,6 +561,7 @@ class AssistenteSaudeLocalTests(unittest.TestCase):
         self.assertIn("obter_saude_local", NUCLEO_FERRAMENTAS)
         self.assertFalse([nome for nome in TOOLS if "limp" in nome or "saude" in nome and nome != "obter_saude_local"])
         arquivos = sorted(p.relative_to(PROJECT_ROOT).as_posix() for p in (PROJECT_ROOT / "domains").glob("assistant_api*.py"))
+        self.assertIn("domains/assistant_api.py", arquivos)
         for arquivo in (*arquivos, "domains/assistant_tools.py", "domains/assistant_chat.py"):
             texto = (PROJECT_ROOT / arquivo).read_text(encoding="utf-8")
             self.assertNotIn("/api/saude-local/limpeza", texto, arquivo)
