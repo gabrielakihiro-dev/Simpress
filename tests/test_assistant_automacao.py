@@ -114,6 +114,14 @@ class StatusTests(unittest.TestCase):
         self.assertEqual((r["situacao"], r["etapa"]), ("aguardando_login", "aguardando_login"))
         self.assertNotIn(NOME, dump(r))
 
+    def test_waiting_dashboard_has_its_own_step_and_login_wins(self) -> None:
+        r = self.status({"estado": "em_andamento", "rotina": "enviar", "aguardando_dashboard": True})
+        self.assertEqual((r["situacao"], r["etapa"]), ("aguardando_dashboard", "aguardando_dashboard"))
+        r = self.status({"estado": "em_andamento", "rotina": "enviar", "aguardando_dashboard": True, "aguardando_login": True})
+        self.assertEqual(r["situacao"], "aguardando_login")
+        r = self.status({"estado": "livre", "aguardando_dashboard": True})
+        self.assertEqual(r["situacao"], "livre")
+
     def test_cancel_requested_wins(self) -> None:
         r = self.status({"estado": "em_andamento", "rotina": "sebrae", "aguardando_login": True, "cancelamento_pedido": True})
         self.assertEqual(r["situacao"], "cancelamento_solicitado")

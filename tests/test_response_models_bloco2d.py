@@ -133,7 +133,7 @@ class EquipamentoTests(unittest.TestCase):
 class AutomacaoFiltroTests(unittest.TestCase):
     ESTADO = {
         "estado": "em_andamento", "rotina": "os", "inicio": "2026-10-20T08:00:00", "origem": "externo", "pid": 12.0,
-        "cancelamento_pedido": 0, "aguardando_login": 1, "login_origem": "UX",
+        "cancelamento_pedido": 0, "aguardando_login": 1, "aguardando_dashboard": 0, "login_origem": "UX",
         "log": {"arquivo": "a.log", "offset": 10.0, "linhas": ["a", "b"], "reiniciado": 0, "_x": 1},
         "ultima": {
             "id": "i", "rotina": "os", "origem": "site", "inicio": "", "fim": "", "status": "concluido", "codigo": 0,

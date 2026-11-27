@@ -76,6 +76,8 @@ class ScriptContract:
     exit_cancelled: int = 130
     login_wait_marker: str = "AÇÃO NECESSÁRIA: faça o login"
     login_done_markers: tuple[str, ...] = ("Login detectado", "Sessão ativa")
+    dashboard_wait_marker: str = "AÇÃO NECESSÁRIA: feche o Dashboard"
+    dashboard_done_markers: tuple[str, ...] = ("Dashboard liberado",)
     capture_marker: str = "Captura da tela no erro:"
     # Files the server writes for the runs it starts (stdout capture and summary).
     site_log_suffix: str = ".site.log"
@@ -585,12 +587,22 @@ class ChromeAutomationRunner:
                 if not path.name.endswith(self.contract.site_log_suffix)]
         return max(logs, key=lambda path: path.name, default=None)
 
+    @staticmethod
+    def _wait_at(text: str, wait_marker: str, done_markers: tuple[str, ...]) -> int:
+        """Index of the wait marker still open (no done marker after it), or -1."""
+        waiting_at = text.rfind(wait_marker)
+        if waiting_at < 0 or any(text.rfind(marker) > waiting_at for marker in done_markers):
+            return -1
+        return waiting_at
+
+    def _dashboard_wait(self, log_path: Optional[Path]) -> bool:
+        text = _read_tail(log_path, LOGIN_SCAN_BYTES)
+        return self._wait_at(text, self.contract.dashboard_wait_marker, self.contract.dashboard_done_markers) >= 0
+
     def _login_wait(self, log_path: Optional[Path]) -> tuple[bool, str]:
         text = _read_tail(log_path, LOGIN_SCAN_BYTES)
-        waiting_at = text.rfind(self.contract.login_wait_marker)
+        waiting_at = self._wait_at(text, self.contract.login_wait_marker, self.contract.login_done_markers)
         if waiting_at < 0:
-            return False, ""
-        if any(text.rfind(marker) > waiting_at for marker in self.contract.login_done_markers):
             return False, ""
         line_start = text.rfind("\n", 0, waiting_at) + 1
         source = re.findall(r"\[([^\]]+)\]", text[line_start:waiting_at])
@@ -625,6 +637,7 @@ class ChromeAutomationRunner:
             "cancelamento_pedido": bool(active and active["cancelamento_pedido"]),
             "aguardando_login": waiting,
             "login_origem": source,
+            "aguardando_dashboard": active is not None and self._dashboard_wait(log_path),
             "log": chunk,
             "ultima": last,
         }
