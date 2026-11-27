@@ -14,6 +14,7 @@ export interface EstadoPlanilhas {
 export type LojaPlanilhas = ReturnType<typeof criarLojaPlanilhas>;
 
 export function criarLojaPlanilhas() {
+  // O estado inicial repete o texto estático do partial (frontend/partials/cockpit-tool-panels.html, seção planilhas).
   let estado: EstadoPlanilhas = { status: "Carregando…", kpis: [], linhas: null, mensagemLista: null, selecionada: "" };
   const ouvintes = new Set<() => void>();
   return {

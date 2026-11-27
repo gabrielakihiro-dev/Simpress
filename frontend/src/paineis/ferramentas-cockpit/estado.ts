@@ -2047,37 +2047,6 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     }));
   }
 
-  // Linha de tabela; com onSelect vira selecionável por clique, Enter ou Espaço.
-  function tableRow(cells: Qualquer, { selected = false, onSelect = null }: { selected?: boolean; onSelect?: Funcao | null } = {}) {
-    const row = element("tr");
-    if (onSelect) {
-      row.tabIndex = 0;
-      row.setAttribute("aria-selected", String(selected));
-      row.addEventListener("click", onSelect);
-      row.addEventListener("keydown", event => {
-        // Botões dentro da linha (ex.: lápis do CNPJ) tratam Enter e Espaço sozinhos.
-        if (event.target !== row || (event.key !== "Enter" && event.key !== " ")) return;
-        event.preventDefault();
-        onSelect();
-      });
-    }
-    cells.forEach(([label, content, className]: Qualquer) => {
-      const cell = element("td", className || "");
-      cell.dataset.label = label;
-      cell.append(content instanceof Node ? content : document.createTextNode(String(content ?? "—")));
-      row.append(cell);
-    });
-    return row;
-  }
-
-  function tableEmpty(body: Qualquer, columns: Qualquer, message: Qualquer) {
-    const cell = element("td", "ck-lista__vazio", message);
-    cell.colSpan = columns;
-    const row = element("tr");
-    row.append(cell);
-    body.replaceChildren(row);
-  }
-
   async function fetchUpdateEvents() {
     const data = await apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico de planilhas." });
     return (Array.isArray(data.eventos) ? data.eventos : []).filter((event: Qualquer) => event.id && !event.somente_anotacoes_sincronizadas);
