@@ -172,104 +172,17 @@
 
   <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
   <div data-react-painel="importacao-planilhas" hidden></div>
+  <!-- Os dois modais de importação são React (frontend/src/paineis/importacao-planilhas/dialogos.tsx): o <section class="ckp-dialogo"> de cada um entra aqui por portal, como primeiro filho do overlay.
+       A seção Entra fica estática neste arquivo (a dica cita o domínio, proibido em frontend/src); o React a move para o fim do corpo "arquivos". -->
   <div id="modal-atualizar-planilhas" class="modal-overlay ck-veu hidden">
-    <section class="ckp-dialogo">
-      <header class="ckp-cab">
-        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-sheet"></use></svg></span>
-        <div class="ckp-cab__textos">
-          <span class="ckp-cab__kicker">Inventários</span>
-          <h2 class="ckp-cab__titulo">Atualizar planilhas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Atualizar planilhas" aria-describedby="tip-atualizar-planilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-atualizar-planilhas" role="tooltip" class="info-tip-text">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</span></span></h2>
-        </div>
-        <div class="ckp-cab__acoes">
-          <nav class="ckp-sistemas" aria-label="Acessar sistemas de origem das planilhas">
-            <a class="ckp-sistema" href="#" data-endpoint-tela="computadores" aria-label="Abrir inventário de computadores do Endpoint Central"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Endpoint</a>
-            <a class="ckp-sistema" href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" aria-label="Abrir Meus Equipamentos da Simpress"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Simpress</a>
-          </nav>
-          <button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharModalAtualizarPlanilhas" aria-label="Fechar (Esc)"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button>
-        </div>
-      </header>
-
-      <div class="ckp-corpo" data-so-etapa="arquivos">
-        <div class="ckp-par-fontes" id="esc-inv-arquivos">
-          <section class="ckp-secao" data-pronta="false">
-            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>1</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Endpoint <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Endpoint" aria-describedby="tip-secao-endpoint"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-secao-endpoint" role="tooltip" class="info-tip-text">Precisa ter nome do computador e rótulo de serviço/número de série.</span></span></h3></div></div>
-            <div class="ckp-secao__corpo">
-              <label class="ckp-arquivo" data-estado="vazio">
-                <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
-                <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-                <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="upload-endpoint-name" data-vazio="Escolher arquivo ou arrastar aqui">Escolher arquivo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx · até 60 MB">.xlsx · até 60 MB</span></span>
-                <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
-              </label>
-            </div>
-          </section>
-          <section class="ckp-secao" data-pronta="false">
-            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>2</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Simpress <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Simpress" aria-describedby="tip-secao-simpress"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-secao-simpress" role="tooltip" class="info-tip-text">Inventário completo de 50 colunas, incluindo o CNPJ de instalação.</span></span></h3></div></div>
-            <div class="ckp-secao__corpo">
-              <label class="ckp-arquivo" data-estado="vazio">
-                <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
-                <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-                <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="upload-details-name" data-vazio="Escolher arquivo ou arrastar aqui">Escolher arquivo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx ou ZIP com uma única planilha · até 60 MB">.xlsx ou ZIP com uma única planilha · até 60 MB</span></span>
-                <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
-              </label>
-            </div>
-          </section>
-        </div>
-
-        <div class="ckp-nota">
-          <input id="auto-export-history-after-update" type="checkbox">
-          <span class="ck-rotulo-info"><label for="auto-export-history-after-update"><strong>Baixar o Histórico de Planilhas automaticamente.</strong></label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o download automático" aria-describedby="auto-export-history-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="auto-export-history-dica" role="tooltip" class="info-tip-text">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span></span></span>
-        </div>
-
         <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title">
           <div class="ckp-secao__cab"><span class="ckp-arquivo__ico" data-ckp="icone-22"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-users"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo"><span id="entra-import-title">Nomes do Microsoft Entra <span class="ckp-opcional">· opcional</span></span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Nomes do Microsoft Entra" aria-describedby="tip-entra-nomes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-entra-nomes" role="tooltip" class="info-tip-text">CSV exportado do Entra. Somente contas @pr.sebrae.com.br são usadas; os inventários acima não são alterados.</span></span></h3></div></div>
           <!-- Corpo da seção em React: frontend/src/paineis/entra-users/secao.tsx. O cabeçalho fica aqui porque a dica cita o domínio, proibido no código React (tests/test_maintenance_contracts.py). -->
           <form class="ckp-secao__corpo" data-react-painel="entra-users"></form>
         </section>
-      </div>
-
-      <div class="ckp-corpo" data-so-etapa="impacto" hidden>
-        <div class="ckp-nota" data-status="ok"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-ok"></use></svg><p id="upload-planilhas-preview" role="status" aria-live="polite" aria-atomic="true"></p></div>
-      </div>
-
-      <footer class="ckp-rodape">
-        <!-- Aviso de impacto atrás do ⓘ, no hover e no foco por teclado (Novo layout, nota n_janelas_planilhas, etapas 1 e 2). -->
-        <span id="upload-impacto-aviso" class="info-tip nl-impacto"><button type="button" class="info-tip-trigger" aria-label="Sobre o impacto" aria-describedby="tip-upload-impacto"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg>Impacto</button><span id="tip-upload-impacto" role="tooltip" class="info-tip-text">Ao confirmar, as duas bases ativas serão substituídas pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</span></span>
-        <p id="upload-planilhas-status" class="ckp-rodape__status" role="status" aria-live="polite" aria-atomic="true"></p>
-        <span class="ck-espaco"></span>
-        <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharModalAtualizarPlanilhas">Cancelar</button>
-        <button type="button" id="btn-voltar-planilhas" class="ck-btn ck-btn--fantasma hidden" data-on-click="limparPreviaUploadPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-arrow-left"></use></svg>Voltar</button>
-        <button type="button" id="btn-previsualizar-planilhas" class="ck-btn ck-btn--primario" data-on-click="previsualizarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-refresh"></use></svg>Pré-visualizar impacto</button>
-        <button type="button" id="btn-confirmar-planilhas" class="hidden ck-btn ck-btn--primario" data-on-click="enviarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-check"></use></svg>Confirmar substituição</button>
-      </footer>
-    </section>
   </div>
 
-  <div id="modal-importar-modelo" class="modal-overlay ck-veu hidden">
-    <section class="ckp-dialogo ckp-dialogo--estreito">
-      <header class="ckp-cab">
-        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-download"></use></svg></span>
-        <div class="ckp-cab__textos">
-          <span class="ckp-cab__kicker">Modelo .xlsx</span>
-          <h2 class="ckp-cab__titulo"><span id="titulo-importar-modelo">Importar arquivos</span> <span class="info-tip info-tip--bloco"><button type="button" class="info-tip-trigger" aria-label="Sobre Importar arquivos" aria-describedby="descricao-importar-modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="descricao-importar-modelo" role="tooltip" class="info-tip-text"></span></span></h2>
-        </div>
-        <div class="ckp-cab__acoes"><button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharImportacaoModelo" aria-label="Fechar importação de modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
-      </header>
-      <div class="ckp-corpo" id="esc-modelo">
-        <label class="ckp-arquivo" data-estado="vazio">
-          <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
-          <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-          <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-modelo-local" data-vazio="Escolher modelo ou arrastar aqui">Escolher modelo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio="Modelo .xlsx · até 60 MB">Modelo .xlsx · até 60 MB</span></span>
-          <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
-        </label>
-      </div>
-      <footer class="ckp-rodape">
-        <p id="status-modelo-local" class="ckp-rodape__status" role="status" aria-live="polite" aria-atomic="true"></p>
-        <span class="ck-espaco"></span>
-        <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharImportacaoModelo">Cancelar</button>
-        <button id="btn-importar-modelo" type="button" class="ck-btn ck-btn--primario" data-on-click="enviarModeloLocal"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-upload"></use></svg>Importar</button>
-      </footer>
-    </section>
-  </div>
+  <div id="modal-importar-modelo" class="modal-overlay ck-veu hidden"></div>
 
   <div id="modal-configuracao-local" class="modal-overlay ck-veu hidden">
     <section class="ckp-dialogo" aria-labelledby="titulo-configuracao-local" aria-describedby="descricao-configuracao-local">

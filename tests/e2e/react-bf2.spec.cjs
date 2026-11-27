@@ -356,3 +356,252 @@ test("importação: erro na prévia de Atualizar planilhas mostra o aviso e não
   expect(semFalhaDePonte(ambiente)).toEqual([]);
   expect(ambiente.bloqueados).toEqual([]);
 });
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Importação de planilhas: DOM dos dois modais desenhado pelo React (frontend/src/paineis/importacao-planilhas/dialogos.tsx).
+// Estas checagens substituem as que test_inventory_upload_flows.cjs fazia no DOM falso (agora lê o estado do painel).
+// ---------------------------------------------------------------------------------------------------------------------
+
+const PREVIA = {
+  preview_token: "token-ficticio",
+  arquivos: { endpoint: { nome: "endpoint-teste.xlsx", linhas: 2 }, detalhes: { nome: "detalhes-teste.xlsx", linhas: 3 } },
+  alteracoes: {
+    endpoint: { series_novas: 1, series_removidas: 2, series_duplicadas_no_arquivo_novo: 0 },
+    detalhes: { series_novas: 2, series_removidas: 1, series_duplicadas_no_arquivo_novo: 1 },
+  },
+};
+
+// Rota que segura a resposta até liberar(): dá tempo de olhar o estado "ocupado" no DOM.
+function rotaSegurada(ambiente, padrao, resposta) {
+  let liberar;
+  const segura = new Promise(resolver => { liberar = resolver; });
+  const instalar = page => page.route(padrao, async route => {
+    ambiente.pedidos.push(route.request().method());
+    await segura;
+    return route.fulfill(resposta);
+  });
+  return { instalar, liberar };
+}
+
+test("importação: o DOM inicial dos modais é o do partial e a seção Entra fica dentro do corpo Arquivos", async ({ page }) => {
+  const ambiente = await preparar(page);
+  await esperarReact(page);
+  const modal = page.locator("#modal-atualizar-planilhas");
+  // o dialog é o único filho do overlay (accessible-dialogs.ts usa firstElementChild) e a seção Entra foi adotada pelo corpo
+  expect(await modal.evaluate(el => [...el.children].map(filho => filho.tagName + "." + filho.className))).toEqual(["SECTION.ckp-dialogo"]);
+  expect(await page.locator("#modal-importar-modelo").evaluate(el => [...el.children].map(filho => filho.className))).toEqual(["ckp-dialogo ckp-dialogo--estreito"]);
+  const corpo = modal.locator('[data-so-etapa="arquivos"]');
+  await expect(corpo.locator('#esc-inv-entra [data-react-painel="entra-users"]')).toHaveCount(1);
+  expect(await page.locator('[data-react-painel="entra-users"]').evaluate(el => el.children.length)).toBeGreaterThan(0);
+  expect(await corpo.evaluate(el => [...el.children].map(filho => filho.id || filho.className))).toEqual(["esc-inv-arquivos", "ckp-nota", "esc-inv-entra"]);
+  await expect(modal.locator('[data-so-etapa="impacto"]')).toHaveAttribute("hidden", "");
+  await expect(corpo).not.toHaveAttribute("hidden", /.*/);
+  const status = modal.locator("#upload-planilhas-status");
+  await expect(status).toHaveAttribute("role", "status");
+  await expect(status).toHaveAttribute("aria-live", "polite");
+  await expect(status).toHaveAttribute("aria-atomic", "true");
+  await expect(status).toHaveClass("ckp-rodape__status");
+  await expect(modal.locator("#upload-planilhas-preview")).toHaveAttribute("aria-atomic", "true");
+  await expect(modal.locator("#btn-voltar-planilhas")).toHaveClass(/hidden/);
+  await expect(modal.locator("#btn-confirmar-planilhas")).toHaveClass(/hidden/);
+  await expect(modal.locator("#btn-previsualizar-planilhas")).not.toHaveClass(/hidden/);
+  // atalhos para os sistemas de origem (antes checados no HTML montado por test_inventory_history_and_tickets.cjs)
+  const sistemas = modal.locator(".ckp-sistemas a.ckp-sistema");
+  await expect(sistemas).toHaveCount(2);
+  // Endpoint: /api/* exige o X-Simpress-Sessao, então o link não aponta para a API; o clique pede a URL (comum/links-endpoint.ts).
+  await expect(sistemas.nth(0)).toHaveAttribute("href", "#");
+  await expect(sistemas.nth(0)).toHaveAttribute("data-endpoint-tela", "computadores");
+  await expect(sistemas.nth(0)).toHaveAttribute("aria-label", "Abrir inventário de computadores do Endpoint Central");
+  await expect(sistemas.nth(1)).toHaveAttribute("href", "https://ux.simpress.com.br/MeusEquipamentos/Index");
+  await expect(sistemas.nth(1)).toHaveAttribute("aria-label", "Abrir Meus Equipamentos da Simpress");
+  await expect(sistemas.nth(1)).toHaveAttribute("target", "_blank");
+  await expect(sistemas.nth(1)).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(page.locator("#modal-importar-modelo #descricao-importar-modelo")).toHaveText("");
+  await expect(page.locator("#modal-importar-modelo #titulo-importar-modelo")).toHaveText("Importar arquivos");
+  expect(semFalhaDePonte(ambiente)).toEqual([]);
+});
+
+test("importação: prévia mostra o texto, alterna os botões e a etapa; escolher outro arquivo limpa a prévia", async ({ page }) => {
+  const ambiente = await preparar(page);
+  await page.addInitScript(() => {
+    window.__rolagens = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function rolar(opcoes) { window.__rolagens.push([this.id, opcoes && opcoes.block]); return original.call(this, opcoes); };
+  });
+  await page.route("**/api/planilhas/previsualizar", route => route.fulfill({ status: 200, json: PREVIA }));
+  await esperarReact(page);
+  await page.evaluate(() => window.abrirModalAtualizarPlanilhas());
+  const modal = page.locator("#modal-atualizar-planilhas");
+  const status = modal.locator("#upload-planilhas-status");
+  const previa = modal.locator("#upload-planilhas-preview");
+  // abrir limpa o status: sem role nem aria-live, com aria-atomic, e a prévia some
+  await expect(status).not.toHaveAttribute("role", /.*/);
+  await expect(status).not.toHaveAttribute("aria-live", /.*/);
+  await expect(status).toHaveAttribute("aria-atomic", "true");
+  await expect(previa).toHaveClass("hidden");
+  await expect(previa).toHaveText("");
+
+  await modal.locator("#btn-previsualizar-planilhas").click();
+  await expect(status).toHaveText("Selecione Endpoint e EquipamentosDetalhes antes de gerar a prévia.");
+  await expect(status).toHaveAttribute("role", "alert");
+  await expect(status).toHaveAttribute("aria-live", "assertive");
+  expect(await page.evaluate(() => window.__rolagens.filter(([id]) => id === "upload-planilhas-status"))).toEqual([["upload-planilhas-status", "nearest"]]);
+
+  await modal.locator("#upload-endpoint-file").setInputFiles(arquivo("endpoint-teste.xlsx"));
+  await modal.locator("#upload-details-file").setInputFiles(arquivo("detalhes-teste.xlsx"));
+  await modal.locator("#btn-previsualizar-planilhas").click();
+  // o \n da prévia vira espaço no toHaveText (que normaliza espaços); whitespace-pre-line (abaixo) é quem o mostra como quebra
+  await expect(previa).toHaveText([
+    "Resumo da substituição (contagens por número de série):",
+    "Endpoint — endpoint-teste.xlsx (2 linhas)",
+    "Séries novas: 1; removidas: 2; duplicadas no arquivo novo: 0.",
+    "Simpress — detalhes-teste.xlsx (3 linhas)",
+    "Séries novas: 2; removidas: 1; duplicadas no arquivo novo: 1.",
+  ].join(" "));
+  expect(await previa.evaluate(el => el.textContent.split("\n").length)).toBe(5);
+  await expect(previa).toHaveClass("whitespace-pre-line");
+  await expect(previa).toHaveAttribute("role", "status");
+  await expect(previa).toHaveAttribute("aria-live", "polite");
+  await expect(status).toHaveText("Confira as contagens e confirme somente se este impacto estiver correto.");
+  await expect(status).toHaveAttribute("role", "status");
+  await expect(status).toHaveAttribute("aria-live", "polite");
+  await expect(modal.locator('[data-so-etapa="impacto"]')).toBeVisible();
+  await expect(modal.locator('[data-so-etapa="arquivos"]')).toBeHidden();
+  await expect(modal.locator("#btn-previsualizar-planilhas")).toBeHidden();
+  await expect(modal.locator("#btn-confirmar-planilhas")).toBeVisible();
+  await expect(modal.locator("#btn-voltar-planilhas")).toBeVisible();
+  expect(await page.evaluate(() => window.__rolagens.some(([id, bloco]) => id === "upload-planilhas-preview" && bloco === "nearest"))).toBe(true);
+
+  // Voltar: etapa Arquivos, prévia limpa, os arquivos escolhidos continuam nos inputs (o React não desmonta nada)
+  await modal.locator("#btn-voltar-planilhas").click();
+  await expect(modal.locator('[data-so-etapa="arquivos"]')).toBeVisible();
+  await expect(previa).toHaveClass("hidden");
+  await expect(modal.locator("#btn-voltar-planilhas")).toBeHidden();
+  await expect(modal.locator("#btn-previsualizar-planilhas")).toBeVisible();
+  await expect(modal.locator("#upload-endpoint-name")).toHaveText("endpoint-teste.xlsx");
+  expect(await modal.locator("#upload-endpoint-file").evaluate(el => el.files.length)).toBe(1);
+
+  // Escolher outro arquivo depois da prévia (onChange React) limpa a prévia
+  await modal.locator("#btn-previsualizar-planilhas").click();
+  await expect(modal.locator("#btn-confirmar-planilhas")).toBeVisible();
+  await modal.locator("#upload-endpoint-file").setInputFiles(arquivo("outro-endpoint.xlsx"));
+  await expect(modal.locator("#btn-confirmar-planilhas")).toBeHidden();
+  await expect(modal.locator("#btn-previsualizar-planilhas")).toBeVisible();
+  await expect(previa).toHaveClass("hidden");
+  await expect(status).toHaveText("");
+  expect(semFalhaDePonte(ambiente)).toEqual([]);
+  expect(ambiente.bloqueados).toEqual([]);
+});
+
+test("importação: durante o envio o botão mostra só o spinner e a mensagem, trava os controles e um duplo clique manda um POST", async ({ page }) => {
+  const ambiente = await preparar(page);
+  await page.addInitScript(() => {
+    window.__rolagens = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function rolar(opcoes) { window.__rolagens.push([this.id, opcoes && opcoes.block]); return original.call(this, opcoes); };
+  });
+  const previa = rotaSegurada(ambiente, "**/api/planilhas/previsualizar", { status: 200, json: PREVIA });
+  await previa.instalar(page);
+  await esperarReact(page);
+  await page.evaluate(() => window.abrirModalAtualizarPlanilhas());
+  const modal = page.locator("#modal-atualizar-planilhas");
+  await modal.locator("#upload-endpoint-file").setInputFiles(arquivo("endpoint-teste.xlsx"));
+  await modal.locator("#upload-details-file").setInputFiles(arquivo("detalhes-teste.xlsx"));
+  const botao = modal.locator("#btn-previsualizar-planilhas");
+  const original = await botao.innerHTML();
+  await page.evaluate(() => { window.previsualizarPlanilhas(); window.previsualizarPlanilhas(); }); // dois cliques no mesmo turno
+  await expect(botao).toHaveAttribute("aria-busy", "true");
+  await expect(botao).toBeDisabled();
+  await expect(botao.locator("svg.lucide.lucide-loader-2.w-3\\.5.h-3\\.5.animate-spin")).toHaveCount(1);
+  await expect(botao.locator("span")).toHaveText("Validando arquivos...");
+  expect(await botao.evaluate(el => [...el.childNodes].map(no => no.nodeName))).toEqual(["svg", "SPAN"]);
+  await expect(modal).toHaveAttribute("aria-busy", "true");
+  await expect(modal.locator("#upload-endpoint-file")).toBeDisabled();
+  await expect(modal.locator("#upload-details-file")).toBeDisabled();
+  await expect(modal.locator("#auto-export-history-after-update")).toBeEnabled(); // só a confirmação trava o checkbox
+  previa.liberar();
+  await expect(modal.locator("#btn-confirmar-planilhas")).toBeVisible();
+  expect(ambiente.pedidos).toEqual(["POST"]);
+  await expect(botao).not.toHaveAttribute("aria-busy", /.*/);
+  await expect(modal).not.toHaveAttribute("aria-busy", /.*/);
+  await expect(modal.locator("#upload-endpoint-file")).toBeEnabled();
+  expect(await botao.innerHTML()).toBe(original); // o conteúdo original volta (ícone e texto)
+
+  // confirmação: spinner "Confirmando substituição..." e o checkbox também trava; erro 422 destrava e mostra o alerta
+  const confirmar = rotaSegurada(ambiente, "**/api/planilhas/atualizar", { status: 422, json: { detail: "Arquivo fictício inválido" } });
+  await confirmar.instalar(page);
+  const botaoConfirmar = modal.locator("#btn-confirmar-planilhas");
+  const originalConfirmar = await botaoConfirmar.innerHTML();
+  await page.evaluate(() => { window.enviarPlanilhas(); window.enviarPlanilhas(); });
+  await expect(botaoConfirmar.locator("span")).toHaveText("Confirmando substituição...");
+  await expect(botaoConfirmar).toHaveAttribute("aria-busy", "true");
+  await expect(modal.locator("#auto-export-history-after-update")).toBeDisabled();
+  await expect(modal).toHaveAttribute("aria-busy", "true");
+  confirmar.liberar();
+  await expect(modal.locator("#upload-planilhas-status")).toHaveText("Arquivo fictício inválido");
+  await expect(modal.locator("#upload-planilhas-status")).toHaveAttribute("role", "alert");
+  await expect(modal.locator("#upload-planilhas-status")).toHaveAttribute("aria-live", "assertive");
+  await expect.poll(() => page.evaluate(() => window.__rolagens.some(([id, bloco]) => id === "upload-planilhas-status" && bloco === "nearest"))).toBe(true);
+  await expect(modal.locator("#btn-previsualizar-planilhas")).toBeVisible(); // 422 invalida a prévia
+  await expect(modal.locator("#auto-export-history-after-update")).toBeEnabled();
+  expect(await botaoConfirmar.innerHTML()).toBe(originalConfirmar);
+  expect(ambiente.pedidos).toEqual(["POST", "POST"]);
+  expect(semFalhaDePonte(ambiente)).toEqual([]);
+  expect(ambiente.bloqueados).toEqual([]);
+});
+
+test("importação: a preferência do histórico automático sobrevive ao recarregar a página", async ({ page }) => {
+  const ambiente = await preparar(page);
+  await esperarReact(page);
+  await page.evaluate(() => { localStorage.removeItem("simpress:auto-export-history-after-update"); });
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-react-pronto", "");
+  const caixa = page.locator("#auto-export-history-after-update");
+  await page.evaluate(() => window.abrirModalAtualizarPlanilhas());
+  await expect(caixa).not.toBeChecked();
+  await caixa.check();
+  expect(await page.evaluate(() => localStorage.getItem("simpress:auto-export-history-after-update"))).toBe("true");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-react-pronto", "");
+  await expect(caixa).toBeChecked();
+  await page.evaluate(() => window.abrirModalAtualizarPlanilhas());
+  await caixa.uncheck();
+  expect(await page.evaluate(() => localStorage.getItem("simpress:auto-export-history-after-update"))).toBe("false");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-react-pronto", "");
+  await expect(caixa).not.toBeChecked();
+  expect(semFalhaDePonte(ambiente)).toEqual([]);
+});
+
+test("importação: o modal do modelo põe data-tipo e aria-busy no overlay e troca título e descrição por tipo", async ({ page }) => {
+  const ambiente = await preparar(page);
+  const segurada = rotaSegurada(ambiente, "**/api/modelos/transferencia/importar", { status: 200, json: {} });
+  await segurada.instalar(page);
+  await esperarReact(page);
+  const modal = page.locator("#modal-importar-modelo");
+  await page.evaluate(() => window.abrirImportacaoModelo("exportacao"));
+  await expect(modal).toHaveAttribute("data-tipo", "exportacao");
+  await expect(modal.locator("#titulo-importar-modelo")).toHaveText("Arquivos para exportação");
+  await expect(modal.locator("#descricao-importar-modelo")).toHaveText(/^Importe a planilha do modelo de exportação que atualiza os apelidos\/hostnames\. Ao substituir um modelo importado/);
+  await page.evaluate(() => window.fecharImportacaoModelo());
+  await page.evaluate(() => window.abrirImportacaoModelo("transferencia"));
+  await expect(modal).toHaveAttribute("data-tipo", "transferencia");
+  await expect(modal.locator("#titulo-importar-modelo")).toHaveText("Arquivos para transferência");
+  await expect(modal.locator("#descricao-importar-modelo")).toHaveText(/^A base Simpress \+ Endpoint é compartilhada\./);
+  const status = modal.locator("#status-modelo-local");
+  await modal.locator("#btn-importar-modelo").click();
+  await expect(status).toHaveText("Selecione um modelo .xlsx.");
+  await expect(status).toHaveAttribute("role", "status");
+  await modal.locator("#arquivo-modelo-local").setInputFiles(arquivo("modelo-teste.xlsx"));
+  await page.evaluate(() => { window.enviarModeloLocal(); window.enviarModeloLocal(); });
+  await expect(status).toHaveText("Validando e importando o modelo…");
+  await expect(modal.locator("#btn-importar-modelo")).toBeDisabled();
+  await expect(modal).toHaveAttribute("aria-busy", "true");
+  segurada.liberar();
+  await expect(status).toContainText("Modelo importado");
+  await expect(modal).not.toHaveAttribute("aria-busy", /.*/);
+  await expect(modal.locator("#btn-importar-modelo")).toBeEnabled();
+  expect(ambiente.pedidos).toEqual(["POST"]);
+  expect(semFalhaDePonte(ambiente)).toEqual([]);
+  expect(ambiente.bloqueados).toEqual([]);
+});

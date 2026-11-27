@@ -39,15 +39,18 @@ test("Chamados keeps the Oracle and Simpress shortcuts and has no standalone tra
   assert.doesNotMatch(estadoChamados, /\/api\/operacoes\/chamados\/evolucao\?/, "sem acordeão, a aba não busca mais a comparação");
 });
 
+// Os atalhos agora são desenhados pelo React (frontend/src/paineis/importacao-planilhas/dialogos.tsx); o DOM real é conferido
+// em tests/e2e/react-bf2.spec.cjs ("o DOM inicial dos modais"). Aqui, o casco no HTML e as mesmas strings no código-fonte.
 test("provides Endpoint and Simpress shortcuts in the spreadsheet update dialog", () => {
   assert.match(appHtml, /id="modal-atualizar-planilhas"/);
+  const dialogos = fs.readFileSync(path.join(__dirname, "..", "..", "frontend", "src", "paineis", "importacao-planilhas", "dialogos.tsx"), "utf8");
   // /api/* exige o X-Simpress-Sessao: o link não aponta para a API; o clique pede a URL (comum/links-endpoint.ts).
-  assert.ok(appHtml.includes('<a class="ckp-sistema" href="#" data-endpoint-tela="computadores" aria-label="Abrir inventário de computadores do Endpoint Central">'));
-  assert.doesNotMatch(appHtml, /href="\/api\//);
-  assert.ok(appHtml.includes('href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer"'));
-  assert.match(appHtml, /class="ckp-sistema"[^>]*aria-label="Abrir inventário de computadores do Endpoint Central"/);
-  assert.match(appHtml, /class="ckp-sistema"[^>]*aria-label="Abrir Meus Equipamentos da Simpress"/);
-  assert.equal((appHtml.match(/class="ckp-sistema"[^>]*aria-label="Abrir (inventário de computadores|Meus Equipamentos)/g) || []).length, 2);
+  assert.ok(dialogos.includes('<a className="ckp-sistema" href="#" data-endpoint-tela="computadores" aria-label="Abrir inventário de computadores do Endpoint Central">'));
+  assert.doesNotMatch(dialogos, /href="\/api\//);
+  assert.ok(dialogos.includes('href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer"'));
+  assert.match(dialogos, /className="ckp-sistema"[^>]*aria-label="Abrir inventário de computadores do Endpoint Central"/);
+  assert.match(dialogos, /className="ckp-sistema"[^>]*aria-label="Abrir Meus Equipamentos da Simpress"/);
+  assert.equal((dialogos.match(/className="ckp-sistema"[^>]*aria-label="Abrir (inventário de computadores|Meus Equipamentos)/g) || []).length, 2);
 });
 
 test("groups secondary actions under cockpit tools dropdown", () => {
