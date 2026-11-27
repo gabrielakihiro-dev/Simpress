@@ -1620,6 +1620,9 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-sugestao__texto { min-width: 0; overflow-wrap: anywhere; }
 .sebrae-sugestao__usar { margin-left: auto; }
 @media (pointer: coarse) { .sebrae-sugestao__usar { min-height: 44px; min-width: 44px; } }
+/* Botão "Agora" ao lado do Encerramento (R): preenche data e hora do computador só no clique. */
+.sebrae-campo-agora { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; min-width: 0; }
+@media (pointer: coarse) { .sebrae-encerramento__agora { min-height: 44px; min-width: 44px; } }
 @media (prefers-reduced-motion: no-preference) {
   .sebrae-sugestao { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
 }
