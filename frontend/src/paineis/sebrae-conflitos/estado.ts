@@ -2,10 +2,9 @@
 // carregarConflitosSebrae pela ponte (sebrae-dashboard.js, depois de carregar os novos chamados).
 // Invariante de envio: o POST só sai no clique em "Salvar escolhas e reenviar", com enviar: true e a
 // versao_importacao da lista na tela; nunca manda "site" onde o servidor não aceita (aceita_site false).
-import { apiFetch, type ApiFetchError } from "../../api";
+import { apiFetch, apiRota, type ApiFetchError } from "../../api";
 
 const URL_CONFLITOS = "/api/sebrae/dashboard/conflitos";
-const URL_ESTADO_AUTOMACAO = "/api/automacao/estado";
 const INTERVALO_MS = 3000;
 const TENTATIVAS_MAX = 300; // ~15 min: a rotina enviar espera o SharePoint
 export const TEXTO_SESSAO_EXPIRADA = "A sessão do Simpress expirou. Abra o site de novo pelo iniciar_servidor.bat para continuar.";
@@ -199,7 +198,7 @@ function acompanharEnvio() {
     if (minha !== acompanhamento) return;
     let dados: { estado?: string; ultima?: { status?: string } | null } | null = null;
     try {
-      dados = await apiFetch(URL_ESTADO_AUTOMACAO, { errorMessage: "Não foi possível consultar a automação." });
+      dados = await apiRota("GET /api/automacao/estado", { errorMessage: "Não foi possível consultar a automação." });
     } catch (erro) {
       const status = (erro as ApiFetchError).status;
       if (minha === acompanhamento && (status === 401 || status === 403)) { // sessão vencida: insistir 300 vezes não adianta
