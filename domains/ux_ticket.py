@@ -8,6 +8,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from datetime import datetime
 import json
+import logging
 from pathlib import Path
 import re
 from threading import Lock
@@ -22,6 +23,8 @@ from domains.ux_chamados import (
     MSG_SEM_ENVIO, MSG_SERIE_TESTE, PLACEHOLDER, PROFILE_NAME, SERIES_SEM_ENVIO_REAL, ErroUX, envio_desativado,
     perfil_solicitante_ou_padrao,
 )
+
+logger = logging.getLogger(__name__)
 
 SESSION_TTL = 30 * 60
 HISTORY_NAME = "ux_tickets_historico.json"
@@ -199,8 +202,8 @@ class TicketsUX:
     def _fechar(portal: PortalTicket, aba: str) -> None:
         try:
             portal.fechar(aba)
-        except Exception:
-            pass  # best effort: a failed close must never mask the result of the request
+        except Exception as erro:
+            logger.debug("Falha ao fechar aba do ticket UX (%s).", type(erro).__name__)  # best effort: a failed close must never mask the result of the request
 
     def _fechar_pendentes(self, portal: PortalTicket) -> None:
         with self._lock:
@@ -215,8 +218,8 @@ class TicketsUX:
         try:
             with self._conectar() as portal:
                 self._fechar_pendentes(portal)
-        except Exception:
-            pass  # Chrome busy or closed: the tabs stay listed for the next connection
+        except Exception as erro:
+            logger.debug("Falha ao fechar abas pendentes do ticket UX (%s).", type(erro).__name__)  # Chrome busy or closed: the tabs stay listed for the next connection
 
     def _sessao(self, session_id: str, serial: str) -> Sessao:
         self._limpar_expiradas()
@@ -413,9 +416,10 @@ class TicketsUX:
                 raise ValueError()
             registro.update(ticket=ticket, estado="enviado")
             atomic_write_json(self._history, historico)
-        except Exception:
+        except Exception as erro:
             if not liberado:
                 raise  # failed before the click: nothing was sent, the session stays for a new try
+            logger.warning("Envio do ticket UX ficou incerto (%s).", type(erro).__name__)
             return {"status": "incerto", "serial": serial, "mensagem": INCERTO}
         finally:
             if liberado:

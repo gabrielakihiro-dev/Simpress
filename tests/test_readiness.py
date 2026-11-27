@@ -1,4 +1,5 @@
 import io
+import json
 import tempfile
 import threading
 import unittest
@@ -7,10 +8,12 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from domains import readiness
+from domains.assistant_lgpd import Mascara
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
     with redirect_stdout(io.StringIO()):
         import main
+from core import integrity
 from core.integrity import FileBusyError, lock_paths
 
 
@@ -68,6 +71,68 @@ class ReadyWorkbookTransientErrorTests(unittest.TestCase):
 
         self.assertFalse(status["available"])
         self.assertEqual(status["state"], "unavailable")
+
+
+    def test_os_error_reason_omits_user_path(self):
+        private = r"C:\Users\fulano\Simpress\data\modelo.xlsx"
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
+            path = Path(directory) / "modelo.xlsx"
+            path.write_bytes(b"fixture")
+            services = readiness.ReadyWorkbookServices(
+                validate_local_model=Mock(side_effect=PermissionError(13, "Permission denied", private)),
+                validate_uploaded_workbook=lambda *_args: None,
+                max_upload_bytes=lambda: 1024,
+                logger=main.logger,
+            )
+            status = readiness.check_ready_workbook(
+                path, "exportacao", services, readiness.ReadyWorkbookCache()
+            )
+            with patch.object(main, "_check_ready_workbook", return_value=status):
+                report = main._get_startup_readiness_unlocked()
+
+        self.assertEqual(status["state"], "unavailable")
+        self.assertEqual(status["reason"], "arquivo temporariamente indisponível (PermissionError)")
+        # The tool result goes to the model as JSON after the Assistant mask (assistant_chat.py).
+        texto = json.dumps(Mascara().mascarar({"dados": report}), ensure_ascii=False) + str(report)
+        for proibido in ("fulano", "Users"):
+            self.assertNotIn(proibido, texto)
+
+
+class RecoveryBlockWithoutUserPathTests(unittest.TestCase):
+    def test_unreadable_manifest_keeps_user_path_out_of_block_log_and_readiness(self):
+        private = r"C:\Users\fulano\Simpress\.transactions\tx\manifest.json"
+        self.addCleanup(setattr, main, "_TRANSACTION_RECOVERY_BLOCK", None)
+        real_read_text = Path.read_text
+
+        def read_text(path, *args, **kwargs):
+            if path.name == "manifest.json":
+                raise PermissionError(13, "Permission denied", private)
+            return real_read_text(path, *args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".transactions" / "tx").mkdir(parents=True)
+            (root / ".transactions" / "tx" / "manifest.json").write_text("{}", encoding="utf-8")
+            with (
+                patch.object(main, "TRANSACTION_ROOT", root),
+                # tests/run_tests.py stubs recovery while importing main; use the real one here.
+                patch.object(main, "recover_pending_transactions", integrity.recover_pending_transactions),
+                patch.object(Path, "read_text", read_text),
+                self.assertLogs(main.logger, level="ERROR") as log,
+            ):
+                self.assertFalse(main._recover_pending_transactions_at_startup())
+            with patch.object(main, "TRANSACTION_ROOT", root):
+                block = main.get_transaction_recovery_block()
+                with patch.object(main, "_check_ready_workbook", return_value={
+                    "available": False, "file": "x.xlsx", "reason": "ausente", "state": "awaiting_import",
+                }):
+                    report = main._get_startup_readiness_unlocked()
+
+        self.assertIn("(PermissionError)", block)
+        self.assertEqual(report["gravacao_bloqueada"]["reason"], block)
+        texto = block + "\n".join(log.output) + json.dumps(report, ensure_ascii=False)
+        for proibido in ("fulano", "Users"):
+            self.assertNotIn(proibido, texto)
 
 
 class ReadinessWithoutGlobalLockTests(unittest.TestCase):
