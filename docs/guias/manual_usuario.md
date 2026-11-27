@@ -281,7 +281,8 @@ O Simpress não envia o pacote para lugar nenhum: a cópia é feita por você.
 
 **Cuidados:**
 
-- Só as telas de exportar e restaurar funcionam neste computador. Pelo celular ou pela rede, o botão não funciona.
+- O Pacote local inteiro (lista, exportar, prévia e restaurar) só funciona neste computador. Pelo celular ou pela rede aparece "Disponível só neste computador.".
+- Se ao exportar aparecer "Pacote recusado: conteúdo inválido em <arquivo>", algum arquivo atual está com problema (por exemplo, um CNPJ inválido em `config/cliente.json`). Corrija esse dado na tela de origem e exporte de novo. Enquanto isso, a restauração também é recusada, porque o pacote de desfazer do estado atual não passaria na conferência.
 - O Assistente (F9) explica o Pacote local, mas não exporta, não lista e não restaura. Essas ações são só suas, por clique.
 - Depois de restaurar, o que ficou de fora (envios, finalizações, marcas de OS) continua como está hoje. Confira o Sebrae e as OS antes de agir.
 - Se a restauração falhar com "Falha ao restaurar. Os arquivos anteriores foram recuperados.", o Simpress voltou ao estado de antes. Se aparecer "confira a pasta .transactions antes de usar o app", não use o app e peça ajuda.
