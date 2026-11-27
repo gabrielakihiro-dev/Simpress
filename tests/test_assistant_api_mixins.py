@@ -15,7 +15,7 @@ FOLHAS = {"domains.assistant_api_comum", *(cls.__module__ for cls in MIXINS)}
 
 class MixinsFolhaTests(unittest.TestCase):
     def test_mixins_estao_em_modulos_proprios(self):
-        self.assertGreaterEqual(len(MIXINS), 3)
+        self.assertGreaterEqual(len(MIXINS), 4)
         self.assertEqual(len({cls.__module__ for cls in MIXINS}), len(MIXINS))
         self.assertNotIn(SimpressApi.__module__, {cls.__module__ for cls in MIXINS})
 
