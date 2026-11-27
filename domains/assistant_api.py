@@ -27,12 +27,9 @@ from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial, normalize_reference_value
 from domains.regras_negocio import cadastro_e_macbook
 from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES
-from domains.assistant_transporte import (  # noqa: F401  (re-exported: callers and tests import these names from here)
-    CALL_TIMEOUT_SECONDS, ENDPOINT_LOOKUP_TIMEOUT_SECONDS, MAX_ANSWER_BYTES, ArquivoUpload, Transport, _asgi_call, _corpo_multipart, asgi_transport,
-)
+from domains.assistant_transporte import ArquivoUpload, Transport, asgi_transport  # noqa: F401  (re-exported: callers and tests import these names from here)
 from domains.assistant_validacao import (  # noqa: F401  (re-exported: callers and tests import these names from here)
-    ACOES_APELIDO_MANUAL, CAMPOS_TRANSFERENCIA, DECISOES_VALIDAS, FONTES_VINCULO_OS, MAX_ANOTACAO, OBRIGATORIOS_TRANSFERENCIA, _ALMOCO_NAO_FECHA,
-    _CAMPOS_CONTATO_ORIGEM, _CAMPOS_REPRESENTANTE, _CHAMADO_UTIC, _chave_cidade, _dict, diferencas_representante, montar_contato_origem,
+    ACOES_APELIDO_MANUAL, DECISOES_VALIDAS, FONTES_VINCULO_OS, MAX_ANOTACAO, _dict, diferencas_representante, montar_contato_origem,
     montar_representante_regional, representante_efetivo, representante_padrao, resolver_cidade_representante, validar_anotacao,
     validar_transferencia, validar_vinculo_os,
 )

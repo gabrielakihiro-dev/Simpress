@@ -3,7 +3,6 @@
 import hashlib
 import inspect
 import json
-import re
 import unittest
 
 from domains import assistant_api
@@ -13,15 +12,19 @@ from domains.assistant_instrucoes import montar_prompt
 from domains.assistant_tools import FERRAMENTAS_LOCAIS_UX, schemas_para_mensagem, tool_schemas
 
 # Se a mudança em ferramenta, prompt ou assinatura for intencional, atualize esta constante.
-SHA256_CONTRATO = "348b51118eb30c42b436f3d23eaaf18a79d1c01f7c15b33a9d1b17b596dc88a3"
+SHA256_CONTRATO = "4c62bad0894ab8f3046cd5759158bef451ebf55b35dc4fa64c7fda3c69d37460"
 
 NOMES_DA_FACHADA = (
     "ACOES_APELIDO_MANUAL", "ArquivoUpload", "AVISO_BACKUPS_NO_PAINEL", "DECISOES_VALIDAS", "FONTES_VINCULO_OS", "MAX_ANOTACAO",
     "MAX_ITENS_LISTA", "MAX_TEXTO_CHAMADO", "MOTIVOS_AUTOMACAO", "ROTINAS_VALIDAS", "SimpressApi", "Transport",
-    "_MOTIVOS", "_asgi_call", "_dict", "_exemplo_comparacao", "_motivo_codigo", "_rotular_item", "asgi_transport",
+    "_MOTIVOS", "_dict", "_exemplo_comparacao", "_motivo_codigo", "_rotular_item", "asgi_transport",
     "diferencas_representante", "montar_contato_origem", "representante_efetivo", "validar_anotacao", "validar_transferencia",
     "validar_vinculo_os",
 )
+
+
+def _parametros(funcao: object) -> list:
+    return [[p.name, p.kind.name, repr(p.default)] for p in inspect.signature(funcao).parameters.values()]  # type: ignore[arg-type]
 
 
 def _contrato() -> str:
@@ -34,18 +37,18 @@ def _contrato() -> str:
         "system_prompt": SYSTEM_PROMPT,
         "montar_prompt": montar_prompt(SYSTEM_PROMPT, "x"),
         "membros": publicos,
-        # assinatura sem o módulo das anotações (só os nomes importam)
-        "assinaturas": {n: re.sub(r"domains\.\w+\.", "", str(inspect.signature(getattr(SimpressApi, n)))) for n in publicos if callable(getattr(SimpressApi, n))},
+        # nome, tipo e default de cada parâmetro; sem anotações, que o Python 3.14 escreve de outro jeito (X | None)
+        "assinaturas": {n: _parametros(getattr(SimpressApi, n)) for n in publicos if callable(getattr(SimpressApi, n))},
     }
     return json.dumps(dados, sort_keys=True, ensure_ascii=False, default=str)
 
 
 class ContratoModeloTests(unittest.TestCase):
-    def test_snapshot_do_que_vai_ao_modelo(self):
+    def test_snapshot_do_que_vai_ao_modelo(self) -> None:
         atual = hashlib.sha256(_contrato().encode("utf-8")).hexdigest()
         self.assertEqual(atual, SHA256_CONTRATO, "Ferramentas, prompt ou API do Assistente mudaram; se foi intencional, atualize SHA256_CONTRATO.")
 
-    def test_fachada_reexporta_os_nomes_usados_fora(self):
+    def test_fachada_reexporta_os_nomes_usados_fora(self) -> None:
         faltando = [n for n in NOMES_DA_FACHADA if not hasattr(assistant_api, n)]
         self.assertEqual(faltando, [])
 
