@@ -1916,18 +1916,18 @@ def registrar_driver(pw) -> None:
     trava = _trava_ativa
     if trava is None:
         return
-    try:
-        # shortcut: atributo privado do Playwright (conferido na 1.64); se mudar, o teste que o fixa falha e o
-        # cancelamento volta a esperar o próximo ponto de espera.
-        proc = pw._impl_obj._connection._transport._proc
-        pid = proc.pid
-    except AttributeError:
-        log("Cancelamento", "PID do driver do Playwright não encontrado; o cancelamento espera o próximo ponto de espera.")
-        return
-    if isinstance(pid, int) and pid > 0:
-        with trava._guarda:
-            if trava.encerrada:  # o vigia já disparou e não volta: um driver novo ficaria sem encerrador
-                raise RotinaCancelada()
+    with trava._guarda:
+        if trava.encerrada:  # o vigia já disparou e não volta: um driver novo ficaria sem encerrador
+            raise RotinaCancelada()
+        try:
+            # shortcut: atributo privado do Playwright (conferido na 1.64); se mudar, o teste que o fixa falha e o
+            # cancelamento volta a esperar o próximo ponto de espera.
+            proc = pw._impl_obj._connection._transport._proc
+            pid = proc.pid
+        except AttributeError:
+            log("Cancelamento", "PID do driver do Playwright não encontrado; o cancelamento espera o próximo ponto de espera.")
+            return
+        if isinstance(pid, int) and pid > 0:
             trava.drivers.append(proc)
 
 
@@ -2000,7 +2000,7 @@ class trava_execucao:
             if sinalizados:
                 log("Cancelamento", f"A rotina não parou em {CANCELAMENTO_FORCADO_S:.0f} s; driver do Playwright encerrado.")
             else:
-                log("Cancelamento", f"A rotina não parou em {CANCELAMENTO_FORCADO_S:.0f} s; nenhum driver ativo, o próximo registro recusa.")
+                log("Cancelamento", f"A rotina não parou em {CANCELAMENTO_FORCADO_S:.0f} s; nenhum driver encerrado; novo registro é recusado.")
             return
 
     def __exit__(self, _tipo, erro, _tb) -> None:

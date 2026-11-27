@@ -2776,7 +2776,7 @@ class VigiaCancelamentoTests(unittest.TestCase):
                 automacao.marcar_clique_irreversivel()
 
     def test_driver_registered_after_the_forced_end_is_refused(self):
-        with self.assertRaises(automacao.RotinaEncerrada):
+        with self.assertRaises(automacao.RotinaEncerrada) as ctx:
             with automacao.trava_execucao("consulta_endpoint"):
                 self.sinal.write_text("agora", encoding="utf-8")
                 limite = time.monotonic() + 5
@@ -2784,6 +2784,7 @@ class VigiaCancelamentoTests(unittest.TestCase):
                     time.sleep(0.1)
                 self.assertTrue(automacao._trava_ativa.encerrada)
                 automacao.registrar_driver(self._pw_falso())
+        self.assertEqual(str(ctx.exception), automacao.CANCELADA_PELO_USUARIO)
         self.assertIsNone(automacao.ler_trava())
 
     def test_cooperative_cancel_also_ends_as_cancelled_for_the_server(self):
