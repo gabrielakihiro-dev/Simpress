@@ -2874,6 +2874,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     try {
       const automacao = await app.apiFetch("/api/automacao/estado", { errorMessage: "Não foi possível consultar a automação." });
       if (automacao?.estado === "em_andamento" && automacao.rotina === "enviar") { app.acompanharExecucaoAutomacao?.(automacao); return; }
+      if (automacao?.ultima?.rotina === "enviar") carregarNovosSebrae(); // terminou entre o atualizar e este GET: a Automação não vai ver o fim
     } catch (_erro) { /* sem estado: a consulta comum abaixo cobre */ }
     app.atualizarEstadoAutomacao?.();
   }
@@ -2976,7 +2977,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         avisoExcluidos || envio.tipo === "warning" ? "alerta" : "ok");
       definirEnvioDisponivel(true);
       app.showToast(envio.texto, envio.tipo);
-      if (dados.enviar?.iniciado) await acompanharEnviarNaAutomacao();
+      if (dados.enviar?.iniciado) void acompanharEnviarNaAutomacao();
       tratarFechar(dados.fechar);
     } catch (falha) { const error = falha as ErroApi;
       definirStatusAtualizar(error.message, "erro");

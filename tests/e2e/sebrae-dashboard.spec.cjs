@@ -1154,6 +1154,21 @@ test("fim do enviar iniciado pelo Atualizar Dashboard, com a aba Automação ocu
   const antes = conflitos.n;
   fase = "livre"; // a rotina enviar terminou
   await expect.poll(() => conflitos.n, { timeout: 15000 }).toBeGreaterThan(antes);
+  // Só o acompanhamento entregue à Automação (acompanharExecucaoAutomacao) avisa o fim; o polling comum não avisa.
+  await expect(page.locator(TOAST).filter({ hasText: "Enviar Dashboard atualizado ao SharePoint:" })).toBeVisible();
+});
+
+test("enviar que terminou entre o Atualizar Dashboard e a consulta da Automação recarrega os conflitos", async ({ page, request }) => {
+  await page.route("**/api/automacao/estado*", route => route.fulfill({ json: ESTADO_LIVRE }));
+  const conflitos = contarConflitos(page);
+  const { painel, antigo } = await abrirAntigo(page, request);
+  await completarCampos(antigo);
+  await painel.locator("#btn-sebrae-atualizar").click();
+  const modal = page.locator("#modal-confirmar-acao");
+  await expect(modal).toBeVisible();
+  const antes = conflitos.n;
+  await Promise.all([page.waitForEvent("download"), modal.locator("#btn-confirmar-acao-ok").click()]);
+  await expect.poll(() => conflitos.n, { timeout: 10000 }).toBeGreaterThan(antes);
 });
 
 test("fim do reenviar (sem itens em resultados, com conflitos) recarrega a lista de conflitos", async ({ page }) => {
