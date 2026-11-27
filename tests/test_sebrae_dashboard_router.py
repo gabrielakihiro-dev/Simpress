@@ -173,6 +173,7 @@ class OsNovaSugeridaRotasTest(unittest.TestCase):
         for numero, corpo in (
             ("UTIC-2026-0001", {"os": "7400000;rm"}), ("UTIC-2026-0001", {"os": ""}), ("UTIC-2026-0001", {"os": "a" * 33}),
             ("UTIC-2026-0001", {"os": "200", "extra": 1}), ("UTIC-2026-0001", {}), ("chamado-x", {"os": "200"}),
+            ("linha:5", {"os": "200"}),  # 26/11/2026: só UTIC-AAAA-N
         ):
             resposta = self.cliente.put(f"/api/sebrae/chamados/{numero}/os-recusada", json=corpo)
             self.assertEqual(resposta.status_code, 422, (numero, corpo, resposta.text))
@@ -256,7 +257,7 @@ class OsNovaSugeridaRotasTest(unittest.TestCase):
         self.montar_cliente([self.antiga()])
         arquivo = fin.pasta_estado(self.caminhos.existentes) / "sebrae_os_recusadas.json"
         for rota in ("os-manter", "os-remover"):
-            for numero, corpo in (("UTIC-2026-0001", {"os": "7400000;rm"}), ("UTIC-2026-0001", {"os": ""}), ("UTIC-2026-0001", {"os": "100", "extra": 1}), ("chamado-x", {"os": "100"})):
+            for numero, corpo in (("UTIC-2026-0001", {"os": "7400000;rm"}), ("UTIC-2026-0001", {"os": ""}), ("UTIC-2026-0001", {"os": "100", "extra": 1}), ("chamado-x", {"os": "100"}), ("linha:5", {"os": "100"})):
                 resposta = self.cliente.put(f"/api/sebrae/chamados/{numero}/{rota}", json=corpo)
                 self.assertEqual(resposta.status_code, 422, (rota, numero, corpo, resposta.text))
         self.assertFalse(arquivo.exists())

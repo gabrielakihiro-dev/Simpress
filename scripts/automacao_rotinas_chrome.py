@@ -2145,11 +2145,13 @@ _BOTAO_MANTER_AMBOS = re.compile(r"^\s*(Keep both|Manter ambos)\s*$", re.IGNOREC
 # Avisos de sucesso do OneDrive (módulo 5729 de ondemand.resx.js, en-us e pt-br): "Uploaded {0} item(s)[ to {1}]",
 # "Uploaded {0} to {1}", "{0} carregado para {1}", "{0} item(ns) carregado(s)". As falhas ("wasn't uploaded to",
 # "não foi carregado para") e o andamento ("Uploading", "Carregando") ficam de fora. Sintaxe válida também em JS.
+# Ancorado no início e, no {0}, só a contagem ou o nome do Dashboard (inclusive a cópia "(pendente …)"): get_by_text também lê
+# os nomes dos arquivos da pasta, e um arquivo chamado "Relatório carregado para RH.xlsx" não pode confirmar o envio (26/11/2026).
+_NOME_ENVIADO = re.escape(Path(DASHBOARD_FINAL).stem) + r"(?: \(pendente [^)]*\))?(?:\.xlsx)?"
 _AVISO_ENVIO_CONCLUIDO = re.compile(
-    r"^\s*uploaded (?:\d+ items?\b|.+? to \S)"
-    r"|(?<!foi )(?<!foram )carregad[oa]s? para \S"
-    r"|^\s*\d+ ite(?:m|ns) carregad[oa]s?\b"
-    r"|upload(?:s)? (?:complete|finished)|(?:upload|envio|carregamento) conclu[ií]do",
+    rf"^\s*uploaded (?:\d+ items?\b|{_NOME_ENVIADO} to \S)"
+    rf"|^\s*(?:\d+ ite(?:m|ns)|{_NOME_ENVIADO}) carregad[oa]s?\b"
+    r"|^\s*(?:uploads? (?:complete|finished)|(?:upload|envio|carregamento) conclu[ií]do)[.!]?\s*$",
     re.IGNORECASE,
 )
 _AVISO_ARQUIVO_EM_USO = re.compile(r"locked|in use|being used|checked out|bloquead|em uso|sendo usado|sendo editado", re.IGNORECASE)
