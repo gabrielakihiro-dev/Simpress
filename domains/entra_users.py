@@ -17,6 +17,7 @@ from typing import Any
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from core.integrity import lock_paths
 from domains.inventory_comparison import normalize_reference_value
 
 
@@ -192,7 +193,7 @@ def _atomic_json(path: Path, data: dict[str, Any]) -> None:
 
 def import_csv(content: bytes, path: Path) -> dict[str, Any]:
     parsed = parse_csv(content)
-    with _LOCK:
+    with lock_paths([path]), _LOCK:  # nível 2 antes da folha (hierarquia_de_locks.md); exclui o Pacote local
         _atomic_json(path, parsed)
     return {key: parsed[key] for key in ("updated_at", "source_rows", "filtered_rows", "logins_ignorados")} | {"users": len(parsed["users"])}
 
@@ -205,7 +206,7 @@ def save_manual_name(path: Path, serial: str, login: str, name: str) -> None:
         raise ValueError("Nome ou série inválidos.")
     if clean and not owner:
         raise ValueError("Não há login válido para vincular o nome.")
-    with _LOCK:
+    with lock_paths([path]), _LOCK:
         data = read_manual_names(path)
         if clean:
             data[key] = {"login": owner, "nome": clean}

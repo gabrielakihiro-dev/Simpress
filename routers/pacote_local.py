@@ -1,7 +1,7 @@
 """Rotas do Pacote local (Configuração local): listar, escolher a pasta, exportar, prévia e restaurar.
 
-Exportar, restaurar e salvar a pasta só valem para pedido direto deste computador (127.0.0.1/::1), mesmo com o acesso
-pela rede ou pelo Tailscale ligado. Regras e mensagens em ``domains/pacote_local.py``.
+Todas as rotas só valem para pedido direto deste computador (127.0.0.1/::1), mesmo com o acesso pela rede ou pelo
+Tailscale ligado. Regras e mensagens em ``domains/pacote_local.py``.
 """
 
 from typing import Any, Callable, List, Literal, Optional
@@ -68,7 +68,7 @@ class PacoteLocalPrevia(BaseModel):
 
 class PacoteLocalRestaurarPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    preview_token: str = Field(..., min_length=64, max_length=64)
+    preview_token: str = Field(..., pattern=r"^[0-9a-f]{64}$")
     confirmado: StrictBool = False
 
 
@@ -93,18 +93,17 @@ def _chamar(funcao: Callable[..., Any], *args: Any) -> Any:
 
 
 def create_pacote_local_router(services: PacoteLocalServices) -> APIRouter:
-    router = APIRouter(prefix="/api/pacote-local")
-    local = [Depends(_so_neste_computador)]
+    router = APIRouter(prefix="/api/pacote-local", dependencies=[Depends(_so_neste_computador)])
 
     @router.get("", response_model=PacoteLocalLista)
     def listar_pacotes_locais():
         return pacote_local.listar(services)
 
-    @router.put("/pasta", response_model=PacoteLocalLista, dependencies=local)
+    @router.put("/pasta", response_model=PacoteLocalLista)
     def salvar_pasta_pacote_local(payload: PacoteLocalPastaPayload):
         return _chamar(pacote_local.salvar_pasta, services, payload.pasta)
 
-    @router.post("/exportar", response_model=PacoteLocalExportacao, dependencies=local)
+    @router.post("/exportar", response_model=PacoteLocalExportacao)
     def exportar_pacote_local():
         return _chamar(pacote_local.exportar, services)
 
@@ -112,7 +111,7 @@ def create_pacote_local_router(services: PacoteLocalServices) -> APIRouter:
     def previa_pacote_local(arquivo: str):
         return _chamar(pacote_local.previa, services, arquivo)
 
-    @router.post("/{arquivo}/restaurar", response_model=PacoteLocalRestauracao, dependencies=local)
+    @router.post("/{arquivo}/restaurar", response_model=PacoteLocalRestauracao)
     def restaurar_pacote_local(arquivo: str, payload: PacoteLocalRestaurarPayload):
         return _chamar(pacote_local.restaurar, services, arquivo, payload.preview_token, payload.confirmado)
 

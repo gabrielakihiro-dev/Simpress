@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import tempfile
+import threading
 import time
 import unicodedata
 import zipfile
@@ -28,7 +29,9 @@ from typing import Any, Callable, Dict, List, Optional
 from core import config
 from core.config import BASE_DIR, STATE_DIR, format_size_limit
 from core.errors import DomainError
-from core.integrity import FileBusyError, TransactionConflictError, WorkbookSafetyError, atomic_write_json, lock_paths
+from core.integrity import (
+    FileBusyError, TransactionConflictError, WorkbookSafetyError, _fsync_directory, atomic_write_json, lock_paths,
+)
 from core.local_paths import is_link_or_junction
 from core.xlsx_safety import validate_xlsx_archive
 from domains.configuracao_local import _CONTRATO, CONTAS, LINKS, validar_valor
@@ -104,7 +107,14 @@ FORA: tuple[str, ...] = (
     "data/state/sebrae_config.json",
     "data/state/sebrae_novos.json",
     "data/state/dashboard_agendamento.json",  # agenda envio ao SharePoint (sistema externo)
-    "data/state/sebrae_*",  # demais estados do Sebrae: ligados ao SharePoint e ao SoftExpert do momento
+    # Demais estados do Sebrae: ligados ao SharePoint e ao SoftExpert do momento.
+    "data/state/sebrae_historico.json",
+    "data/state/sebrae_os_recusadas.json",
+    "data/state/sebrae_excel_diario.json",
+    "data/state/sebrae_categoria_indice.json",
+    "data/state/sebrae_antigos_resultado.json",
+    "data/state/sebrae_antigos_softexpert.json",
+    "data/state/sebrae_backups",
     "data/state/inventory_update_idempotency.json",  # controle interno contra importação repetida
     "data/state/assinatura_tecnico.svg",  # o pacote leva só .json e .xlsx
     # Travas: pertencem ao processo que as criou.
@@ -129,12 +139,12 @@ NOME_PACOTE = re.compile(r"^(pacote-local|desfazer)-(\d{8}-\d{6})\.zip$")
 LIMITE_TOTAL = 300 * 1024 * 1024
 LIMITE_ZIP = 300 * 1024 * 1024
 LIMITE_MANIFESTO = 1024 * 1024
-RAZAO_MAXIMA = 100
 _BLOCO = 1024 * 1024
 _PAPEIS = {_rel(config.DETAILS_UPLOAD_FILE): "detalhes", _rel(config.ENDPOINT_UPLOAD_FILE): "endpoint"}
 _LINKS_E_CONTAS = {
     _rel(config.AUTOMATION_ACCOUNTS_FILE), _rel(config.CLIENT_CONFIG_FILE),
     _rel(config.REGIONAL_REPRESENTATIVES_FILE), _rel(config.REGIONAL_REPRESENTATIVE_DEFAULTS_FILE),
+    _rel(config.ASSISTANT_INSTRUCTIONS_FILE),
 }
 _CHAVES_MANIFESTO = {"formato", "tipo", "versao_app", "criado_em", "arquivos", "ausentes"}
 _CHAVES_ARQUIVO = {"caminho", "tamanho_bytes", "sha256"}
@@ -146,6 +156,9 @@ MSG_PASTA_INEXISTENTE = "A pasta não existe ou não aceita escrita."
 MSG_PASTA_REDE = "Use uma pasta deste computador (sem OneDrive, rede ou unidade removível)."
 MSG_PASTA_PROIBIDA = "Pasta não permitida."
 MSG_FALHA = "Falha ao restaurar. Os arquivos anteriores foram recuperados."
+MSG_OCUPADOS = "Arquivos ocupados; tente de novo em instantes."
+# Ligado durante a restauração: ChromeAutomationRunner recusa iniciar rotina (main.py injeta ``RESTAURANDO.is_set``).
+RESTAURANDO = threading.Event()
 MOTIVO_MANIFESTO = "manifesto ausente ou inválido"
 MOTIVO_FORA = "arquivo fora da lista permitida"
 MOTIVO_NAO_CONFERE = "arquivo não confere com o manifesto"
@@ -168,6 +181,8 @@ class PacoteLocalServices:
     # Gerenciadores de contexto que entregam True quando a caixa de entrada está livre (sem esperar).
     travas_importacao: Callable[[], List[Any]]
     transacao_pendente: Callable[[], bool]
+    # Estado publicado quando a restauração deixa o app sem cadastro (o mesmo de um app recém-aberto sem planilhas).
+    estado_vazio: Callable[[], Any]
 
 
 def _recusa(motivo: str) -> DomainError:
@@ -184,45 +199,65 @@ def _grande_demais(limite: int) -> DomainError:
 
 # --- Pasta do pacote ------------------------------------------------------------------------------------------------
 
+def _raizes_sincronizadas() -> List[Path]:
+    """Raízes do OneDrive: variáveis de ambiente e, no Windows, os pontos de montagem do OneDrive/SharePoint."""
+    raizes = [os.environ.get(variavel, "").strip() for variavel in _SINCRONIZADAS_ENV]
+    if sys.platform == "win32":
+        import winreg
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\SyncEngines\Providers\OneDrive") as chave:
+                for indice in range(winreg.QueryInfoKey(chave)[0]):
+                    try:
+                        with winreg.OpenKey(chave, winreg.EnumKey(chave, indice)) as conta:
+                            raizes.append(str(winreg.QueryValueEx(conta, "MountPoint")[0]).strip())
+                    except OSError:
+                        continue
+        except OSError:
+            pass
+    return [Path(raiz).resolve() for raiz in raizes if raiz and "\0" not in raiz]
+
+
 def validar_pasta(base: Path, texto: str) -> Path:
     """A pasta resolvida, ou DomainError 422 com uma das três mensagens de pasta."""
     erro = lambda mensagem: DomainError(mensagem, status_code=422)  # noqa: E731
-    if texto.startswith(("\\\\", "//")):
+    if any(ord(caractere) < 0x20 for caractere in texto):
+        raise erro(MSG_PASTA_PROIBIDA)
+    if texto.startswith(("\\", "//")):
         raise erro(MSG_PASTA_REDE)
-    pasta = Path(texto)
-    if not pasta.is_absolute():
-        raise erro(MSG_PASTA_INEXISTENTE)
-    partes = [parte.casefold() for parte in pasta.parts]
-    for variavel in _SINCRONIZADAS_ENV:
-        raiz = os.environ.get(variavel, "").strip()
-        raiz_partes = [parte.casefold() for parte in Path(raiz).parts] if raiz else []
-        if raiz_partes and partes[:len(raiz_partes)] == raiz_partes:
-            raise erro(MSG_PASTA_REDE)
-    if any(nome in parte for parte in partes for nome in _SINCRONIZADAS_NOMES):
-        raise erro(MSG_PASTA_REDE)
-    atual = Path(pasta.anchor)
-    for parte in pasta.parts[1:]:
-        atual = atual / parte
-        if is_link_or_junction(atual):
-            raise erro(MSG_PASTA_PROIBIDA)
-    if not pasta.is_dir():
-        raise erro(MSG_PASTA_INEXISTENTE)
-    resolvida = pasta.resolve()
-    for proibida in (base / "static", base / ".transactions"):
-        proibida = proibida.resolve()
-        if resolvida == proibida or proibida in resolvida.parents:
-            raise erro(MSG_PASTA_PROIBIDA)
-    if sys.platform == "win32":
-        import ctypes
-
-        drive_fixo = 3
-        if ctypes.windll.kernel32.GetDriveTypeW(resolvida.anchor) != drive_fixo:
-            raise erro(MSG_PASTA_REDE)
     try:
-        descritor, teste = tempfile.mkstemp(prefix=".pacote-local-teste-", dir=resolvida)
+        pasta = Path(texto)
+        if not pasta.is_absolute():
+            raise erro(MSG_PASTA_INEXISTENTE)
+        atual = Path(pasta.anchor)
+        for parte in pasta.parts[1:]:  # antes de resolver: resolve() esconde o link
+            atual = atual / parte
+            if is_link_or_junction(atual):
+                raise erro(MSG_PASTA_PROIBIDA)
+        if not pasta.is_dir():
+            raise erro(MSG_PASTA_INEXISTENTE)
+        # Nuvem, rede e repositório conferidos no caminho resolvido: ``..`` não contorna.
+        resolvida = pasta.resolve()
+        if str(resolvida).startswith(("\\", "//")):
+            raise erro(MSG_PASTA_REDE)
+        if any(nome in parte.casefold() for parte in resolvida.parts for nome in _SINCRONIZADAS_NOMES):
+            raise erro(MSG_PASTA_REDE)
+        if any(raiz == resolvida or raiz in resolvida.parents for raiz in _raizes_sincronizadas()):
+            raise erro(MSG_PASTA_REDE)
+        # Dentro do repositório o zip (com dado pessoal) poderia ir ao Git; só a pasta padrão é aceita.
+        base = base.resolve()
+        if (resolvida == base or base in resolvida.parents) and resolvida != (base / "data" / "pacotes_locais"):
+            raise erro(MSG_PASTA_PROIBIDA)
+        if sys.platform == "win32":
+            import ctypes
+
+            drive_fixo = 3
+            if ctypes.windll.kernel32.GetDriveTypeW(resolvida.anchor) != drive_fixo:
+                raise erro(MSG_PASTA_REDE)
+        descritor, teste = tempfile.mkstemp(prefix=".pacote-local-teste-", suffix=".tmp", dir=resolvida)
         os.close(descritor)
         os.unlink(teste)
-    except OSError:
+    except (OSError, ValueError):
         raise erro(MSG_PASTA_INEXISTENTE) from None
     return resolvida
 
@@ -244,7 +279,7 @@ def _pasta_em_uso(services: PacoteLocalServices) -> Path:
     if padrao:
         try:
             Path(texto).mkdir(parents=True, exist_ok=True)
-        except OSError:
+        except (OSError, ValueError):
             pass  # validar_pasta responde com a mensagem certa
     return validar_pasta(services.base_dir(), texto)
 
@@ -271,7 +306,7 @@ def listar(services: PacoteLocalServices) -> Dict[str, Any]:
                 })
     except DomainError as error:
         resposta["erro_pasta"] = error.detail
-    except OSError:
+    except (OSError, ValueError):
         resposta["erro_pasta"] = MSG_PASTA_INEXISTENTE
     resposta["pacotes"].sort(key=lambda item: (item["criado_em"], item["arquivo"]), reverse=True)
     return resposta
@@ -281,12 +316,14 @@ def salvar_pasta(services: PacoteLocalServices, texto: str) -> Dict[str, Any]:
     texto = texto.strip()
     valor = str(validar_pasta(services.base_dir(), texto)) if texto else ""
     arquivo = services.arquivo_config()
-    arquivo.parent.mkdir(parents=True, exist_ok=True)
     try:
+        arquivo.parent.mkdir(parents=True, exist_ok=True)
         with lock_paths([arquivo]):
             atomic_write_json(arquivo, {"pasta": valor})
     except FileBusyError:
-        raise DomainError("Arquivos ocupados; tente de novo em instantes.", status_code=409) from None
+        raise DomainError(MSG_OCUPADOS, status_code=409) from None
+    except OSError:
+        raise DomainError("Não foi possível salvar a pasta; tente de novo.", status_code=503) from None
     logger.info("pacote_local: pasta gravada (padrao=%s)", not valor)
     return listar(services)
 
@@ -309,7 +346,10 @@ def _hashes_atuais(base: Path) -> Dict[str, Optional[str]]:
     hashes: Dict[str, Optional[str]] = {}
     for rel in ALLOWLIST:
         alvo = _alvo(base, rel)
-        hashes[rel] = sha256_file(alvo) if alvo.is_file() else None
+        try:
+            hashes[rel] = sha256_file(alvo) if alvo.is_file() else None
+        except OSError:  # aberto por outro programa (Excel) ou sem permissão
+            raise DomainError(MSG_OCUPADOS, status_code=409) from None
     return hashes
 
 
@@ -335,7 +375,10 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
             raise DomainError(
                 f"{rel} passa do limite de {format_size_limit(services.max_upload_bytes)}.", status_code=422,
             )
-        dados = alvo.read_bytes()
+        try:
+            dados = alvo.read_bytes()
+        except OSError:
+            raise DomainError(MSG_OCUPADOS, status_code=409) from None
         total += len(dados)
         if total > LIMITE_TOTAL:
             raise DomainError(f"Os arquivos passam do limite de {format_size_limit(LIMITE_TOTAL)}.", status_code=422)
@@ -346,7 +389,10 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
         "criado_em": agora.isoformat(timespec="seconds"), "arquivos": arquivos, "ausentes": ausentes,
     }
     final = pasta / nome
-    descritor, temporario = tempfile.mkstemp(prefix=".pacote-local-", suffix=".tmp", dir=pasta)
+    try:
+        descritor, temporario = tempfile.mkstemp(prefix=".pacote-local-", suffix=".tmp", dir=pasta)
+    except OSError:
+        raise DomainError(MSG_PASTA_INEXISTENTE, status_code=422) from None
     try:
         with os.fdopen(descritor, "wb") as saida:
             with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as pacote:
@@ -366,6 +412,9 @@ def _gravar_pacote(services: PacoteLocalServices, pasta: Path, tipo: str) -> Dic
         except BaseException:
             final.unlink(missing_ok=True)
             raise
+        _fsync_directory(pasta)
+    except OSError:
+        raise DomainError(MSG_PASTA_INEXISTENTE, status_code=422) from None
     finally:
         try:
             os.unlink(temporario)
@@ -384,7 +433,12 @@ def exportar(services: PacoteLocalServices) -> Dict[str, Any]:
         with lock_paths([base / rel for rel in ALLOWLIST]):  # leitura coerente; uma chamada só
             resultado = _gravar_pacote(services, pasta, "exportacao")
     except FileBusyError:
-        raise DomainError("Arquivos ocupados; tente de novo em instantes.", status_code=409) from None
+        raise DomainError(MSG_OCUPADOS, status_code=409) from None
+    try:  # o pacote só fica na pasta se a prévia e a restauração o aceitarem
+        validar_pacote(services, pasta / resultado["arquivo"])
+    except DomainError:
+        (pasta / resultado["arquivo"]).unlink(missing_ok=True)
+        raise
     logger.info("pacote_local: exportado (arquivos=%d, ausentes=%d)", resultado["arquivos"], resultado["ausentes"])
     return resultado
 
@@ -482,6 +536,8 @@ def _conteudo_valido(services: PacoteLocalServices, rel: str, dados: bytes) -> b
             return _json_valido(rel, json.loads(dados.decode("utf-8-sig")))
         with zipfile.ZipFile(io.BytesIO(dados)) as planilha:
             validate_xlsx_archive(planilha)
+            if any("vbaproject" in nome.lower() for nome in planilha.namelist()):  # planilha com macro
+                return False
         if rel in _PAPEIS:
             services.validate_uploaded_workbook(dados, _PAPEIS[rel])
         return True
@@ -496,19 +552,29 @@ def validar_pacote(services: PacoteLocalServices, caminho: Path) -> Dict[str, An
     """
     if is_link_or_junction(caminho) or not caminho.is_file():
         raise _recusa(MOTIVO_CAMINHO)
-    with caminho.open("rb") as entrada:
-        if os.fstat(entrada.fileno()).st_size > LIMITE_ZIP:
-            raise _grande_demais(LIMITE_ZIP)
-        resumo = hashlib.sha256()
-        for bloco in iter(lambda: entrada.read(_BLOCO), b""):
-            resumo.update(bloco)
-        entrada.seek(0)
+    try:
+        entrada = caminho.open("rb")
+    except OSError:
+        raise DomainError("Não foi possível ler o pacote; tente de novo.", status_code=503) from None
+    with entrada:
+        try:
+            if os.fstat(entrada.fileno()).st_size > LIMITE_ZIP:
+                raise _grande_demais(LIMITE_ZIP)
+            resumo = hashlib.sha256()
+            for bloco in iter(lambda: entrada.read(_BLOCO), b""):
+                resumo.update(bloco)
+            entrada.seek(0)
+        except OSError:
+            raise DomainError("Não foi possível ler o pacote; tente de novo.", status_code=503) from None
         try:
             pacote = zipfile.ZipFile(entrada)
         except (zipfile.BadZipFile, OSError, ValueError):
             raise _recusa(MOTIVO_MANIFESTO) from None
         with pacote:
             manifesto, conteudo = _validar_entradas(services, pacote)
+    achado = NOME_PACOTE.fullmatch(caminho.name)
+    if achado and (achado.group(1) == "desfazer") != (manifesto["tipo"] == "desfazer"):
+        raise _recusa(MOTIVO_MANIFESTO)  # o tipo do manifesto precisa bater com o prefixo do nome
     return {"manifesto": manifesto, "conteudo": conteudo, "sha256": resumo.hexdigest()}
 
 
@@ -561,8 +627,6 @@ def _validar_entradas(services: PacoteLocalServices, pacote: zipfile.ZipFile) ->
             dados = _ler(pacote, info, item["tamanho_bytes"])
         except Exception:  # CRC, zlib ou compressão não suportada
             dados = None
-        if dados is not None and len(dados) > RAZAO_MAXIMA * max(info.compress_size, 1):
-            raise _grande_demais(LIMITE_TOTAL)
         if dados is None or len(dados) != item["tamanho_bytes"] or hashlib.sha256(dados).hexdigest() != item["sha256"]:
             raise _recusa(MOTIVO_NAO_CONFERE)
         if not _conteudo_valido(services, rel, dados):
@@ -638,15 +702,18 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
     caminho = _caminho_pacote(pasta, arquivo)
     base = services.base_dir()
     with ExitStack() as guardas:
-        if services.automacao_em_andamento():
-            raise _recusa_restauracao("uma automação está em execução")
         admissao = services.upload_admission()
         if not admissao.acquire(blocking=False):
             raise _recusa_restauracao("uma importação está em andamento")
         guardas.callback(admissao.release)
+        # Liga antes de olhar a automação: uma rotina que comece depois disso é recusada pelo próprio runner.
+        RESTAURANDO.set()
+        guardas.callback(RESTAURANDO.clear)
         for trava in services.travas_importacao():
             if not guardas.enter_context(trava):
                 raise _recusa_restauracao("uma importação está em andamento")
+        if services.automacao_em_andamento():
+            raise _recusa_restauracao("uma automação está em execução")
         if services.transacao_pendente():
             raise _recusa_restauracao("há uma gravação pendente para conferir em .transactions")
 
@@ -661,6 +728,7 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
 
         erro_interno: Optional[BaseException] = None
         gravado = False
+        desfazer: Optional[Dict[str, Any]] = None
         try:
             with services.inventory_state_transaction([base / rel for rel in ALLOWLIST]) as transacao:
                 try:
@@ -680,14 +748,17 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
                             transacao.stage_bytes(base / rel, dados, _conferir_preparado(dados))
                         elif acao == "apagar":
                             transacao.stage_delete(base / rel)
+                    if services.automacao_em_andamento():  # rotina iniciada fora do site durante a preparação
+                        raise _recusa_restauracao("uma automação está em execução")
                     transacao.apply()
                     estado = services.load_database(transaction_locked=True, publish=False)
-                    if (base / _rel(config.DETAILS_UPLOAD_FILE)).is_file() and not isinstance(estado, dict):
-                        raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
+                    if not isinstance(estado, dict):
+                        if (base / _rel(config.DETAILS_UPLOAD_FILE)).is_file():
+                            raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
+                        estado = services.estado_vazio()  # restauração sem cadastro: o site fica sem equipamentos
                     transacao.commit()
                     gravado = True
-                    if isinstance(estado, dict):
-                        services.publish_database_state(estado)  # dentro da transação, como history_restore
+                    services.publish_database_state(estado)  # dentro da transação, como history_restore
                 except BaseException as error:
                     erro_interno = error
                     raise
@@ -700,6 +771,8 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
             if erro_interno is not None and error is not erro_interno:
                 _falhou(pacote["sha256"], error)
                 raise _sem_recuperacao() from None  # a volta automática (rollback) também falhou
+            if desfazer is not None:  # nada mudou: o desfazer do estado atual não serve para nada
+                (pasta / desfazer["arquivo"]).unlink(missing_ok=True)
             if isinstance(error, DomainError):
                 raise
             _falhou(pacote["sha256"], error)
@@ -711,6 +784,7 @@ def restaurar(services: PacoteLocalServices, arquivo: str, preview_token: str, c
                 raise _recusa_restauracao("o estado mudou desde a prévia; abra a prévia de novo") from None
             raise DomainError(MSG_FALHA, status_code=500) from None
 
+    assert desfazer is not None
     resultado = {
         "substituidos": totais["substituir"], "criados": totais["criar"], "apagados": totais["apagar"],
         "mantidos": totais["manter"], "pacote_desfazer": desfazer["arquivo"],

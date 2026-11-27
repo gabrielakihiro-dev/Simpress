@@ -116,6 +116,7 @@ from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_rout
 from routers.local_setup import create_local_setup_router
 from routers.configuracao_local import create_configuracao_local_router
 from routers.pacote_local import create_pacote_local_router
+from domains import pacote_local as pacote_local_domain
 from domains.pacote_local import PacoteLocalServices
 from domains.monthly_report import sebrae_sources_from_state
 from routers.monthly_report import (
@@ -2149,6 +2150,7 @@ app.include_router(create_pacote_local_router(PacoteLocalServices(
         try_ticket_inbox_lock(AUTOMATIC_TICKET_INBOX_DIR / ".importador.lock"),
     ],
     transacao_pendente=lambda: get_transaction_recovery_block() is not None,
+    estado_vazio=lambda: prepare_database_state({}, [], {}),
 )))
 
 inventory_history_router, _inventory_history_exports = create_inventory_history_router(InventoryHistoryServices(
@@ -2387,7 +2389,9 @@ def get_chrome_automation_runner() -> ChromeAutomationRunner:
     global _chrome_automation_runner
     with _chrome_automation_runner_lock:
         if _chrome_automation_runner is None:
-            _chrome_automation_runner = ChromeAutomationRunner(default_contract(BASE_DIR, STATE_DIR, LOG_DIR))
+            _chrome_automation_runner = ChromeAutomationRunner(
+                default_contract(BASE_DIR, STATE_DIR, LOG_DIR), bloqueado=pacote_local_domain.RESTAURANDO.is_set,
+            )
         return _chrome_automation_runner
 
 

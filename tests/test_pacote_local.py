@@ -5,6 +5,7 @@ gravados. Os serviços do app (transação, carga da base, guardas) entram por i
 """
 
 import contextlib
+import dataclasses
 import fnmatch
 import hashlib
 import io
@@ -26,7 +27,7 @@ from openpyxl import Workbook
 import core.config
 from core.config import BASE_DIR, MAX_UPLOAD_BYTES, STATE_DIR
 from core.integrity import AtomicFileTransaction
-from domains import inventory_inbox, pacote_local
+from domains import inventory_inbox, pacote_local, ticket_inbox
 from domains.pacote_local import ALLOWLIST, FORA, PacoteLocalServices
 from routers.pacote_local import create_pacote_local_router
 
@@ -73,6 +74,17 @@ def montar_zip(arquivos: dict, manifesto=None, extras=(), versao="1.3.0", tipo="
     return saida.getvalue()
 
 
+def remendar(zip_bytes: bytes, nome: str, deslocamentos: tuple, valor: bytes) -> bytes:
+    """Troca um campo do cabeçalho local e do central da entrada (o zipfile não grava cabeçalhos mentirosos)."""
+    dados = bytearray(zip_bytes)
+    local = zipfile.ZipFile(io.BytesIO(zip_bytes)).getinfo(nome).header_offset
+    central = dados.rindex(nome.encode()) - 46  # o nome vem logo depois do cabeçalho central (46 bytes)
+    assert (dados[local:local + 4], dados[central:central + 4]) == (b"PK\x03\x04", b"PK\x01\x02")
+    for inicio, deslocamento in zip((local, central), deslocamentos):
+        dados[inicio + deslocamento:inicio + deslocamento + len(valor)] = valor
+    return bytes(dados)
+
+
 class PacoteLocalBase(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -83,6 +95,7 @@ class PacoteLocalBase(unittest.TestCase):
         self.admissao = threading.BoundedSemaphore(1)
         self.publicados = []
         self.carregar = mock.Mock(return_value={"equipamentos_cache": {}})
+        self.estado_vazio = {"equipamentos_cache": {}, "vazio": True}
         self.services = PacoteLocalServices(
             base_dir=lambda: self.base,
             arquivo_config=lambda: self.base / "config" / "pacote_local.json",
@@ -94,13 +107,21 @@ class PacoteLocalBase(unittest.TestCase):
             validate_uploaded_workbook=lambda dados, papel: {},
             automacao_em_andamento=lambda: self.automacao,
             upload_admission=lambda: self.admissao,
-            travas_importacao=lambda: [inventory_inbox.try_worker_lock(self.base / "inbox" / ".importador.lock")],
+            travas_importacao=lambda: [
+                inventory_inbox.try_worker_lock(self.base / "inbox" / ".importador.lock"),
+                ticket_inbox.try_worker_lock(self.base / "chamados" / ".importador.lock"),
+            ],
             transacao_pendente=lambda: False,
+            estado_vazio=lambda: self.estado_vazio,
         )
+        self.montar()
+        self.pasta = self.base / "data" / "pacotes_locais"
+
+    def montar(self, **trocas) -> None:
+        self.services = dataclasses.replace(self.services, **trocas)
         app = FastAPI()
         app.include_router(create_pacote_local_router(self.services))
         self.client = TestClient(app, client=LOCAL)
-        self.pasta = self.base / "data" / "pacotes_locais"
 
     def gravar(self, rel: str, dados) -> None:
         alvo = self.base / rel
@@ -157,7 +178,7 @@ class AllowlistTests(unittest.TestCase):
     def test_allowlist_so_json_e_xlsx_e_sem_sobreposicao_com_fora(self):
         self.assertTrue(all(rel.endswith((".json", ".xlsx")) for rel in ALLOWLIST))
         self.assertEqual(len(set(ALLOWLIST)), len(ALLOWLIST))
-        self.assertEqual(set(ALLOWLIST) & set(FORA), set())
+        self.assertEqual([rel for rel in ALLOWLIST if any(fnmatch.fnmatchcase(rel, padrao) for padrao in FORA)], [])
         for sensivel in (".env", "data/state/config_backups", "data/state/sebrae_credenciais.json", "config/pacote_local.json"):
             self.assertIn(sensivel, FORA)
         self.assertIn(CHAMADOS, ALLOWLIST)
@@ -189,6 +210,22 @@ class ExportarTests(PacoteLocalBase):
         self.assertEqual([item["arquivo"] for item in lista["pacotes"]], [corpo["arquivo"]])
         self.assertEqual(lista["pacotes"][0]["tipo"], "exportacao")
         self.assertEqual([p.name for p in self.pasta.iterdir()], [corpo["arquivo"]])  # sem temporário
+
+    def test_json_repetitivo_exporta_e_abre_na_previa(self):
+        historico = [{"serie": "S1", "campo": "usuario", "antes": "", "depois": "", "origem": "manual"}] * 5000
+        self.gravar("data/state/historico_alteracoes.json", json.dumps(historico, indent=2).encode())
+        resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        info = zipfile.ZipFile(self.pasta / resposta.json()["arquivo"]).getinfo("data/state/historico_alteracoes.json")
+        self.assertGreater(info.file_size / info.compress_size, 100)  # a razão não é limite
+        self.assertEqual(self.previa(resposta.json()["arquivo"]).status_code, 200)
+
+    def test_exportacao_que_nao_passa_na_conferencia_nao_fica_na_pasta(self):
+        self.gravar(cliente_rel(), {"contrato": "123", "cnpj_faturamento": "11.111.111/1111-11"})
+        resposta = self.client.post("/api/pacote-local/exportar")
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]),
+                         (422, f"Pacote recusado: conteúdo inválido em {cliente_rel()}"))
+        self.assertEqual(list(self.pasta.iterdir()), [])
 
     def test_nunca_sobrescreve_pacote_com_o_mesmo_nome(self):
         self.gravar(LEMBRETES, {"a": 1})
@@ -237,11 +274,7 @@ class ValidacaoTests(PacoteLocalBase):
         self.recusa(montar_zip({LEMBRETES: b"{}"}, versao="1.4.0"), "pacote de uma versão mais nova do app")
 
     def test_limites_de_tamanho(self):
-        servicos = self.services
-        self.services = PacoteLocalServices(**{**servicos.__dict__, "max_upload_bytes": 10})
-        app = FastAPI()
-        app.include_router(create_pacote_local_router(self.services))
-        self.client = TestClient(app, client=LOCAL)
+        self.montar(max_upload_bytes=10)
         self.recusa(montar_zip({LEMBRETES: b'{"a": "' + b"x" * 20 + b'"}'}), "pacote grande demais (limite 10 bytes)")
         with mock.patch.object(pacote_local, "LIMITE_ZIP", 50):
             self.recusa(montar_zip({LEMBRETES: b"{}"}), "pacote grande demais (limite 50 bytes)")
@@ -252,6 +285,38 @@ class ValidacaoTests(PacoteLocalBase):
         self.recusa(montar_zip({CHAMADOS: b'{"chamados": {}}'}), f"conteúdo inválido em {CHAMADOS}")
         self.recusa(montar_zip({"data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx": b"PK nada"}),
                     "conteúdo inválido em data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx")
+
+    def test_entradas_estruturais_recusadas(self):
+        cifrada = remendar(montar_zip({LEMBRETES: b"{}"}), LEMBRETES, (6, 8), (1).to_bytes(2, "little"))
+        self.assertTrue(zipfile.ZipFile(io.BytesIO(cifrada)).getinfo(LEMBRETES).flag_bits & 1)
+        self.recusa(cifrada, "caminho inválido no pacote")
+        self.recusa(montar_zip({}, extras=[(zipfile.ZipInfo("data/state/"), b"")]), "caminho inválido no pacote")
+        decomposto = "data/state/le\u0301mbretes.json"  # NFC igual a "lémbretes"
+        self.recusa(montar_zip({}, extras=[("data/state/l\u00e9mbretes.json", b"{}"), (decomposto, b"{}")]),
+                    "caminho inválido no pacote")
+        self.recusa(montar_zip({}, extras=[(LEMBRETES, b"{}"), (LEMBRETES.upper(), b"{}")]), "caminho inválido no pacote")
+
+    def test_cabecalho_que_mente_o_tamanho(self):
+        dados = remendar(montar_zip({LEMBRETES: b'{"lembretes": ["um", "dois", "tres"]}'}), LEMBRETES, (22, 24),
+                         (5).to_bytes(4, "little"))  # tamanho descompactado declarado = 5 bytes
+        self.assertEqual(zipfile.ZipFile(io.BytesIO(dados)).getinfo(LEMBRETES).file_size, 5)
+        self.recusa(dados, "arquivo não confere com o manifesto")
+
+    def test_total_acima_do_limite(self):
+        with mock.patch.object(pacote_local, "LIMITE_TOTAL", 3):
+            self.recusa(montar_zip({LEMBRETES: b"{}", OBSERVACOES: b"{}"}), "pacote grande demais (limite 3 bytes)")
+
+    def test_tipo_do_manifesto_bate_com_o_nome(self):
+        self.recusa(montar_zip({LEMBRETES: b"{}"}, tipo="desfazer"), "manifesto ausente ou inválido")
+        resposta = self.previa(self.colocar(montar_zip({LEMBRETES: b"{}"}), "desfazer-20260101-000000.zip"))
+        self.assertEqual(resposta.json()["detail"], "Pacote recusado: manifesto ausente ou inválido")
+
+    def test_planilha_com_macro(self):
+        livro = io.BytesIO(planilha())
+        with zipfile.ZipFile(livro, "a") as arquivo:
+            arquivo.writestr("xl/vbaProject.bin", b"macro")
+        self.recusa(montar_zip({"data/planilhas_entrada/_modelos/transferencia.xlsx": livro.getvalue()}),
+                    "conteúdo inválido em data/planilhas_entrada/_modelos/transferencia.xlsx")
 
     def test_404_para_nome_fora_do_padrao(self):
         self.colocar(montar_zip({LEMBRETES: b"{}"}), "outro.zip")
@@ -307,9 +372,60 @@ class RestaurarTests(PacoteLocalBase):
             resposta = self.restaurar(nome, token)
         self.assertEqual((resposta.status_code, resposta.json()["detail"]),
                          (409, "Restauração recusada: uma importação está em andamento"))
+        with ticket_inbox.try_worker_lock(self.base / "chamados" / ".importador.lock") as livre:
+            self.assertTrue(livre)
+            resposta = self.restaurar(nome, token)
+        self.assertEqual(resposta.json()["detail"], "Restauração recusada: uma importação está em andamento")
+        self.montar(transacao_pendente=lambda: True)
+        self.assertEqual((self.restaurar(nome, token).status_code, self.restaurar(nome, token).json()["detail"]),
+                         (409, "Restauração recusada: há uma gravação pendente para conferir em .transactions"))
         self.assertEqual(self.estado(), self.alterado)
         self.assertTrue(self.admissao.acquire(blocking=False))  # a guarda foi liberada
         self.admissao.release()
+        self.assertFalse(pacote_local.RESTAURANDO.is_set())
+
+    def test_arquivos_ocupados(self):
+        nome = self.preparar()
+        token = self.previa(nome).json()["preview_token"]
+        self.montar(inventory_state_transaction=mock.Mock(side_effect=pacote_local.FileBusyError("ocupado")))
+        resposta = self.restaurar(nome, token)
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]),
+                         (409, "Restauração recusada: arquivos ocupados; tente de novo em instantes"))
+        self.assertEqual(self.estado(), self.alterado)
+
+    def test_automacao_que_comeca_durante_a_restauracao(self):
+        nome = self.preparar()
+        token = self.previa(nome).json()["preview_token"]
+        vistas = []
+
+        def automacao():
+            vistas.append(pacote_local.RESTAURANDO.is_set())
+            return len(vistas) > 1  # livre na guarda, ocupada logo antes de gravar
+
+        self.montar(automacao_em_andamento=automacao)
+        resposta = self.restaurar(nome, token)
+        self.assertEqual((resposta.status_code, resposta.json()["detail"]),
+                         (409, "Restauração recusada: uma automação está em execução"))
+        self.assertEqual(vistas, [True, True])  # a trava das rotinas já estava ligada nas duas checagens
+        self.assertEqual(self.estado(), self.alterado)
+        self.assertEqual([p.name for p in self.pasta.iterdir()], [nome])  # desfazer sem uso apagado
+        self.assertFalse(pacote_local.RESTAURANDO.is_set())
+
+    def test_rotina_do_chrome_recusada_durante_a_restauracao(self):
+        from core.errors import DomainConflictError
+        from tests.test_chrome_automation import RunnerHarness
+
+        harness = RunnerHarness(self.base / "chrome")
+        harness.runner = harness.build(bloqueado=pacote_local.RESTAURANDO.is_set)
+        pacote_local.RESTAURANDO.set()
+        try:
+            with self.assertRaises(DomainConflictError):
+                harness.runner.start("os")
+        finally:
+            pacote_local.RESTAURANDO.clear()
+        self.assertEqual(harness.popen_calls, [])
+        harness.runner.start("os")
+        self.assertEqual(len(harness.popen_calls), 1)
 
     def test_ida_e_volta_com_desfazer(self):
         nome = self.preparar()
@@ -341,6 +457,29 @@ class RestaurarTests(PacoteLocalBase):
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual(resposta.json()["apagados"], 1)
         self.assertEqual(self.estado(), self.alterado)  # volta exato, inclusive apagar o que não existia
+
+    def test_desfazer_que_apaga_o_cadastro_publica_estado_vazio(self):
+        detalhes = "data/planilhas_entrada/EquipamentosDetalhes_atual.xlsx"
+        self.gravar(LEMBRETES, {"a": 1})
+        self.gravar(detalhes, planilha())
+        nome = self.client.post("/api/pacote-local/exportar").json()["arquivo"]
+        (self.base / detalhes).unlink()
+        desfazer = self.restaurar(nome, self.previa(nome).json()["preview_token"]).json()["pacote_desfazer"]
+        self.assertTrue((self.base / detalhes).is_file())
+        self.carregar.return_value = False  # sem cadastro, load_database devolve False
+        resposta = self.restaurar(desfazer, self.previa(desfazer).json()["preview_token"])
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertFalse((self.base / detalhes).exists())
+        self.assertIs(self.publicados[-1], self.estado_vazio)
+
+    def test_muda_links_com_instrucoes_do_assistente(self):
+        instrucoes = "data/state/assistente_instrucoes.json"
+        nome = self.colocar(montar_zip({instrucoes: b'{"instrucoes": []}'}))
+        self.assertTrue(self.previa(nome).json()["muda_links"])
+
+    def test_token_que_nao_e_hex(self):
+        nome = self.preparar()
+        self.assertEqual(self.restaurar(nome, "Z" * 64).status_code, 422)
 
     def test_ja_corresponde(self):
         self.gravar(LEMBRETES, {"a": 1})
@@ -390,6 +529,7 @@ class RestaurarTests(PacoteLocalBase):
         self.assertEqual((resposta.status_code, resposta.json()["detail"]), (500, pacote_local.MSG_FALHA))
         self.assertEqual(self.estado(), self.alterado)
         self.assertEqual(self.publicados, [])
+        self.assertEqual([p.name for p in self.pasta.iterdir()], [nome])  # o desfazer sem uso foi apagado
 
 
 class PastaTests(PacoteLocalBase):
@@ -416,16 +556,31 @@ class PastaTests(PacoteLocalBase):
             str(self.base / "static"): "Pasta não permitida.",
             str(self.base / "atalho"): "Pasta não permitida.",
         }
+        (self.base / "data" / "outra").mkdir(parents=True)
+        fora = self.base.parent / "fora"
+        fora.mkdir()
+        casos.update({
+            str(self.base): "Pasta não permitida.",
+            str(self.base / "data" / "outra"): "Pasta não permitida.",  # zip com dado pessoal iria ao Git
+            f"{fora}/../app/data/outra": "Pasta não permitida.",
+            f"{fora}\x00": "Pasta não permitida.",
+            f"{fora}\nx": "Pasta não permitida.",
+        })
         for texto, mensagem in casos.items():
             with self.subTest(texto=texto):
                 resposta = self.salvar(texto)
                 self.assertEqual((resposta.status_code, resposta.json()["detail"]), (422, mensagem))
-        with mock.patch.dict(os.environ, {"OneDrive": str(real)}):
-            self.assertEqual(self.salvar(str(real)).json()["detail"], rede)
+        nuvem = self.base.parent / "nuvem"
+        (nuvem / "p").mkdir(parents=True)
+        with mock.patch.dict(os.environ, {"OneDrive": str(nuvem)}):
+            self.assertEqual(self.salvar(str(nuvem / "p")).json()["detail"], rede)
+            self.assertEqual(self.salvar(f"{fora}/../nuvem/p").json()["detail"], rede)  # .. não contorna
+        with mock.patch.dict(os.environ, {"OneDriveCommercial": f"{fora}/../nuvem"}):
+            self.assertEqual(self.salvar(str(nuvem / "p")).json()["detail"], rede)
         self.assertFalse((self.base / "config" / "pacote_local.json").exists())
 
     def test_salva_pasta_valida_e_volta_ao_padrao(self):
-        escolhida = self.base / "pacotes"
+        escolhida = self.base.parent / "pacotes"
         escolhida.mkdir()
         resposta = self.salvar(str(escolhida))
         self.assertEqual(resposta.status_code, 200, resposta.text)
@@ -453,8 +608,9 @@ class AcessoTests(PacoteLocalBase):
     def test_so_neste_computador_mesmo_com_rede_ligada(self):
         rede = TestClient(self.client.app, client=("192.168.0.20", 1234))
         with mock.patch.dict(os.environ, {"SIMPRESS_ACESSO_REDE": "1", "SIMPRESS_ACESSO_TAILSCALE": "1"}):
-            self.assertEqual(rede.get("/api/pacote-local").status_code, 200)
             chamadas = (
+                rede.get("/api/pacote-local"),
+                rede.get(f"/api/pacote-local/{NOME}/previa"),
                 rede.put("/api/pacote-local/pasta", json={"pasta": ""}),
                 rede.post("/api/pacote-local/exportar"),
                 rede.post(f"/api/pacote-local/{NOME}/restaurar", json={"preview_token": "0" * 64, "confirmado": True}),
@@ -471,6 +627,9 @@ class AcessoTests(PacoteLocalBase):
         for metodo, caminho in (("get", "/api/pacote-local"), ("post", "/api/pacote-local/exportar"),
                                 ("get", f"/api/pacote-local/{NOME}/previa")):
             self.assertEqual(getattr(client, metodo)(caminho).status_code, 401)
+        self.assertEqual(client.put("/api/pacote-local/pasta", json={"pasta": ""}).status_code, 401)
+        restaurar = client.post(f"/api/pacote-local/{NOME}/restaurar", json={"preview_token": "0" * 64, "confirmado": True})
+        self.assertEqual(restaurar.status_code, 401)
 
 
 if __name__ == "__main__":

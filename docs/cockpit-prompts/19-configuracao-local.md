@@ -177,16 +177,16 @@ Exporta e restaura, num arquivo `.zip` deste computador, configurações, histó
 
 ### Pasta do pacote
 
-- Padrão: `data/pacotes_locais/` (criada se faltar). Fora do Git (`/data/pacotes_locais/` no `.gitignore`).
+- Padrão: `data/pacotes_locais/` (criada se faltar). Fora do Git (`/data/pacotes_locais/` no `.gitignore`; `pacote-local-*.zip`, `desfazer-*.zip` e `.pacote-local-*.tmp` também, em qualquer pasta).
 - A pasta escolhida fica em `config/pacote_local.json` (`{"pasta": "<caminho absoluto>"}`; vazio ou ausente = padrão). Fora do Git (`/config/pacote_local.json`). Esse arquivo **nunca** entra no pacote e nunca é restaurado.
-- Validação ao salvar **e** ao usar a pasta: absoluta, existente, pasta de verdade, gravável (cria e apaga um arquivo temporário); nem ela nem nenhum pai é link ou junção; fora de `static/` e de `.transactions/`.
-- Recusa rede e unidade removível: caminhos `\\` ou `//`; no Windows, só unidade fixa (`DRIVE_FIXED`). Em outros sistemas essa checagem é pulada.
-- Recusa pastas sincronizadas: dentro das variáveis `OneDrive`, `OneDriveCommercial` ou `OneDriveConsumer`, ou com um componente de caminho que contenha `onedrive`, `dropbox`, `google drive` ou `icloud` (sem diferenciar maiúsculas).
+- Validação ao salvar **e** ao usar a pasta: sem caractere de controle; absoluta, existente, pasta de verdade, gravável (cria e apaga um arquivo temporário); nem ela nem nenhum pai é link ou junção; dentro do repositório só a pasta padrão (fora dela o zip, com dado pessoal, poderia ir ao Git; isso já exclui `static/` e `.transactions/`). Nuvem, rede e repositório são conferidos no caminho resolvido, então `..` não contorna.
+- Recusa rede e unidade removível: caminhos `\\` ou `//` (também depois de resolver, o que pega unidade de rede mapeada); no Windows, só unidade fixa (`DRIVE_FIXED`). Em outros sistemas essa checagem é pulada.
+- Recusa pastas sincronizadas: dentro das variáveis `OneDrive`, `OneDriveCommercial` ou `OneDriveConsumer` (raiz também resolvida), dentro de um ponto de sincronização do OneDrive/SharePoint registrado no Windows (`HKCU\Software\SyncEngines\Providers\OneDrive\*\MountPoint`; sem a chave, nada muda), ou com um componente de caminho que contenha `onedrive`, `dropbox`, `google drive` ou `icloud` (sem diferenciar maiúsculas).
 - Mensagens de erro (textos exatos; a tela mostra a do servidor em `role="alert"`):
   - `A pasta não existe ou não aceita escrita.` (inexistente ou sem escrita)
   - `Use uma pasta deste computador (sem OneDrive, rede ou unidade removível).` (rede, sincronizada ou removível)
-  - `Pasta não permitida.` (`static/`, `.transactions/` ou link)
-- Salvar a pasta: 422 com a mensagem acima, nada gravado. Gravação atômica com trava (409 `Arquivos ocupados; tente de novo em instantes.`). Pasta configurada que sumiu: a lista mostra `erro_pasta` e nenhum pacote.
+  - `Pasta não permitida.` (dentro do repositório fora da padrão, link ou caractere de controle)
+- Salvar a pasta: 422 com a mensagem acima, nada gravado. Gravação atômica com trava (409 `Arquivos ocupados; tente de novo em instantes.`; 503 `Não foi possível salvar a pasta; tente de novo.` se o disco recusar). Pasta configurada que sumiu: a lista mostra `erro_pasta` e nenhum pacote.
 
 ### Textos aprovados da tela
 
@@ -212,20 +212,21 @@ Exporta e restaura, num arquivo `.zip` deste computador, configurações, histó
 ### Exportar
 
 1. `POST /api/pacote-local/exportar`, sem corpo. Lê todos os itens da allowlist numa só trava (`lock_paths`), então a cópia é coerente.
-2. Grava `pacote-local-AAAAMMDD-HHMMSS.zip` com um `manifesto.json` (formato 1, tipo, versão do app, data, lista de arquivos com tamanho e SHA-256, lista de ausentes). Grava num temporário e troca de nome com `os.replace`, depois fsync.
-3. Nunca sobrescreve: se o nome já existe, espera um segundo e tenta outro; se mesmo assim colidir, 409.
-4. Limites: 60 MB por arquivo (o `MAX_UPLOAD_BYTES` do app) e 300 MB no total. Acima disso, 422.
+2. Grava `pacote-local-AAAAMMDD-HHMMSS.zip` com um `manifesto.json` (formato 1, tipo, versão do app, data, lista de arquivos com tamanho e SHA-256, lista de ausentes). Grava num temporário `.pacote-local-*.tmp` com fsync, reserva o nome (criação exclusiva), troca com `os.replace` e faz fsync da pasta.
+3. Reabre o zip e o confere com a mesma validação da prévia. Se não passar (por exemplo, um arquivo atual inválido), apaga o zip e responde 422 `Pacote recusado: <motivo>`.
+4. Nunca sobrescreve: se o nome já existe, espera um segundo e tenta outro; se mesmo assim colidir, 409.
+5. Limites: 60 MB por arquivo (o `MAX_UPLOAD_BYTES` do app) e 300 MB no total. Acima disso, 422.
 
 ### Restaurar (ordem do código)
 
 1. Sem `confirmado: true` no corpo: 422, nada acontece. A tela envia `true` só no clique de `Confirmar restauração`.
-2. Guardas, sem espera (409 se alguma estiver ocupada): automação do Chrome em andamento (`uma automação está em execução`); importação em andamento, por upload ou por caixa de entrada (`uma importação está em andamento`); gravação pendente em `.transactions` (`há uma gravação pendente para conferir em .transactions`).
+2. Guardas, sem espera (409 se alguma estiver ocupada): importação em andamento, por upload ou por caixa de entrada (`uma importação está em andamento`); automação do Chrome em andamento (`uma automação está em execução`); gravação pendente em `.transactions` (`há uma gravação pendente para conferir em .transactions`). Logo depois da guarda de upload liga a trava `RESTAURANDO`: até o fim da restauração, iniciar uma rotina do Chrome pelo site (ou pelo agendamento) responde 409 `Uma restauração do Pacote local está em andamento; tente de novo em instantes.`
 3. Valida o zip inteiro (ver "Validação" abaixo) sem gravar nada.
 4. Recalcula o `preview_token` (SHA-256 do zip e dos hashes atuais dos itens da allowlist, comparados com `hmac.compare_digest`). Se mudou: 409 `o estado mudou desde a prévia; abra a prévia de novo`. Se nada muda: 409 `Este pacote já corresponde ao estado atual.`
 5. Abre a transação `inventory_state_transaction` sobre a allowlist (nível 1 e 2 numa chamada só). Dentro dela, reconfere os hashes.
 6. **Antes de gravar**, cria o pacote de desfazer `desfazer-AAAAMMDD-HHMMSS.zip` na mesma pasta com o estado atual, reabre e valida. Se falhar, apaga o desfazer e para com 409 `o pacote de desfazer do estado atual não passou na conferência (...)`. Nada é gravado.
-7. Prepara cada arquivo `criar` ou `substituir` (com a conferência dos bytes), apaga só o que o desfazer manda apagar, aplica, carrega o banco para provar que o conjunto abre, faz commit e publica o estado.
-8. Falha: rollback pela transação. Se a gravação já tinha sido feita e só o recarregamento falhou: 500 `A restauração foi gravada, mas o site não recarregou os dados; reinicie o app.`
+7. Prepara cada arquivo `criar` ou `substituir` (com a conferência dos bytes) e apaga só o que o desfazer manda apagar. Confere de novo a automação (uma rotina iniciada fora do site): se houver, 409 e nada é gravado. Aplica, carrega o banco para provar que o conjunto abre (se o cadastro deixou de existir, publica o estado vazio, como um app sem planilhas), faz commit e publica o estado.
+8. Falha: rollback pela transação, e o desfazer criado no passo 6 é apagado (o estado não mudou). Se a gravação já tinha sido feita e só o recarregamento falhou: 500 `A restauração foi gravada, mas o site não recarregou os dados; reinicie o app.`
 9. Log: só ação, contagens, SHA-256 do pacote e o tipo do erro. Nunca conteúdo, valores ou nomes de pessoas.
 
 Regra da restauração: arquivo da allowlist que existe hoje e não está no pacote fica **mantido** (`manter`). A única exceção é o `ausentes` de um pacote de desfazer, que é apagado.
@@ -242,14 +243,14 @@ Qualquer falha é 422 `Pacote recusado: <motivo>`, sem gravar nada. Motivos: `ma
 
 - Zip sem cifra, sem pasta, sem link, sem caminho absoluto, sem `..`, sem letra de unidade, sem `\`, sem caractere de controle, sem nome reservado do Windows, sem duplicado (sem diferenciar maiúsculas).
 - Manifesto de esquema estrito; entradas iguais ao manifesto; cada caminho igual a um item da allowlist. **O destino vem da allowlist, nunca do nome dentro do zip.**
-- Tamanho e SHA-256 conferem, lidos em streaming com limite. Razão de compressão até 100.
-- `.json` precisa ser JSON válido; `.xlsx` passa pelo validador de arquivo seguro; as duas planilhas de entrada passam pelo validador de upload. `config/contas_automacao.json` e `config/cliente.json` têm os valores revalidados (e-mail, usuário, link, contrato e CNPJ). `historico_chamados.json` precisa ter a lista `chamados`.
+- Tamanho e SHA-256 conferem, lidos em streaming: a leitura para em `tamanho + 1` e nos limites de 60 MB por arquivo e 300 MB no total (sem limite de razão de compressão: JSON repetitivo comprime mais de 100 vezes).
+- O tipo do manifesto bate com o nome (`pacote-local-` = exportação, `desfazer-` = desfazer); senão, `manifesto ausente ou inválido`.
+- `.json` precisa ser JSON válido; `.xlsx` passa pelo validador de arquivo seguro e não pode ter macro (`vbaProject`); as duas planilhas de entrada passam pelo validador de upload. `config/contas_automacao.json` e `config/cliente.json` têm os valores revalidados (e-mail, usuário, link, contrato e CNPJ). `historico_chamados.json` precisa ter a lista `chamados`.
 - Pacote de versão mais nova que o app é recusado. Versão igual ou mais antiga entra.
 
 ### Só neste computador
 
-- Exportar, restaurar e salvar a pasta só aceitam pedido direto de `127.0.0.1` ou `::1`. Com acesso pela rede ou pelo Tailscale ligado, a resposta é 403 `Disponível só neste computador.`
-- A prévia (`GET .../previa`) e a lista não têm essa trava, porque não gravam nada. Todas exigem o cookie de sessão (401 sem ele).
+- Todas as rotas (lista, pasta, exportar, prévia e restaurar) só aceitam pedido direto de `127.0.0.1` ou `::1`. Com acesso pela rede ou pelo Tailscale ligado, a resposta é 403 `Disponível só neste computador.` Todas exigem o cookie de sessão (401 sem ele).
 
 ### O que entra e o que fica de fora
 
