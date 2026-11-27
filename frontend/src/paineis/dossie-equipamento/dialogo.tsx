@@ -22,8 +22,10 @@ function LinhaDaOrdem({ linha }: { linha: Linha }) {
   );
 }
 
-// A contagem visível fica aria-hidden: o nome acessível lê "OS, 2 eventos", não "OS2".
-const nomePilula = (rotulo: string, total: number) => `${rotulo}, ${total} ${total === 1 ? "evento" : "eventos"}`;
+// Nome acessível pelo próprio texto ("OS 2 eventos"): o espaço evita "OS2" e o visível fica contido no nome.
+const Pilula = ({ rotulo, total }: { rotulo: string; total: number }) => (
+  <>{rotulo} <span className="dossie-equip__n">{total}</span><span className="ui-sr-only"> {total === 1 ? "evento" : "eventos"}</span></>
+);
 
 export function Dialogo() {
   const { serie, modelo, status, corpo, linha, filtro, trocado } = useSyncExternalStore(assinar, ler);
@@ -63,12 +65,12 @@ export function Dialogo() {
         <p id="dossie-linha-indisponivel" className="dossie-equip__mensagem dossie-equip__mensagem--alerta" hidden={!linha?.indisponivel}>{linha?.indisponivel}</p>
         <p id="dossie-filtro-impresso" className="dossie-equip__so-impressao">Filtro: {rotuloAtivo}</p>
         <div className="dossie-equip__filtros" role="group" aria-label="Filtrar a linha do tempo" hidden={contagens.length === 0}>
-          <button type="button" className="dossie-equip__pilula" aria-pressed={ativo === FILTRO_TUDO} aria-label={nomePilula(TEXTO.tudo, linha?.eventos.length ?? 0)} onClick={() => escolherFiltro(FILTRO_TUDO)}>
-            {TEXTO.tudo}<span className="dossie-equip__n" aria-hidden="true">{linha?.eventos.length}</span>
+          <button type="button" className="dossie-equip__pilula" aria-pressed={ativo === FILTRO_TUDO} onClick={() => escolherFiltro(FILTRO_TUDO)}>
+            <Pilula rotulo={TEXTO.tudo} total={linha?.eventos.length ?? 0} />
           </button>
           {contagens.map(c => (
-            <button key={c.tipo} type="button" className="dossie-equip__pilula" aria-pressed={ativo === c.tipo} aria-label={nomePilula(c.rotulo, c.total)} onClick={() => escolherFiltro(c.tipo)}>
-              {c.rotulo}<span className="dossie-equip__n" aria-hidden="true">{c.total}</span>
+            <button key={c.tipo} type="button" className="dossie-equip__pilula" aria-pressed={ativo === c.tipo} onClick={() => escolherFiltro(c.tipo)}>
+              <Pilula rotulo={c.rotulo} total={c.total} />
             </button>
           ))}
         </div>

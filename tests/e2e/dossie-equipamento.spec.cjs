@@ -333,14 +333,14 @@ test("the keyboard stays inside the dialog and Enter on Ver OS follows the OS", 
     percurso.push(foco.rotulo);
   }
   // Timeline pills and Imprimir joined the tab cycle (DOM order: Ver OS buttons, pills, Imprimir, Fechar).
-  expect(percurso).toEqual(["Ver OS OS-1001", "Ver OS OS-1002", "Tudo, 2 eventos", "OS, 2 eventos"]);
+  expect(percurso).toEqual(["Ver OS OS-1001", "Ver OS OS-1002", "Tudo 2 eventos", "OS 2 eventos"]);
   for (const esperado of ["Imprimir", "Fechar", "Ver OS OS-1001"]) {
     await page.keyboard.press("Tab");
     expect(await emFoco(page)).toEqual({ dentro: true, id: expect.any(String), rotulo: esperado });
   }
   await page.keyboard.press("Shift+Tab");
   expect((await emFoco(page)).rotulo).toBe("Fechar");
-  for (const esperado of ["Imprimir", "OS, 2 eventos", "Tudo, 2 eventos", "Ver OS OS-1002"]) {
+  for (const esperado of ["Imprimir", "OS 2 eventos", "Tudo 2 eventos", "Ver OS OS-1002"]) {
     await page.keyboard.press("Shift+Tab");
     expect((await emFoco(page)).rotulo).toBe(esperado);
   }
@@ -439,13 +439,13 @@ test("filters list only the types with events plus Tudo, with counts, and switch
   await abrirDossie(page);
   await expect(page.getByRole("group", { name: "Filtrar a linha do tempo" })).toBeVisible();
   // Fixed order, no "Cobertura" pill missing: every type here has events.
-  await expect(pilulas(page)).toHaveText(["Tudo6", "Apelido e usuário1", "Transferências1", "OS2", "Chamados Sebrae1", "Cobertura1"]);
+  await expect(pilulas(page)).toHaveText(["Tudo 6 eventos", "Apelido e usuário 1 evento", "Transferências 1 evento", "OS 2 eventos", "Chamados Sebrae 1 evento", "Cobertura 1 evento"]);
   await expect(pilulas(page).first()).toHaveAttribute("aria-pressed", "true");
   await expect(pilulas(page).nth(3)).toHaveAttribute("aria-pressed", "false");
-  // The accessible name reads the count apart from the label ("OS, 2 eventos", never "OS2").
-  await expect(modal(page).getByRole("button", { name: "Tudo, 6 eventos" })).toBeVisible();
-  await expect(modal(page).getByRole("button", { name: "OS, 2 eventos" })).toBeVisible();
-  await expect(modal(page).getByRole("button", { name: "Cobertura, 1 evento" })).toBeVisible();
+  // The accessible name reads the count apart from the label ("OS 2 eventos", never "OS2").
+  await expect(modal(page).getByRole("button", { name: "Tudo 6 eventos" })).toBeVisible();
+  await expect(modal(page).getByRole("button", { name: "OS 2 eventos" })).toBeVisible();
+  await expect(modal(page).getByRole("button", { name: "Cobertura 1 evento" })).toBeVisible();
   // The fade runs only on a filter change, not when the dialog opens.
   await expect(page.locator("#dossie-linha-lista")).not.toHaveClass(/dossie-equip__linha--troca/);
 
@@ -470,7 +470,7 @@ test("filters list only the types with events plus Tudo, with counts, and switch
 test("only the types that have events get a pill", async ({ page }) => {
   await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo([EVENTOS_MISTOS[0], EVENTOS_MISTOS[5]])) }));
   await abrirDossie(page);
-  await expect(pilulas(page)).toHaveText(["Tudo2", "Transferências1", "Chamados Sebrae1"]);
+  await expect(pilulas(page)).toHaveText(["Tudo 2 eventos", "Transferências 1 evento", "Chamados Sebrae 1 evento"]);
 });
 
 test("a failed source shows the notice and the OS section stays intact", async ({ page }) => {
@@ -510,7 +510,7 @@ test("above the limit the screen says how many of the total it shows", async ({ 
   await abrirDossie(page);
   await expect(eventosDaLinha(page)).toHaveCount(200);
   await expect(page.locator("#dossie-linha-limite")).toHaveText("Mostrando os 200 eventos mais recentes de 205.");
-  await expect(pilulas(page)).toHaveText(["Tudo200", "OS200"]);
+  await expect(pilulas(page)).toHaveText(["Tudo 200 eventos", "OS 200 eventos"]);
 });
 
 test("Imprimir calls window.print", async ({ page }) => {

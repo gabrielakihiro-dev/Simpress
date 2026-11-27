@@ -2814,7 +2814,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .dossie-equip__pilula { font: inherit; font-size: var(--fs-sm); padding: 3px 10px; border: 1px solid var(--cor-borda); border-radius: 999px; background: transparent; color: var(--cor-texto-suave); cursor: pointer; }
 .dossie-equip__pilula[aria-pressed="true"] { border-color: var(--cor-destaque); color: var(--cor-destaque-texto); background: var(--cor-destaque-fundo); }
 .dossie-equip__pilula:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
-.dossie-equip__n { margin-left: 4px; opacity: .7; }
+.dossie-equip__n { opacity: .7; }
 .dossie-equip__linha { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .dossie-equip__linha--troca { animation: dossie-troca 150ms var(--curva); }
 .dossie-equip__ev { display: grid; grid-template-columns: 128px 130px minmax(0, 1fr); gap: 10px; align-items: start; min-width: 0; padding: 8px 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }

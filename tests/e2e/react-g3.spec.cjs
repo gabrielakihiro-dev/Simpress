@@ -1,7 +1,8 @@
 // Migração React, Dia 2, grupo G3 (Equipamentos): "Dossiê do equipamento" da Home (F1).
 // O baseline de screenshots foi gravado com o diálogo antigo (JS puro), antes da troca para React:
 // o diálogo em React tem de sair igual nos dois tamanhos (390 e 1366 px) e nos dois temas.
-// O comportamento continua coberto por tests/e2e/dossie-equipamento.spec.cjs, que roda sem mudanças.
+// O comportamento continua coberto por tests/e2e/dossie-equipamento.spec.cjs.
+// O baseline dossie-pronto mudou com a "Linha do tempo" (27/11/2026) e é regravado no Windows.
 const { test, expect } = require("@playwright/test");
 
 const EQUIPAMENTO = { serial: "LENTO", modelo: "Notebook de teste", tipo: "Notebook", apelido: "TESTE-001", nome_pessoa: "Pessoa Teste" };
@@ -21,6 +22,15 @@ const DOSSIE = {
       eventos: [{ atualizado_em: "2026-11-05T09:30:00", tipo: "Dados alterados", mudancas: [{ campo: "Status Oracle", anterior: ["Aberto"], atual: ["Em atendimento"] }] }],
       total: 1,
     },
+  },
+};
+// Desde a decisão B (27/11/2026) as mudanças de OS aparecem na "Linha do tempo". Sem `linha_do_tempo`
+// (resposta antiga) a seção some, e os baselines de erro, carregando e sem base ficam iguais.
+const DOSSIE_LINHA = {
+  ...DOSSIE,
+  linha_do_tempo: {
+    eventos: [{ quando: "2026-11-05T09:30:00", so_data: false, tipo: "os", titulo: "Dados alterados", detalhes: ["Status Oracle: Aberto → Em atendimento"] }],
+    total: 1, limite: 200, indisponiveis: [],
   },
 };
 
@@ -49,9 +59,9 @@ const foto = { animations: "disabled", maxDiffPixelRatio: 0.01 };
 
 for (const tema of ["light", "dark"]) {
   test(`baseline: dossiê com OS, chamados e histórico, tema ${tema}`, async ({ page }) => {
-    await abrirDossie(page, { tema, dossie: DOSSIE });
+    await abrirDossie(page, { tema, dossie: DOSSIE_LINHA });
     await expect(page.locator("#dossie-os-linhas tr")).toHaveCount(2);
-    await expect(page.locator("#dossie-historico-lista > li")).toHaveCount(1);
+    await expect(page.locator("#dossie-linha-lista > li")).toHaveCount(1);
     await expect(dialogo(page)).toHaveScreenshot(`dossie-pronto-${tema}.png`, foto);
   });
 
@@ -78,7 +88,7 @@ test.describe("estrutura (1366 px)", () => {
   test.skip(({ viewport }) => viewport.width < 1366, "estrutura não depende da largura: roda só no desktop");
 
   test("IDs, ARIA e data-*: os mesmos do diálogo antigo, sem IDs repetidos na página", async ({ page }) => {
-    await abrirDossie(page, { tema: "light", dossie: DOSSIE });
+    await abrirDossie(page, { tema: "light", dossie: DOSSIE_LINHA });
     const modal = page.locator("#modal-dossie-equipamento.modal-overlay.ck-veu");
     await expect(modal).toHaveAttribute("aria-labelledby", "titulo-dossie-equipamento");
     await expect(modal.locator("h3#titulo-dossie-equipamento")).toHaveText("Dossiê do equipamento");
@@ -96,11 +106,12 @@ test.describe("estrutura (1366 px)", () => {
     await expect(modal.locator("#dossie-os-linhas tr").first().locator("td").last()).toHaveClass("ck-td--sem-rotulo");
     await expect(modal.locator("#dossie-os-linhas button.ck-btn.ck-btn--secundario.ck-btn--sm[type=button]").first()).toHaveAttribute("aria-label", "Ver OS OS-1001");
     await expect(modal.locator("#dossie-os-linhas .ck-tag.ck-tag--neutra")).toHaveText(["Manual"]);
-    await expect(modal.locator("#dossie-historico-titulo")).toHaveText("Mudanças da série nas importações de OS");
-    await expect(modal.locator("ul#dossie-historico-lista.dossie-equip__eventos > li.dossie-equip__evento")).toHaveCount(1);
-    await expect(modal.locator("#dossie-historico-lista p.dossie-equip__evento-cab time")).toHaveAttribute("datetime", "2026-11-05T09:30:00");
-    await expect(modal.locator("#dossie-historico-lista ul.dossie-equip__mudancas > li")).toHaveText(["Status Oracle: Aberto → Em atendimento"]);
-    await expect(modal.locator("#dossie-historico-vazio")).toBeHidden();
+    await expect(modal.locator("section#dossie-linha")).toHaveAttribute("aria-labelledby", "dossie-linha-titulo");
+    await expect(modal.locator("h4#dossie-linha-titulo")).toHaveText("Linha do tempo");
+    await expect(modal.locator("ol#dossie-linha-lista.dossie-equip__linha > li.dossie-equip__ev")).toHaveCount(1);
+    await expect(modal.locator("#dossie-linha-lista li.dossie-equip__ev time")).toHaveAttribute("datetime", "2026-11-05T09:30:00");
+    await expect(modal.locator("#dossie-linha-lista ul.dossie-equip__mudancas > li")).toHaveText(["Status Oracle: Aberto → Em atendimento"]);
+    await expect(modal.locator("#dossie-linha-vazio")).toBeHidden();
     await expect(modal.locator("button#dossie-fechar[type=button]")).toHaveText("Fechar");
     const repetidos = await page.evaluate(() => {
       const ids = [...document.querySelectorAll("[id]")].map(el => el.id);
@@ -110,9 +121,9 @@ test.describe("estrutura (1366 px)", () => {
   });
 
   test("data malformada (objeto) no histórico: o diálogo continua desenhado, como no código antigo", async ({ page }) => {
-    const historico = { ...DOSSIE.os.historico, eventos: [{ ...DOSSIE.os.historico.eventos[0], atualizado_em: {} }] };
-    await abrirDossie(page, { tema: "light", dossie: { ...DOSSIE, os: { ...DOSSIE.os, ultima_vez_observada_em: {}, historico } } });
-    await expect(page.locator("#dossie-historico-lista > li")).toHaveCount(1);
+    const linha_do_tempo = { ...DOSSIE_LINHA.linha_do_tempo, eventos: [{ ...DOSSIE_LINHA.linha_do_tempo.eventos[0], quando: {} }] };
+    await abrirDossie(page, { tema: "light", dossie: { ...DOSSIE, os: { ...DOSSIE.os, ultima_vez_observada_em: {} }, linha_do_tempo } });
+    await expect(page.locator("#dossie-linha-lista > li")).toHaveCount(1);
     await expect(page.locator("#titulo-dossie-equipamento")).toHaveText("Dossiê do equipamento");
     await expect(page.locator("#dossie-fechar")).toBeVisible();
     await expect(page.locator("#dossie-status")).toBeHidden();
