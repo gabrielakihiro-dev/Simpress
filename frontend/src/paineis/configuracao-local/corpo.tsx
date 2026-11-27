@@ -2,6 +2,7 @@
 // Os botões mantêm os data-on-* do HTML antigo: o action-dispatcher chama a ação em window, que passa pela ponte.
 import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { CHAVES_IA } from "./acoes";
+import { SecaoPacoteLocal } from "./pacote";
 import { assinar, ler, type Conta, type EstadoChave, type Link, type Secao, type Status } from "./estado";
 
 const classeSecao = (visivel: boolean) => (visivel ? "ckp-secao" : "ckp-secao hidden");
@@ -215,6 +216,7 @@ export function CorpoConfiguracao() {
           </div>
         </div>
       </section>
+      <SecaoPacoteLocal visivel={aberto} revisao={revisao.contas} Cabecalho={Cabecalho} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { COLUNAS, TEXTO, VAZIO, assinar, ler, verOs, type Linha } from "./estado";
+import { COLUNAS, FILTRO_TUDO, TEXTO, VAZIO, assinar, escolherFiltro, ler, verOs, type Linha } from "./estado";
 
 // Conteúdo de .ck-dialogo do #modal-dossie-equipamento (frontend/partials/modais.html). Mesmos IDs, classes e ARIA do
 // diálogo antigo: todos os elementos existem sempre e só o atributo hidden muda, como antes.
@@ -22,9 +22,18 @@ function LinhaDaOrdem({ linha }: { linha: Linha }) {
   );
 }
 
+// Nome acessível pelo próprio texto ("OS 2 eventos"): o espaço evita "OS2" e o visível fica contido no nome.
+const Pilula = ({ rotulo, total }: { rotulo: string; total: number }) => (
+  <>{rotulo} <span className="dossie-equip__n">{total}</span><span className="ui-sr-only"> {total === 1 ? "evento" : "eventos"}</span></>
+);
+
 export function Dialogo() {
-  const { serie, modelo, status, corpo } = useSyncExternalStore(assinar, ler);
-  const historico = corpo?.historico ?? null;
+  const { serie, modelo, status, corpo, linha, filtro, trocado } = useSyncExternalStore(assinar, ler);
+  const contagens = linha?.contagens ?? [];
+  // Filtro que já não tem eventos (não ocorre hoje) cai em "Tudo".
+  const ativo = contagens.some(c => c.tipo === filtro) ? filtro : FILTRO_TUDO;
+  const rotuloAtivo = contagens.find(c => c.tipo === ativo)?.rotulo ?? TEXTO.tudo;
+  const eventos = (linha?.eventos ?? []).filter(e => ativo === FILTRO_TUDO || e.tipo === ativo);
   return (
     <>
       <header className="dossie-equip__cab">
@@ -50,27 +59,44 @@ export function Dialogo() {
             </tbody>
           </table>
         </div>
-        <div id="dossie-historico" className="dossie-equip__historico" hidden={!historico}>
-          <h4 id="dossie-historico-titulo" className="dossie-equip__subtitulo">{historico?.titulo}</h4>
-          <ul id="dossie-historico-lista" className="dossie-equip__eventos">
-            {historico?.eventos.map((evento, i) => (
-              <li key={i} className="dossie-equip__evento">
-                <p className="dossie-equip__evento-cab">
-                  <time dateTime={evento.datetime || undefined}>{evento.quando}</time>{" · "}<strong>{evento.tipo}</strong>
-                </p>
-                {evento.mudancas.length > 0 && (
-                  <ul className="dossie-equip__mudancas">
-                    {evento.mudancas.map((mudanca, j) => <li key={j}>{mudanca}</li>)}
+      </section>
+      <section id="dossie-linha" className="dossie-equip__secao" aria-labelledby="dossie-linha-titulo" hidden={!linha}>
+        <h4 id="dossie-linha-titulo" className="dossie-equip__subtitulo">Linha do tempo</h4>
+        <p id="dossie-linha-indisponivel" className="dossie-equip__mensagem dossie-equip__mensagem--alerta" hidden={!linha?.indisponivel}>{linha?.indisponivel}</p>
+        <p id="dossie-filtro-impresso" className="dossie-equip__so-impressao">Filtro: {rotuloAtivo}</p>
+        <div className="dossie-equip__filtros" role="group" aria-label="Filtrar a linha do tempo" hidden={contagens.length === 0}>
+          <button type="button" className="dossie-equip__pilula" aria-pressed={ativo === FILTRO_TUDO} onClick={() => escolherFiltro(FILTRO_TUDO)}>
+            <Pilula rotulo={TEXTO.tudo} total={linha?.eventos.length ?? 0} />
+          </button>
+          {contagens.map(c => (
+            <button key={c.tipo} type="button" className="dossie-equip__pilula" aria-pressed={ativo === c.tipo} onClick={() => escolherFiltro(c.tipo)}>
+              <Pilula rotulo={c.rotulo} total={c.total} />
+            </button>
+          ))}
+        </div>
+        <ol id="dossie-linha-lista" key={ativo} className={trocado ? "dossie-equip__linha dossie-equip__linha--troca" : "dossie-equip__linha"} aria-label="Eventos, do mais recente ao mais antigo">
+          {eventos.map((evento, i) => (
+            <li key={i} className="dossie-equip__ev">
+              <time dateTime={evento.datetime || undefined}>{evento.quando}</time>
+              <span className="ck-tag ck-tag--neutra">{evento.rotulo}</span>
+              <div>
+                <p className="dossie-equip__ev-titulo">{evento.titulo}</p>
+                {evento.detalhes.length > 0 && (
+                  // LGPD: apelido e usuário só na tela; o CSS os esconde na impressão.
+                  <ul className={`dossie-equip__mudancas${evento.tipo === "apelido_usuario" ? " dossie-equip__so-tela" : ""}`}>
+                    {evento.detalhes.map((detalhe, j) => <li key={j}>{detalhe}</li>)}
                   </ul>
                 )}
-              </li>
-            ))}
-          </ul>
-          <p id="dossie-historico-vazio" hidden={!historico || historico.eventos.length > 0}>{TEXTO.semMudancas}</p>
-        </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <p id="dossie-linha-vazio" hidden={!linha || linha.eventos.length > 0}>{TEXTO.semEventos}</p>
+        <p id="dossie-linha-limite" hidden={!linha?.limite}>{linha?.limite}</p>
       </section>
       <div className="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
         {/* data-on-click como antes: o despachante de ações (frontend/src/ui/action-dispatcher.ts) chama window.fecharDossieEquipamento (a ponte) */}
+        <button type="button" id="dossie-imprimir" className="ck-btn ck-btn--secundario" onClick={() => window.print()}>Imprimir</button>
         <button type="button" id="dossie-fechar" data-on-click="fecharDossieEquipamento" className="ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </>

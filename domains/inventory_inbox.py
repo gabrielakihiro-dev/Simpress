@@ -84,6 +84,9 @@ def _try_worker_lock(path: Path) -> Iterator[bool]:
             handle.close()
         _PROCESS_WORKER_LOCK.release()
 
+# Público para o Pacote local recusar a restauração enquanto a caixa importa (sem esperar).
+try_worker_lock = _try_worker_lock
+
 
 def _rename_batch(source: Path, destination: Path) -> None:
     """Rename a batch folder, waiting out transient sharing locks; other errors propagate."""
