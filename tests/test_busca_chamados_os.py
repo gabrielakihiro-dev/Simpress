@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from core.errors import DomainBusyError
+from core.logging_setup import HTTP_CLIENT_LOGGERS, quiet_http_client_loggers
 from domains.busca_chamados_os import buscar_chamados, buscar_os
 from routers.operations import create_operations_router
 
@@ -90,6 +91,9 @@ class RotaTests(unittest.TestCase):
         self.tickets = fontes(novos=[("UTIC-2026-15", {"titulo": f"Mouse CPF {CPF}", "solicitante": NOME, "descricao": f"Trocar fonte zzdescx CPF {CPF}"})],
                               antigos=[("UTIC-2026-20", {"titulo": "Teclado quebrado"})], finalizados=["UTIC-2026-30"])
         self.series_equipamento = []
+        for nome in HTTP_CLIENT_LOGGERS:  # como em produção (configure_logging); devolve o nível no fim
+            self.addCleanup(logging.getLogger(nome).setLevel, logging.getLogger(nome).level)
+        quiet_http_client_loggers()
 
     def series_para(self, q):
         if isinstance(self.series_equipamento, Exception):
