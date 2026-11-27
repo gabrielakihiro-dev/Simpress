@@ -45,7 +45,7 @@ function dossie(serie, os = {}, linha = linhaDoTempo(EVENTOS_OS_LINHA)) {
   return {
     serie,
     modelo: "Notebook de teste",
-    ...(linha === undefined ? {} : { linha_do_tempo: linha }),
+    ...(linha === null ? {} : { linha_do_tempo: linha }), // null: the key is missing from the answer
     os: {
       estado: "ok", mensagem: "", total_importacoes: 3, ultima_importacao_em: "2026-11-10T08:00:00", presente_na_ultima: true,
       ultima_vez_observada_em: null, ordens: ORDENS, historico: { titulo: TITULO_HISTORICO, eventos: EVENTOS, total: EVENTOS.length }, ...os,
@@ -332,11 +332,18 @@ test("the keyboard stays inside the dialog and Enter on Ver OS follows the OS", 
     expect(foco.dentro).toBe(true);
     percurso.push(foco.rotulo);
   }
-  expect(percurso).toEqual(["Ver OS OS-1001", "Ver OS OS-1002", "Fechar", "Ver OS OS-1001"]);
+  // Timeline pills and Imprimir joined the tab cycle (DOM order: Ver OS buttons, pills, Imprimir, Fechar).
+  expect(percurso).toEqual(["Ver OS OS-1001", "Ver OS OS-1002", "Tudo2", "OS2"]);
+  for (const esperado of ["Imprimir", "Fechar", "Ver OS OS-1001"]) {
+    await page.keyboard.press("Tab");
+    expect(await emFoco(page)).toEqual({ dentro: true, id: expect.any(String), rotulo: esperado });
+  }
   await page.keyboard.press("Shift+Tab");
   expect((await emFoco(page)).rotulo).toBe("Fechar");
-  await page.keyboard.press("Shift+Tab");
-  expect((await emFoco(page)).rotulo).toBe("Ver OS OS-1002");
+  for (const esperado of ["Imprimir", "OS2", "Tudo2", "Ver OS OS-1002"]) {
+    await page.keyboard.press("Shift+Tab");
+    expect((await emFoco(page)).rotulo).toBe(esperado);
+  }
   await page.keyboard.press("Enter");
   await expect(modal(page)).toBeHidden();
   expect(await page.evaluate(() => window.__verOs)).toEqual([[[], SERIE_LINHA, "OS-1002"]]);
@@ -418,7 +425,8 @@ test("the timeline keeps the API order (newest first) and shows only the day for
   await abrirDossie(page);
   await expect(eventosDaLinha(page)).toHaveCount(EVENTOS_MISTOS.length);
   await expect(eventosDaLinha(page).locator(".dossie-equip__ev-titulo")).toHaveText(EVENTOS_MISTOS.map(e => e.titulo));
-  await expect(eventosDaLinha(page).locator("time")).toHaveText(["26/11/2026 16:40", "20/11/2026", "12/11/2026 10:00", "05/11/2026 09:30", "03/11/2026 08:00", "02/11/2026 08:00"].map(t => new RegExp(`^${t.replace(/\//g, "\\/")}`)));
+  // Only the day is checked for timed events: the hour follows the browser time zone.
+  await expect(eventosDaLinha(page).locator("time")).toHaveText(["26/11/2026", "20/11/2026", "12/11/2026", "05/11/2026", "03/11/2026", "02/11/2026"].map(dia => new RegExp(`^${dia.replace(/\//g, "\\/")}`)));
   const cobertura = eventosDaLinha(page).nth(1);
   await expect(cobertura.locator("time")).toHaveText("20/11/2026"); // day only, no hour
   await expect(cobertura.locator(".ck-tag")).toHaveText("Cobertura");
@@ -467,7 +475,7 @@ test("a failed source shows the notice and the OS section stays intact", async (
 });
 
 test("without linha_do_tempo in the answer the OS section still works", async ({ page }) => {
-  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, undefined) }));
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, null) }));
   await abrirDossie(page);
   await expect(page.locator("#dossie-status")).toBeHidden();
   await expect(page.locator("#dossie-os-importacoes")).toHaveText("Importações disponíveis: 3");
@@ -483,7 +491,7 @@ test("a series without events says so and shows no filters", async ({ page }) =>
   await expect(page.locator("#dossie-linha-vazio")).toBeVisible();
   await expect(page.locator("#dossie-linha-vazio")).toHaveText("Sem eventos para esta série.");
   await expect(eventosDaLinha(page)).toHaveCount(0);
-  await expect(pilulas(page)).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Filtrar a linha do tempo" })).toBeHidden();
   await expect(page.locator("#dossie-linha-indisponivel")).toBeHidden();
   await expect(page.locator("#dossie-linha-limite")).toBeHidden();
 });
@@ -530,13 +538,25 @@ for (const tema of ["dark", "light"]) {
       const veu = document.querySelector("#modal-dossie-equipamento");
       const dialogo = veu.querySelector(".ck-dialogo");
       return {
-        posicao: getComputedStyle(veu).position, fundoVeu: getComputedStyle(veu).backgroundColor,
+        posicao: getComputedStyle(veu).position,
         fundo: getComputedStyle(dialogo).backgroundColor, texto: getComputedStyle(document.querySelector(".dossie-equip__ev-titulo")).color,
         altura: getComputedStyle(dialogo).maxHeight, rolagem: dialogo.scrollHeight - dialogo.clientHeight,
       };
     });
-    expect(medidas).toMatchObject({ posicao: "static", fundoVeu: "rgb(255, 255, 255)", fundo: "rgb(255, 255, 255)", texto: "rgb(17, 17, 17)", altura: "none" });
+    expect(medidas).toMatchObject({ posicao: "static", fundo: "rgb(255, 255, 255)", texto: "rgb(17, 17, 17)", altura: "none" });
     expect(medidas.rolagem).toBeLessThanOrEqual(0);
+  });
+}
+
+// Known screen defect (reported, not hidden): static/styles/nl-base.css:125 (`.ck-veu:not(#assistente-widget *)`) ties in
+// specificity with the print rule in ck-cockpit.css:2839 and comes later, so the veil keeps its translucent color in print.
+for (const tema of ["dark", "light"]) {
+  test(`print media (${tema} theme): the veil has a white background`, async ({ page }) => {
+    await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO") }));
+    await abrirDossie(page);
+    await page.locator("html").evaluate((raiz, valor) => { raiz.dataset.theme = valor; }, tema);
+    await page.emulateMedia({ media: "print" });
+    await expect(modal(page)).toHaveCSS("background-color", "rgb(255, 255, 255)");
   });
 }
 

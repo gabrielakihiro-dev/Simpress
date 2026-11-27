@@ -2836,7 +2836,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* Impressão: só o diálogo do dossiê (o modal é filho direto do body), fundo branco e texto escuro em qualquer tema. */
 @media print {
   body > *:not(#modal-dossie-equipamento) { display: none !important; }
-  #modal-dossie-equipamento.ck-veu { position: static; display: block; padding: 0; background: #fff; animation: none; }
+  /* body > sobe a especificidade acima de .ck-veu:not(#assistente-widget *) de nl-base.css, que vem depois */
+  body > #modal-dossie-equipamento.ck-veu { position: static; display: block; padding: 0; background: #fff; backdrop-filter: none; animation: none; }
   #modal-dossie-equipamento > .ck-dialogo.dossie-equip { width: 100%; max-width: none; max-height: none; overflow: visible; box-shadow: none; border: 0; border-radius: 0; padding: 0; background: #fff; }
   #modal-dossie-equipamento .dossie-equip__cab, #modal-dossie-equipamento .dossie-equip__cab * { color: #111; }
   #modal-dossie-equipamento .dossie-equip :is(p, h3, h4, time, td, th, li, strong, span) { color: #111 !important; background: transparent !important; }
