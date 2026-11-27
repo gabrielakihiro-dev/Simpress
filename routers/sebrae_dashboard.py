@@ -25,9 +25,10 @@ from core.errors import DomainBusyError, DomainConflictError, DomainError, Domai
 from core.config import REGIONAL_REPRESENTATIVE_DEFAULTS_FILE, REGIONAL_REPRESENTATIVES_FILE, format_size_limit
 from core.integrity import atomic_write_json, lock_paths
 from domains import (
-    local_setup, sebrae_categoria, sebrae_credenciais, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,  # noqa: F401 - sebrae_categoria reexportado: os testes fazem patch.object(rota_sebrae.sebrae_categoria, ...)
+    local_setup, sebrae_credenciais, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
     sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_os_nova, sebrae_os_recusadas,
 )
+from domains import sebrae_categoria  # noqa: F401 - reexportado: os testes fazem patch.object(rota_sebrae.sebrae_categoria, ...)
 from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
 from domains import sebrae_dashboard_importacao as importacao, sebrae_dashboard_tela as tela
 from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c
