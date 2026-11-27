@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { apiFetch } from "../../api";
@@ -31,7 +32,7 @@ function exigir(id: string) {
   return alvo;
 }
 
-export function montar(container: HTMLElement) {
+export function montar(_container: HTMLElement) {
   const janela = window as unknown as Record<string, any>;
   // Tudo que não é da API é lido de window na hora da chamada (nada é guardado aqui), como o código antigo lia de `app`.
   const app: AppSebrae = {
@@ -63,40 +64,35 @@ export function montar(container: HTMLElement) {
     lojaAvisos,
     lojaRascunho,
   });
-  // Portais anexam: cada parte esvazia os seus alvos de texto (no partial já nascem vazios). Falha numa parte não derruba
-  // as outras nem o painel: as ações voltam sempre.
-  const partes: [string, () => JSX.Element][] = [
-    ["os chips da última leitura dos antigos", () => {
-      const alvos = {} as AlvosLeitura;
-      for (const [chave, id] of Object.entries(IDS_LEITURA) as [keyof AlvosLeitura, string][]) {
-        const alvo = exigir(id);
-        // Texto do horário e de "N falhas" vai no <span> interno (o ícone fica ao lado).
-        alvos[chave] = chave === "horaTexto" || chave === "botaoTexto" ? alvo.querySelector<HTMLElement>(":scope > span") ?? alvo : alvo;
-      }
-      [alvos.horaTexto, alvos.lidos, alvos.botaoTexto, alvos.lista, alvos.semUtic].forEach(alvo => alvo.replaceChildren());
-      return <ChipsLeitura key="leitura" alvos={alvos} loja={lojaLeitura} />;
-    }],
-    ["os avisos dos novos", () => {
-      const alvo = exigir("sebrae-novos-avisos");
-      alvo.replaceChildren();
-      return <AvisosNovos key="avisos" alvo={alvo} loja={lojaAvisos} />;
-    }],
-    ["o rascunho", () => {
-      const alvos = Object.fromEntries(Object.entries(IDS_RASCUNHO).map(([chave, id]) => [chave, exigir(id)])) as unknown as AlvosRascunho;
-      [alvos.status, alvos.resumo, alvos.itens].forEach(alvo => alvo.replaceChildren());
-      return <Rascunho key="rascunho" alvos={alvos} loja={lojaRascunho} />;
-    }],
-  ];
-  const filhos = partes.flatMap(([nome, criar]) => {
-    try { return [criar()]; } catch (erro) {
+  // Cada parte tem a sua raiz (num div solto: o conteúdo vai por portal), então erro ao montar ou ao desenhar uma não
+  // derruba as outras nem o painel: as ações voltam sempre. Portais anexam: cada parte esvazia os seus alvos de texto antes.
+  const montarParte = (nome: string, criar: () => ReactNode) => {
+    try {
+      const filho = criar();
+      flushSync(() => { createRoot(document.createElement("div")).render(filho); });
+    } catch (erro) {
       console.error(`Chamados do SoftExpert: falha ao montar ${nome}.`, erro);
-      return [];
     }
+  };
+  montarParte("os chips da última leitura dos antigos", () => {
+    const alvos = {} as AlvosLeitura;
+    for (const [chave, id] of Object.entries(IDS_LEITURA) as [keyof AlvosLeitura, string][]) {
+      const alvo = exigir(id);
+      // Texto do horário e de "N falhas" vai no <span> interno (o ícone fica ao lado).
+      alvos[chave] = chave === "horaTexto" || chave === "botaoTexto" ? alvo.querySelector<HTMLElement>(":scope > span") ?? alvo : alvo;
+    }
+    [alvos.horaTexto, alvos.lidos, alvos.botaoTexto, alvos.lista, alvos.semUtic].forEach(alvo => alvo.replaceChildren());
+    return <ChipsLeitura alvos={alvos} loja={lojaLeitura} />;
   });
-  try {
-    flushSync(() => { createRoot(container).render(<>{filhos}</>); });
-  } catch (erro) {
-    console.error("Chamados do SoftExpert: as partes em React não foram montadas.", erro);
-  }
+  montarParte("os avisos dos novos", () => {
+    const alvo = exigir("sebrae-novos-avisos");
+    alvo.replaceChildren();
+    return <AvisosNovos alvo={alvo} loja={lojaAvisos} />;
+  });
+  montarParte("o rascunho", () => {
+    const alvos = Object.fromEntries(Object.entries(IDS_RASCUNHO).map(([chave, id]) => [chave, exigir(id)])) as unknown as AlvosRascunho;
+    [alvos.status, alvos.resumo, alvos.itens].forEach(alvo => alvo.replaceChildren());
+    return <Rascunho alvos={alvos} loja={lojaRascunho} />;
+  });
   return acoes;
 }

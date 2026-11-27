@@ -21,6 +21,8 @@ export function Rascunho({ alvos, loja }: { alvos: AlvosRascunho; loja: LojaRasc
   const { texto, situacao, detalhes, versao } = useSyncExternalStore(loja.assinar, loja.ler);
   useLayoutEffect(() => {
     if (!versao) return; // nunca mostrado: o partial fica como veio (sem data-estado)
+    // Só o estado final de várias chamadas seguidas é aplicado. A ordem hidden/data-estado fica igual à de antes porque, num
+    // mesmo turno, só a primeira chamada pode vir sem texto (renderizar em estado.ts); as outras chamam uma vez.
     alvos.bloco.hidden = !texto;
     alvos.bloco.dataset.estado = situacao;
     alvos.caixa.hidden = !detalhes.length;
