@@ -25,7 +25,7 @@ const DOSSIE = {
   },
 };
 // Desde a decisão B (27/11/2026) as mudanças de OS aparecem na "Linha do tempo". Sem `linha_do_tempo`
-// (resposta antiga) a seção some, e os baselines de erro, carregando e sem base ficam iguais.
+// a seção mostra todas as fontes como indisponíveis (baseline sem base); erro e carregando não a mostram.
 const DOSSIE_LINHA = {
   ...DOSSIE,
   linha_do_tempo: {
