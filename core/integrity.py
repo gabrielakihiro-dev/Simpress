@@ -434,7 +434,8 @@ def _recover_transaction(root: Path, transaction_dir: Path) -> None:
             "Falha ao ler registro de recuperação (arquivo=%s, erro=%s).",
             manifest_path.name, type(error).__name__,
         )
-        raise TransactionConflictError(f"O registro de recuperação '{manifest_path.name}' está inválido: {error}.") from error
+        # The OSError text carries the full path (Windows login); only its type goes out.
+        raise TransactionConflictError(f"O registro de recuperação '{manifest_path.name}' está inválido ({type(error).__name__}).") from error
 
     if manifest.get("phase") == "committed":
         _cleanup_staged_files(root, manifest["entries"])
