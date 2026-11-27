@@ -166,6 +166,26 @@ test("apiRota takes method and URL from the route key, fills path params and sen
   assert.deepEqual(calls[1][1], { method: "GET" });
 });
 
+test("apiRota builds the query string from consulta: same order, repeated keys for lists, empty string kept, null/undefined dropped", async t => {
+  const { apiRota } = require("../../frontend/src/api.ts");
+  const calls = mockFetch(t, async () => jsonResponse({}));
+  await apiRota("GET /api/automacao/estado", { consulta: { offset: 0, arquivo: "" }, errorMessage: "Falhou." });
+  assert.equal(calls[0][0], "/api/automacao/estado?offset=0&arquivo=");
+  assert.deepEqual(calls[0][1], { method: "GET" }, "consulta não vaza para o RequestInit");
+
+  await apiRota("GET /api/automacao/historico/ultimas", { consulta: { rotina: ["os", "sebrae"] } });
+  assert.equal(calls[1][0], "/api/automacao/historico/ultimas?rotina=os&rotina=sebrae");
+
+  await apiRota("GET /api/automacao/historico", { consulta: { limite: 20, pagina: 1, data_inicio: null, data_fim: undefined, rotina: "os" } });
+  assert.equal(calls[2][0], "/api/automacao/historico?limite=20&pagina=1&rotina=os");
+
+  await apiRota("GET /api/automacao/execucoes/{execucao_id}/log", { caminho: { execucao_id: "a b/1" }, consulta: { linhas: 500 } });
+  assert.equal(calls[3][0], "/api/automacao/execucoes/a%20b%2F1/log?linhas=500");
+
+  await apiRota("GET /api/automacao/historico", { consulta: {} });
+  assert.equal(calls[4][0], "/api/automacao/historico", "sem parâmetros não acrescenta ?");
+});
+
 test("apiRota with responseType response returns the raw 2xx Response, even with an illegible body", async t => {
   const { apiRota } = require("../../frontend/src/api.ts");
   const calls = mockFetch(t, async () => new Response("<html>truncado", { status: 200 }));
