@@ -1407,17 +1407,10 @@ class Handler(BaseHTTPRequestHandler):
                        "base": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00"},
                        "linhas": linhas, "conteudo_base64": "UEsDBA==", "fechar": fechar, "enviar": enviar})
             return
-        if path in ("/api/sebrae/dashboard", "/api/sebrae/exportar"):
+        if path == "/api/sebrae/dashboard":
             size = int(self.headers.get("Content-Length", "0"))
-            body = self.rfile.read(size)
-            if path == "/api/sebrae/dashboard":
-                self.send(sebrae_novos_payload())
-            else:
-                chamados = json.loads(body or b"{}").get("chamados") or []
-                linhas = [f"{c['A']}\t\t{c['numero']}\t{c['D']}" for c in chamados]
-                self.send({"quantidade": len(chamados), "bloco_a_p": "\n".join(linhas),
-                           "bloco_r_s": "\n".join(f"{c['R']}\t{c['S']}" for c in chamados),
-                           "mensagem": "Planilha Exportada com Sucesso!"})
+            self.rfile.read(size)
+            self.send(sebrae_novos_payload())
             return
         if path in ("/api/equipamentos/usuarios-logados", "/api/equipamento/atualizar-usuario"):
             size = int(self.headers.get("Content-Length", "0"))

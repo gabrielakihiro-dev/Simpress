@@ -2110,7 +2110,6 @@ def verificar_staged_computers_apos_inventarios(context: "BrowserContext") -> No
 
 def rodar_rotina_sebrae(context: "BrowserContext") -> int:
     # Só leitura do SoftExpert: o resultado vai para data/state/sebrae_novos.json e o site mostra o formulário.
-    # O fluxo antigo (sebrae_rotina: Excel Online + orquestração) fica sem uso até ser removido.
     from scripts import sebrae_leitura
 
     return sebrae_leitura.executar(context, sys.modules[__name__])
