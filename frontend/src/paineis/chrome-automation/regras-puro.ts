@@ -75,6 +75,7 @@ export interface DadosEstado {
   inicio?: string | null;
   cancelamento_pedido?: boolean;
   aguardando_login?: boolean;
+  aguardando_dashboard?: boolean;
   login_origem?: string;
   ultima?: Execucao | null;
   log?: { arquivo?: string; offset?: number; reiniciado?: boolean; linhas?: string[] };
@@ -171,6 +172,7 @@ export interface DescricaoEstado {
   titulo: string;
   detalhe: string;
   esperandoLogin: boolean;
+  esperandoDashboard: boolean;
   avisoLogin: string;
   chipState: string;
   chipTitulo: string;
@@ -200,6 +202,7 @@ export function descreverEstado(dados: DadosEstado): DescricaoEstado {
     titulo,
     detalhe,
     esperandoLogin: ativo && Boolean(dados.aguardando_login),
+    esperandoDashboard: ativo && Boolean(dados.aguardando_dashboard),
     avisoLogin: `Faça o login no Chrome de automação${sistema}. A rotina continua sozinha depois do login.`,
     chipState: ativo ? "occupied" : "idle",
     chipTitulo: ativo ? "Chrome ocupado" : "Chrome livre",

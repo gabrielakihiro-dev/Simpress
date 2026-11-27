@@ -714,8 +714,8 @@ QUERY_TOOLS: List[Tool] = [
     ),
     _read(
         "consultar_status_automacao",
-        "Estado atual da automação do Chrome: situacao (livre, em_andamento, aguardando_login, cancelamento_solicitado), "
-        "qual rotina e desde quando. A etapa só é conhecida quando aguarda login; nos outros casos vem 'indisponível'. "
+        "Estado atual da automação do Chrome: situacao (livre, em_andamento, aguardando_login, aguardando_dashboard, cancelamento_solicitado), "
+        "qual rotina e desde quando. A etapa só é conhecida quando aguarda login ou Dashboard; nos outros casos vem 'indisponível'. "
         "Traz também a última execução do histórico (concluida, falhou, cancelada, interrompida ou ocupada, com motivo_codigo).",
         lambda c, a: c.consultar_status_automacao(),
     ),

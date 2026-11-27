@@ -79,12 +79,13 @@
 #tab-panel-automacao :is(.nl-f4-selo, #automacao-estado.ck-badge) .ck-ico { width: 12px; height: 12px; flex: none; }
 
 /* ---------- 5. Aviso de login ---------- */
-#tab-panel-automacao #automacao-aviso-login.ck-aviso {
+#tab-panel-automacao :is(#automacao-aviso-login, #automacao-aviso-dashboard).ck-aviso {
   grid-template-columns: 24px minmax(0, 1fr); align-items: start; gap: 4px 12px; padding: 14px 20px; border: 1px solid rgba(var(--nl-a), .5); border-radius: 16px;
   background: rgba(var(--nl-a), .10); color: var(--nl-atx);
 }
-#tab-panel-automacao #automacao-aviso-login .ck-secao-titulo, #tab-panel-automacao #automacao-aviso-login .ck-cartao__meta { color: var(--nl-atx); }
-#tab-panel-automacao #automacao-aviso-login .ck-secao-titulo { font-size: 14px; }
+#tab-panel-automacao :is(#automacao-aviso-login, #automacao-aviso-dashboard) .ck-secao-titulo, #tab-panel-automacao :is(#automacao-aviso-login, #automacao-aviso-dashboard) .ck-cartao__meta { color: var(--nl-atx); }
+#tab-panel-automacao :is(#automacao-aviso-login, #automacao-aviso-dashboard) .ck-secao-titulo { font-size: 14px; }
+#tab-panel-automacao #btn-automacao-cancelar-dashboard { margin-top: 8px; }
 
 /* ---------- 6. Cabeçalho: nome do Chrome, chip de estado, Backups e Login ---------- */
 #tab-panel-automacao .ck-chrome { align-items: center; gap: 10px 12px; padding: 14px 24px; }

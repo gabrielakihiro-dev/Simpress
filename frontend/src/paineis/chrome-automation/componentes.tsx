@@ -44,6 +44,22 @@ export function Aviso({ host }: { host: HTMLElement }) {
   );
 }
 
+export function AvisoDashboard({ host }: { host: HTMLElement }) {
+  const e = useAutomacao();
+  const esperando = Boolean(e.descricao?.esperandoDashboard);
+  useLayoutEffect(() => { host.hidden = !esperando; }, [host, esperando]);
+  return (
+    <>
+      <Icone nome="i-alerta" />
+      <div>
+        <h2 id="automacao-aviso-dashboard-titulo" className="ck-secao-titulo">Dashboard aberto no Excel</h2>
+        <p id="automacao-aviso-dashboard-texto" className="ck-cartao__meta">O Dashboard está aberto no Excel, por você ou por outra pessoa. Feche-o: a rotina continua sozinha quando ele for liberado. Se não for você, use Cancelar execução.</p>
+        <button type="button" className="ck-btn ck-btn--perigo ck-btn--sm" id="btn-automacao-cancelar-dashboard" aria-describedby="automacao-aviso-dashboard-texto" data-on-click="cancelarRotinaAutomacao" title="Para a rotina em andamento; o Chrome continua aberto" disabled={!e.emAndamento || e.ocupado}><Icone nome="i-stop" classe="ck-ico ck-ico--xs" />Cancelar execução</button>
+      </div>
+    </>
+  );
+}
+
 export function Chrome() {
   const e = useAutomacao();
   const d = e.descricao;
