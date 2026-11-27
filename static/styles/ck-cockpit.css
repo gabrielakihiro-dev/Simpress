@@ -2815,7 +2815,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .dossie-equip__pilula[aria-pressed="true"] { border-color: var(--cor-destaque); color: var(--cor-destaque-texto); background: var(--cor-destaque-fundo); }
 .dossie-equip__pilula:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .dossie-equip__n { margin-left: 4px; opacity: .7; }
-.dossie-equip__linha { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; animation: dossie-troca 150ms var(--curva); }
+.dossie-equip__linha { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.dossie-equip__linha--troca { animation: dossie-troca 150ms var(--curva); }
 .dossie-equip__ev { display: grid; grid-template-columns: 128px 130px minmax(0, 1fr); gap: 10px; align-items: start; min-width: 0; padding: 8px 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
 .dossie-equip__ev time { color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
 .dossie-equip__ev .ck-tag { justify-self: start; }
@@ -2830,22 +2831,22 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .dossie-equip__ev > div { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ck-veu > .ck-dialogo.dossie-equip .dossie-equip__status, .dossie-equip__linha { animation: none; }
+  .ck-veu > .ck-dialogo.dossie-equip .dossie-equip__status, .dossie-equip__linha--troca { animation: none; }
 }
 /* LGPD: apelido e usuário podem ser nome de pessoa; os detalhes (.dossie-equip__so-tela) saem só da impressão. */
-/* Impressão: só o diálogo do dossiê (o modal é filho direto do body), fundo branco e texto escuro em qualquer tema. */
+/* Impressão: só o diálogo do dossiê, e só com ele aberto e os Termos fora da impressão (html.termos-imprimindo); fundo branco e texto escuro em qualquer tema. */
+/* O prefixo (body:has) também sobe a especificidade acima de .ck-veu:not(#assistente-widget *) de nl-base.css, que vem depois. */
 @media print {
-  body > *:not(#modal-dossie-equipamento) { display: none !important; }
-  /* body > sobe a especificidade acima de .ck-veu:not(#assistente-widget *) de nl-base.css, que vem depois */
-  body > #modal-dossie-equipamento.ck-veu { position: static; display: block; padding: 0; background: #fff; backdrop-filter: none; animation: none; }
-  #modal-dossie-equipamento > .ck-dialogo.dossie-equip { width: 100%; max-width: none; max-height: none; overflow: visible; box-shadow: none; border: 0; border-radius: 0; padding: 0; background: #fff; }
-  #modal-dossie-equipamento .dossie-equip__cab, #modal-dossie-equipamento .dossie-equip__cab * { color: #111; }
-  #modal-dossie-equipamento .dossie-equip :is(p, h3, h4, time, td, th, li, strong, span) { color: #111 !important; background: transparent !important; }
-  #modal-dossie-equipamento .dossie-equip :is(.dossie-equip__filtros, .ck-btn, .ck-td--sem-rotulo, th:last-child, .dossie-equip__so-tela) { display: none !important; }
-  #modal-dossie-equipamento .dossie-equip .dossie-equip__so-impressao { display: block; }
-  #modal-dossie-equipamento .dossie-equip > div:last-child { display: none; }
-  .dossie-equip__ev { break-inside: avoid; background: #fff; border-color: #ccc; }
-  .dossie-equip__linha { animation: none; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) > *:not(#modal-dossie-equipamento) { display: none !important; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) > #modal-dossie-equipamento.ck-veu { position: static; display: block; padding: 0; background: #fff; backdrop-filter: none; animation: none; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) #modal-dossie-equipamento > .ck-dialogo.dossie-equip { width: 100%; max-width: none; max-height: none; overflow: visible; box-shadow: none; border: 0; border-radius: 0; padding: 0; background: #fff; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) #modal-dossie-equipamento .dossie-equip__cab, html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) #modal-dossie-equipamento .dossie-equip__cab * { color: #111; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) #modal-dossie-equipamento .dossie-equip :is(p, h3, h4, time, td, th, li, strong, span) { color: #111 !important; background: transparent !important; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) #modal-dossie-equipamento .dossie-equip :is(.dossie-equip__filtros, .ck-btn, .ck-td--sem-rotulo, th:last-child, .dossie-equip__so-tela) { display: none !important; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) #modal-dossie-equipamento .dossie-equip .dossie-equip__so-impressao { display: block; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) #modal-dossie-equipamento .dossie-equip > div:last-child { display: none; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) .dossie-equip__ev { break-inside: avoid; background: #fff; border-color: #ccc; }
+  html:not(.termos-imprimindo) body:has(> #modal-dossie-equipamento:not(.hidden)) .dossie-equip__linha { animation: none; }
 }
 
 /* ---------- F2 Catálogo de unidades (13/11/2026): KPIs em cartões, barra numa linha, lista e detalhe em cartões, detalhe em grade 2×2 ---------- */

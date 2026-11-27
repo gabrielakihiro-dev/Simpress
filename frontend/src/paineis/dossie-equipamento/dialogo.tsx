@@ -22,8 +22,11 @@ function LinhaDaOrdem({ linha }: { linha: Linha }) {
   );
 }
 
+// A contagem visível fica aria-hidden: o nome acessível lê "OS, 2 eventos", não "OS2".
+const nomePilula = (rotulo: string, total: number) => `${rotulo}, ${total} ${total === 1 ? "evento" : "eventos"}`;
+
 export function Dialogo() {
-  const { serie, modelo, status, corpo, linha, filtro } = useSyncExternalStore(assinar, ler);
+  const { serie, modelo, status, corpo, linha, filtro, trocado } = useSyncExternalStore(assinar, ler);
   const contagens = linha?.contagens ?? [];
   // Filtro que já não tem eventos (não ocorre hoje) cai em "Tudo".
   const ativo = contagens.some(c => c.tipo === filtro) ? filtro : FILTRO_TUDO;
@@ -60,16 +63,16 @@ export function Dialogo() {
         <p id="dossie-linha-indisponivel" className="dossie-equip__mensagem dossie-equip__mensagem--alerta" hidden={!linha?.indisponivel}>{linha?.indisponivel}</p>
         <p id="dossie-filtro-impresso" className="dossie-equip__so-impressao">Filtro: {rotuloAtivo}</p>
         <div className="dossie-equip__filtros" role="group" aria-label="Filtrar a linha do tempo" hidden={contagens.length === 0}>
-          <button type="button" className="dossie-equip__pilula" aria-pressed={ativo === FILTRO_TUDO} onClick={() => escolherFiltro(FILTRO_TUDO)}>
-            {TEXTO.tudo}<span className="dossie-equip__n">{linha?.eventos.length}</span>
+          <button type="button" className="dossie-equip__pilula" aria-pressed={ativo === FILTRO_TUDO} aria-label={nomePilula(TEXTO.tudo, linha?.eventos.length ?? 0)} onClick={() => escolherFiltro(FILTRO_TUDO)}>
+            {TEXTO.tudo}<span className="dossie-equip__n" aria-hidden="true">{linha?.eventos.length}</span>
           </button>
           {contagens.map(c => (
-            <button key={c.tipo} type="button" className="dossie-equip__pilula" aria-pressed={ativo === c.tipo} onClick={() => escolherFiltro(c.tipo)}>
-              {c.rotulo}<span className="dossie-equip__n">{c.total}</span>
+            <button key={c.tipo} type="button" className="dossie-equip__pilula" aria-pressed={ativo === c.tipo} aria-label={nomePilula(c.rotulo, c.total)} onClick={() => escolherFiltro(c.tipo)}>
+              {c.rotulo}<span className="dossie-equip__n" aria-hidden="true">{c.total}</span>
             </button>
           ))}
         </div>
-        <ol id="dossie-linha-lista" key={ativo} className="dossie-equip__linha" aria-label="Eventos, do mais recente ao mais antigo">
+        <ol id="dossie-linha-lista" key={ativo} className={trocado ? "dossie-equip__linha dossie-equip__linha--troca" : "dossie-equip__linha"} aria-label="Eventos, do mais recente ao mais antigo">
           {eventos.map((evento, i) => (
             <li key={i} className="dossie-equip__ev">
               <time dateTime={evento.datetime || undefined}>{evento.quando}</time>

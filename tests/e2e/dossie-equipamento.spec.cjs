@@ -333,14 +333,14 @@ test("the keyboard stays inside the dialog and Enter on Ver OS follows the OS", 
     percurso.push(foco.rotulo);
   }
   // Timeline pills and Imprimir joined the tab cycle (DOM order: Ver OS buttons, pills, Imprimir, Fechar).
-  expect(percurso).toEqual(["Ver OS OS-1001", "Ver OS OS-1002", "Tudo2", "OS2"]);
+  expect(percurso).toEqual(["Ver OS OS-1001", "Ver OS OS-1002", "Tudo, 2 eventos", "OS, 2 eventos"]);
   for (const esperado of ["Imprimir", "Fechar", "Ver OS OS-1001"]) {
     await page.keyboard.press("Tab");
     expect(await emFoco(page)).toEqual({ dentro: true, id: expect.any(String), rotulo: esperado });
   }
   await page.keyboard.press("Shift+Tab");
   expect((await emFoco(page)).rotulo).toBe("Fechar");
-  for (const esperado of ["Imprimir", "OS2", "Tudo2", "Ver OS OS-1002"]) {
+  for (const esperado of ["Imprimir", "OS, 2 eventos", "Tudo, 2 eventos", "Ver OS OS-1002"]) {
     await page.keyboard.press("Shift+Tab");
     expect((await emFoco(page)).rotulo).toBe(esperado);
   }
@@ -429,6 +429,7 @@ test("the timeline keeps the API order (newest first) and shows only the day for
   await expect(eventosDaLinha(page).locator("time")).toHaveText(["26/11/2026", "20/11/2026", "12/11/2026", "05/11/2026", "03/11/2026", "02/11/2026"].map(dia => new RegExp(`^${dia.replace(/\//g, "\\/")}`)));
   const cobertura = eventosDaLinha(page).nth(1);
   await expect(cobertura.locator("time")).toHaveText("20/11/2026"); // day only, no hour
+  await expect(cobertura.locator("time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}$/); // no invented 23:59:59
   await expect(cobertura.locator(".ck-tag")).toHaveText("Cobertura");
   await expect(eventosDaLinha(page).first().locator("time")).toHaveAttribute("datetime", "2026-11-26T16:40:00-03:00");
 });
@@ -441,12 +442,19 @@ test("filters list only the types with events plus Tudo, with counts, and switch
   await expect(pilulas(page)).toHaveText(["Tudo6", "Apelido e usuário1", "Transferências1", "OS2", "Chamados Sebrae1", "Cobertura1"]);
   await expect(pilulas(page).first()).toHaveAttribute("aria-pressed", "true");
   await expect(pilulas(page).nth(3)).toHaveAttribute("aria-pressed", "false");
+  // The accessible name reads the count apart from the label ("OS, 2 eventos", never "OS2").
+  await expect(modal(page).getByRole("button", { name: "Tudo, 6 eventos" })).toBeVisible();
+  await expect(modal(page).getByRole("button", { name: "OS, 2 eventos" })).toBeVisible();
+  await expect(modal(page).getByRole("button", { name: "Cobertura, 1 evento" })).toBeVisible();
+  // The fade runs only on a filter change, not when the dialog opens.
+  await expect(page.locator("#dossie-linha-lista")).not.toHaveClass(/dossie-equip__linha--troca/);
 
   await pilulas(page).nth(3).click(); // OS
   await expect(pilulas(page).nth(3)).toHaveAttribute("aria-pressed", "true");
   await expect(pilulas(page).first()).toHaveAttribute("aria-pressed", "false");
   await expect(eventosDaLinha(page).locator(".dossie-equip__ev-titulo")).toHaveText(["Dados alterados", "Importação inicial"]);
   await pilulas(page).nth(4).click(); // Chamados Sebrae
+  await expect(page.locator("#dossie-linha-lista")).toHaveClass(/dossie-equip__linha--troca/);
   await expect(eventosDaLinha(page).locator(".dossie-equip__ev-titulo")).toHaveText(["Chamado encerrado no Dashboard"]);
   await expect(pilulas(page).nth(3)).toHaveAttribute("aria-pressed", "false");
 
@@ -548,8 +556,6 @@ for (const tema of ["dark", "light"]) {
   });
 }
 
-// Known screen defect (reported, not hidden): static/styles/nl-base.css:125 (`.ck-veu:not(#assistente-widget *)`) ties in
-// specificity with the print rule in ck-cockpit.css:2839 and comes later, so the veil keeps its translucent color in print.
 for (const tema of ["dark", "light"]) {
   test(`print media (${tema} theme): the veil has a white background`, async ({ page }) => {
     await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO") }));
@@ -559,6 +565,16 @@ for (const tema of ["dark", "light"]) {
     await expect(modal(page)).toHaveCSS("background-color", "rgb(255, 255, 255)");
   });
 }
+
+test("with the dialog closed, print media does not print the dossier and keeps the app", async ({ page }) => {
+  await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_MISTOS)) }));
+  await abrirDossie(page);
+  await page.locator("#dossie-fechar").click();
+  await expect(modal(page)).toBeHidden();
+  await page.emulateMedia({ media: "print" });
+  await expect(modal(page)).toBeHidden();
+  await expect(page.locator("#input-serial")).toBeVisible(); // the dossier print rule does not hide the app
+});
 
 test("print media prints the active filter label", async ({ page }) => {
   await prepararDossie(page, route => route.fulfill({ json: dossie("LENTO", {}, linhaDoTempo(EVENTOS_MISTOS)) }));

@@ -85,9 +85,10 @@ export interface Estado {
   corpo: Corpo | null; // null esconde a seção de OS e chamados
   linha: LinhaDoTempo | null; // null esconde a linha do tempo
   filtro: string; // FILTRO_TUDO ou um tipo; volta a "tudo" a cada abertura
+  trocado: boolean; // true depois da primeira escolha de filtro: só então a lista anima
 }
 
-let estado: Estado = { serie: "", modelo: "", status: "", corpo: null, linha: null, filtro: FILTRO_TUDO };
+let estado: Estado = { serie: "", modelo: "", status: "", corpo: null, linha: null, filtro: FILTRO_TUDO, trocado: false };
 const ouvintes = new Set<() => void>();
 function mudar(parcial: Partial<Estado>) {
   estado = { ...estado, ...parcial };
@@ -138,7 +139,7 @@ function montarLinha(bruta: unknown): LinhaDoTempo {
     const soData = evento.so_data === true;
     return {
       quando: soData ? formatarDia(evento.quando) : formatarData(evento.quando),
-      datetime: texto(evento.quando),
+      datetime: soData ? texto(evento.quando).slice(0, 10) : texto(evento.quando),
       tipo,
       rotulo: doMapa(ROTULOS_TIPO, tipo) || ouVazio(tipo),
       titulo: ouVazio(evento.titulo),
@@ -156,7 +157,7 @@ function montarLinha(bruta: unknown): LinhaDoTempo {
   };
 }
 
-export function escolherFiltro(filtro: string) { mudar({ filtro }); }
+export function escolherFiltro(filtro: string) { mudar({ filtro, trocado: true }); }
 
 let aberto = false;
 let geracao = 0; // muda a cada abrir, fechar e troca de série: respostas atrasadas de uma sessão antiga são descartadas
@@ -185,7 +186,7 @@ export async function abrirDossieEquipamento(): Promise<void> {
   controle?.abort();
   const meu = controle = new AbortController();
   // O diálogo abre já com "Carregando dossiê…" desenhado: o foco inicial e o rótulo dependem do DOM pronto.
-  flushSync(() => mudar({ serie, modelo: texto(equipamento.modelo), status: TEXTO.carregando, corpo: null, linha: null, filtro: FILTRO_TUDO }));
+  flushSync(() => mudar({ serie, modelo: texto(equipamento.modelo), status: TEXTO.carregando, corpo: null, linha: null, filtro: FILTRO_TUDO, trocado: false }));
   app.abrirModalAcessivel(MODAL, "#dossie-fechar", "fecharDossieEquipamento");
   // Mesma série e mesma revisão da seleção de quando o diálogo abriu.
   const vigente = () => aberto && geracao === minha
