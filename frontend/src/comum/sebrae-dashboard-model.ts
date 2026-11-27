@@ -55,6 +55,12 @@ export function encerramentoParaCampo(texto: Qualquer): string {
   return real ? `${ano}-${mes}-${dia}T${hora}:${minuto}` : ""; // data impossível: "" (o servidor recusaria com 422)
 }
 
+/** Botão "Agora" do R (pedido do usuário, 27/11/2026): data e hora do relógio deste computador no formato do campo datetime-local. Só roda no clique. */
+export function encerramentoAgora(agora: Date = new Date()): string {
+  const dois = (n: number) => String(n).padStart(2, "0");
+  return `${agora.getFullYear()}-${dois(agora.getMonth() + 1)}-${dois(agora.getDate())}T${dois(agora.getHours())}:${dois(agora.getMinutes())}`;
+}
+
 export const MAX_TITULO = 300; // mesmo limite de ChamadoManual.G no servidor (routers/sebrae_dashboard.py)
 const LIMITE_H_LIDO = 2000; // a coluna H lida do Dashboard chega cortada aqui (LIMITE_H_LIDO em domains/sebrae_dashboard_gravacao.py)
 
