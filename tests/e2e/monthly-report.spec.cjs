@@ -11,7 +11,7 @@ async function openMonthlyReport(page) {
 }
 
 // Sub-abas do F8 (Novo layout, 18/11/2026: a comparação saiu): [chave, rótulo exato]. A ordem é a da tablist.
-const ABAS_RELATORIO = [["visao", "Visão geral"], ["os", "OS e pedidos do mês"], ["sebrae", "Chamados (F5)"], ["base", "Base atual"]];
+const ABAS_RELATORIO = [["visao", "Visão geral"], ["os", "OS e pedidos do mês"], ["sebrae", "Chamados (F5)"], ["base", "Base atual"], ["tendencias", "Tendências"]];
 
 // Só um painel fica visível; trocar de aba é clicar nela. As seções das outras abas existem, mas escondidas.
 async function openReportTab(page, key) {
@@ -77,7 +77,18 @@ function sebraeNovos() {
   };
 }
 
+function tendencias(dias) {
+  return {
+    dias, inicio: "2026-08-01",
+    tempo_medio_os: { encerradas: 12, encerradas_sem_data: 0, media_dias: 4.5, media_dias_anterior: 6.0 },
+    sem_acesso_7_dias: { historico_desde: "2026-08-01", pontos: [{ data: "2026-10-01", total: 40 }, { data: "2026-10-10", total: 35 }, { data: "2026-10-20", total: 30 }] },
+  };
+}
+
+const tendenciasVazias = dias => ({ dias, inicio: "2026-08-01", tempo_medio_os: { encerradas: 0, encerradas_sem_data: 0, media_dias: null, media_dias_anterior: null }, sem_acesso_7_dias: { pontos: [] } });
+
 async function routeMonthly(page) {
+  await page.route("**/api/relatorio-mensal/tendencias**", route => route.fulfill({ json: tendencias(Number(new URL(route.request().url()).searchParams.get("dias"))) }));
   await page.route(/\/api\/relatorio-mensal\/dados(?:\?|$)/, route => route.fulfill({ json: monthlyReport(new URL(route.request().url()).searchParams.get("mes")) }));
   await page.route("**/api/sebrae/novos", route => route.fulfill({ json: sebraeNovos() }));
 }
@@ -383,12 +394,12 @@ async function expectReportTab(page, key, { focused = false } = {}) {
   if (focused) await expect(page.locator(`#rel-aba-${key}`)).toBeFocused();
 }
 
-test("the report has four tabs, opens on Visão geral and shows the counters and the Chamados card", async ({ page }) => {
+test("the report has five tabs, opens on Visão geral and shows the counters and the Chamados card", async ({ page }) => {
   await routeMonthly(page);
   await page.goto("/");
   await openMonthlyReport(page);
   const tabs = page.getByRole("tablist", { name: "Assuntos do relatório" }).getByRole("tab");
-  await expect(tabs).toHaveCount(4);
+  await expect(tabs).toHaveCount(5);
   for (const [index, [key, label]] of ABAS_RELATORIO.entries()) {
     await expect(tabs.nth(index).locator(".rel-aba__rotulo")).toHaveText(label);
     await expect(tabs.nth(index)).toHaveAttribute("id", `rel-aba-${key}`);
@@ -441,17 +452,24 @@ test("clicking, arrow keys, Home and End switch tabs with a roving tabindex", as
   await expectReportTab(page, "sebrae", { focused: true });
   await page.keyboard.press("ArrowLeft");
   await expectReportTab(page, "os", { focused: true });
-  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowRight");
+  await expectReportTab(page, "sebrae", { focused: true });
+  await page.keyboard.press("ArrowRight");
   await expectReportTab(page, "base", { focused: true });
-  // As setas são circulares: depois da última volta à primeira e vice-versa.
+  await page.keyboard.press("ArrowRight");
+  await expectReportTab(page, "tendencias", { focused: true });
   await page.keyboard.press("ArrowRight");
   await expectReportTab(page, "visao", { focused: true });
   await page.keyboard.press("ArrowLeft");
-  await expectReportTab(page, "base", { focused: true });
+  await expectReportTab(page, "tendencias", { focused: true });
+  await page.keyboard.press("Home");
+  await expectReportTab(page, "visao", { focused: true });
+  await page.keyboard.press("End");
+  await expectReportTab(page, "tendencias", { focused: true });
   await page.keyboard.press("Home");
   await expectReportTab(page, "visao", { focused: true });
 
-  // Só a aba ativa está na ordem do Tab: Tab sai da tablist em vez de percorrer as outras três.
+  // Só a aba ativa está na ordem do Tab: Tab sai da tablist em vez de percorrer as outras quatro.
   await page.keyboard.press("Tab");
   expect(await page.evaluate(() => document.activeElement?.getAttribute("role"))).not.toBe("tab");
 });
@@ -527,7 +545,7 @@ test("the tablist scrolls on its own at 320px and the page never scrolls horizon
   // A última aba é alcançável pelo teclado mesmo fora da área visível da barra.
   await page.locator("#rel-aba-visao").focus();
   await page.keyboard.press("End");
-  await expectReportTab(page, "base", { focused: true });
+  await expectReportTab(page, "tendencias", { focused: true });
   expect(await noPageScroll()).toBe(true);
 });
 
@@ -640,4 +658,76 @@ test("the OS tab labels its filter and paginates by 20, and the movement chart g
   await painel.getByRole("button", { name: "Carregar mais" }).click();
   await expect(painel.locator("tbody tr")).toHaveCount(45);
   await expect(painel.getByRole("button", { name: "Carregar mais" })).toHaveCount(0);
+});
+
+test("the Tendências tab loads 30 days, switches to 90 and ignores the month bar", async ({ page }) => {
+  const pedidos = [];
+  await routeMonthly(page);
+  await page.route("**/api/relatorio-mensal/tendencias**", route => {
+    const dias = new URL(route.request().url()).searchParams.get("dias");
+    pedidos.push(dias);
+    return route.fulfill({ json: tendencias(Number(dias)) });
+  });
+  await page.goto("/");
+  await openMonthlyReport(page);
+  expect(pedidos).toEqual([]);
+  await openReportTab(page, "tendencias");
+  const painel = page.locator("#rel-painel-tendencias");
+  await expect(painel.locator("#rel-tend-tempo .nf8-tend__num")).toContainText("4,5");
+  await expect(painel.locator("#rel-tend-acesso .nf8-tend__num")).toContainText("30");
+  await expect(painel.locator("#rel-tend-acesso svg.nf8-tend__svg[role=img]")).toHaveAttribute("aria-label", /de 40 em 01\/10 para 30 em 20\/10/);
+  await expect(painel.locator("#rel-tend-tempo .nf8-tend__bom")).toHaveText("−1,5 dia");
+  await expect(painel).toContainText("Até hoje · não muda com o mês");
+  expect(pedidos).toEqual(["30"]);
+  const grupo = painel.getByRole("group", { name: "Período" });
+  await expect(grupo.locator('[data-rel-periodo="30"]')).toHaveAttribute("aria-pressed", "true");
+  await grupo.locator('[data-rel-periodo="90"]').click();
+  await expect(grupo.locator('[data-rel-periodo="90"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(grupo.locator('[data-rel-periodo="30"]')).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(() => pedidos).toEqual(["30", "90"]);
+  // Trocar o mês não pede tendências de novo.
+  await page.locator("#cockpit-monthly-month").fill("2026-09");
+  await expect(page.locator("#cockpit-monthly-status")).toContainText("Mês encerrado");
+  await expect(painel.locator("#rel-tend-tempo")).toBeVisible();
+  expect(pedidos).toEqual(["30", "90"]);
+});
+
+test("the Tendências tab shows the empty state in both cards", async ({ page }) => {
+  await routeMonthly(page);
+  await page.route("**/api/relatorio-mensal/tendencias**", route => route.fulfill({ json: tendenciasVazias(30) }));
+  await page.goto("/");
+  await openMonthlyReport(page);
+  await openReportTab(page, "tendencias");
+  const vazios = page.locator("#rel-painel-tendencias .nf8-tend__vazio[role=status]");
+  await expect(vazios).toHaveCount(2);
+  await expect(vazios.nth(0)).toContainText("Sem dados suficientes nos últimos 30 dias.");
+  await expect(vazios.nth(0)).toContainText("Nenhuma OS Oracle encerrada com data no período.");
+  await expect(vazios.nth(1)).toContainText("Menos de 2 atualizações de inventário no período.");
+});
+
+test("the Tendências tab explains a load failure", async ({ page }) => {
+  await routeMonthly(page);
+  await page.route("**/api/relatorio-mensal/tendencias**", route => route.fulfill({ status: 500, json: {} }));
+  await page.goto("/");
+  await openMonthlyReport(page);
+  await openReportTab(page, "tendencias");
+  await expect(page.locator("#rel-painel-tendencias p.nf8-tend__aviso")).toContainText("Falha ao carregar as tendências.");
+});
+
+test("the Tendências tab fits 320px and passes axe in both themes", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await routeMonthly(page);
+  await page.goto("/");
+  await openMonthlyReport(page);
+  await openReportTab(page, "tendencias");
+  await expect(page.locator("#rel-tend-tempo")).toBeVisible();
+  await expect(page.locator("#rel-tend-acesso")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  for (const theme of ["dark", "light"]) {
+    await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
+    await esperarAnimacoes(page);
+    const audit = await new AxeBuilder({ page }).include("#rel-painel-tendencias").analyze();
+    expect(audit.violations.map(violation => violation.id), theme).toEqual([]);
+  }
 });

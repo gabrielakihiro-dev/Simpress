@@ -27,7 +27,7 @@ O filtro `#automacao-historico-rotina` ganhou a opção `sebrae` ("Sincronizar c
 
 ### Erro 409 ao ativar
 
-Enquanto `ROTINA_PRONTA` for falso (até a Fase E), o servidor responde 409 ao ativar. A tela mostra a mensagem do servidor num aviso (`warning`), mantém o botão habilitado, não muda a situação e mantém o texto explicativo permanente em `sebrae-agendamento-aviso`.
+Enquanto `ROTINA_PRONTA` for falso (o agendador segue pausado), o servidor responde 409 ao ativar. A tela mostra a mensagem do servidor num aviso (`warning`), mantém o botão habilitado, não muda a situação e mantém o texto explicativo permanente em `sebrae-agendamento-aviso`.
 
 ## Notificações (sem repetição)
 
