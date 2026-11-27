@@ -54,8 +54,53 @@ export function chaveOperacaoInventario(): string {
 }
 
 // Os elementos vêm do HTML montado; faltar um é erro de marcação e estoura no primeiro uso, como no código antigo.
+// Só os inputs de arquivo (não controlados: o File e o redesenho do nome vivem no DOM, ui/file-picker.ts) são lidos assim.
 function porId<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Estado da tela (dialogos.tsx desenha por useSyncExternalStore). A fábrica o reinicia a cada criação.
+// ---------------------------------------------------------------------------------------------------------------------
+interface StatusUpload { texto: string; role?: "status" | "alert"; aoVivo?: "polite" | "assertive"; erro: boolean }
+interface EstadoTela {
+  etapa: "arquivos" | "impacto";
+  status: StatusUpload;
+  previa: { texto: string; classe?: string };
+  /** Botão e mensagem do envio em andamento; trava os controles da tela. */
+  ocupado: { botao: "previa" | "confirmar"; mensagem: string } | null;
+  exportarHistorico: boolean;
+  /** Modal "Importar modelo": tipo ("transferencia" ou "exportacao"), status e trava do botão (aria-busy no overlay). */
+  modelo: { tipo?: string; status: string; alerta: boolean; ocupado: boolean };
+}
+
+const CHAVE_EXPORTAR_HISTORICO = "simpress:auto-export-history-after-update";
+const inicial = (): EstadoTela => ({
+  etapa: "arquivos",
+  status: { texto: "", role: "status", aoVivo: "polite", erro: false },
+  previa: { texto: "" },
+  ocupado: null,
+  exportarHistorico: false,
+  modelo: { status: "", alerta: false, ocupado: false },
+});
+let estado: EstadoTela = inicial();
+const ouvintes = new Set<() => void>();
+export const ler = (): EstadoTela => estado;
+export const assinar = (ouvinte: () => void) => { ouvintes.add(ouvinte); return () => { ouvintes.delete(ouvinte); }; };
+function mudar(parcial: Partial<EstadoTela>) {
+  estado = { ...estado, ...parcial };
+  ouvintes.forEach(ouvinte => ouvinte());
+}
+const mudarModelo = (parcial: Partial<EstadoTela["modelo"]>) => mudar({ modelo: { ...estado.modelo, ...parcial } });
+
+/** Checkbox "Baixar o Histórico de Planilhas automaticamente": grava no estado e na preferência deste navegador. */
+export function definirExportarHistorico(valor: boolean) {
+  mudar({ exportarHistorico: valor });
+  try {
+    window.localStorage.setItem(CHAVE_EXPORTAR_HISTORICO, valor ? "true" : "false");
+  } catch (error) {
+    console.warn("Não foi possível salvar a preferência de exportação automática do histórico.", error);
+  }
 }
 
 /** Arquivos do inventário: Simpress + Endpoint com prévia, modelos importados e a exportação de equipamentos atualizados. */
@@ -64,27 +109,15 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
   const inventoryOperationKey = context.inventoryOperationKey ?? chaveOperacaoInventario;
 
   let inventoryUploadAttempt: { endpoint: File | undefined; details: File | undefined; key: string } | null = null;
+  estado = inicial();
+  ouvintes.forEach(ouvinte => ouvinte());
 
   function inicializarExportacaoAutomaticaHistorico() {
-    const input = document.getElementById("auto-export-history-after-update") as HTMLInputElement | null;
-    if (!input) return;
-
     try {
-      input.checked = window.localStorage.getItem("simpress:auto-export-history-after-update") === "true";
+      mudar({ exportarHistorico: window.localStorage.getItem(CHAVE_EXPORTAR_HISTORICO) === "true" });
     } catch (error) {
       console.warn("Não foi possível ler a preferência de exportação automática do histórico.", error);
     }
-
-    input.addEventListener("change", () => {
-      try {
-        window.localStorage.setItem(
-          "simpress:auto-export-history-after-update",
-          input.checked ? "true" : "false",
-        );
-      } catch (error) {
-        console.warn("Não foi possível salvar a preferência de exportação automática do histórico.", error);
-      }
-    });
   }
 
   const ARQUIVOS_ATUALIZACAO_PLANILHAS = ["upload-endpoint-file", "upload-details-file", "entra-csv-file"];
@@ -94,18 +127,8 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  function inicializarArquivosAtualizacaoPlanilhas() {
-    ["upload-endpoint-file", "upload-details-file"].forEach(inputId => {
-      document.getElementById(inputId)?.addEventListener("change", () => limparPreviaUploadPlanilhas());
-    });
-  }
-
-  function mostrarEtapaPlanilhas(etapa: string) {
-    document.getElementById("modal-atualizar-planilhas")?.querySelectorAll?.<HTMLElement>("[data-so-etapa]").forEach(el => {
-      el.hidden = el.dataset.soEtapa !== etapa;
-    });
-    document.getElementById("btn-voltar-planilhas")?.classList.toggle("hidden", etapa !== "impacto");
-  }
+  // Escolher ou remover arquivo limpa a prévia: onChange dos dois inputs em dialogos.tsx (antes, ouvintes aqui). Fica na ponte por contrato.
+  function inicializarArquivosAtualizacaoPlanilhas() {}
 
   // ==========================================
   // RECARREGAR / SINCRONIZAR PLANILHA BASE
@@ -114,18 +137,11 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
 
   function abrirImportacaoModelo(tipo: string) {
     if (importacaoModeloOcupada) return;
-    const modal = porId("modal-importar-modelo");
-    modal.dataset.tipo = tipo;
-    porId("titulo-importar-modelo").textContent = tipo === "transferencia"
-      ? "Arquivos para transferência" : "Arquivos para exportação";
-    porId("descricao-importar-modelo").textContent = (tipo === "transferencia"
-      ? "A base Simpress + Endpoint é compartilhada. Se necessário, atualize-a no painel de disponibilidade; aqui, importe o modelo oficial de transferência da Simpress."
-      : "Importe a planilha do modelo de exportação que atualiza os apelidos/hostnames.")
-      + " Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.";
+    // Título, descrição e data-tipo do overlay saem de modelo.tipo (dialogos.tsx).
+    mudarModelo({ tipo, status: "" });
     const modelFile = porId<HTMLInputElement>("arquivo-modelo-local");
     modelFile.value = "";
     redesenharSeletorArquivo(modelFile);
-    porId("status-modelo-local").textContent = "";
     app.abrirModalAcessivel("modal-importar-modelo", "#arquivo-modelo-local", "fecharImportacaoModelo");
   }
 
@@ -135,21 +151,15 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
 
   async function enviarModeloLocal() {
     if (importacaoModeloOcupada) return;
-    const modal = porId("modal-importar-modelo");
     const file = porId<HTMLInputElement>("arquivo-modelo-local").files?.[0];
-    const status = porId("status-modelo-local");
-    status.setAttribute("role", "status");
-    if (!file) { status.textContent = "Selecione um modelo .xlsx."; return; }
-    const button = porId<HTMLButtonElement>("btn-importar-modelo");
+    if (!file) { mudarModelo({ alerta: false, status: "Selecione um modelo .xlsx." }); return; }
     importacaoModeloOcupada = true;
-    button.disabled = true;
-    modal.setAttribute("aria-busy", "true");
-    status.textContent = "Validando e importando o modelo…";
+    mudarModelo({ ocupado: true, alerta: false, status: "Validando e importando o modelo…" });
     const data = new FormData();
     data.append("file", file);
     try {
-      await apiFetch(`/api/modelos/${modal.dataset.tipo}/importar`, { method: "POST", body: data, errorMessage: "Não foi possível importar o modelo." });
-      status.textContent = "Modelo importado. Confira abaixo se todas as dependências estão disponíveis.";
+      await apiFetch(`/api/modelos/${estado.modelo.tipo}/importar`, { method: "POST", body: data, errorMessage: "Não foi possível importar o modelo." });
+      mudarModelo({ status: "Modelo importado. Confira abaixo se todas as dependências estão disponíveis." });
       const modelFile = porId<HTMLInputElement>("arquivo-modelo-local");
       modelFile.value = "";
       redesenharSeletorArquivo(modelFile);
@@ -159,32 +169,20 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
       await Promise.allSettled([app.carregarProntidao(), app.carregarEstatisticas(), app.carregarUnidades()]);
       app.showToast("Modelo validado e importado.", "success");
     } catch (error) {
-      status.setAttribute("role", "alert");
-      status.textContent = (error as ErroApi).message || "Não foi possível importar o modelo.";
+      mudarModelo({ alerta: true, status: (error as ErroApi).message || "Não foi possível importar o modelo." });
     } finally {
       importacaoModeloOcupada = false;
-      button.disabled = false;
-      modal.removeAttribute("aria-busy");
+      mudarModelo({ ocupado: false });
     }
   }
 
   function limparPreviaUploadPlanilhas(limparStatus = true) {
     appState.previaPlanilhasAtual = null;
-    const preview = document.getElementById("upload-planilhas-preview");
-    if (preview) {
-      preview.textContent = "";
-      preview.classList.add("hidden");
-    }
-    document.getElementById("btn-confirmar-planilhas")?.classList.add("hidden");
-    document.getElementById("btn-previsualizar-planilhas")?.classList.remove("hidden");
-    mostrarEtapaPlanilhas("arquivos");
-    if (limparStatus) {
-      const status = porId("upload-planilhas-status");
-      status.textContent = "";
-      status.className = "ckp-rodape__status";
-      status.removeAttribute("role");
-      status.removeAttribute("aria-live");
-    }
+    mudar({
+      previa: { texto: "", classe: "hidden" },
+      etapa: "arquivos",
+      ...(limparStatus ? { status: { texto: "", erro: false } } : {}),
+    });
   }
 
   function abrirModalAtualizarPlanilhas() {
@@ -197,17 +195,12 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     app.fecharModalAcessivel("modal-atualizar-planilhas");
   }
 
+  // O scrollIntoView do erro fica no efeito de dialogos.tsx (status.erro).
   function mostrarStatusUpload(mensagem: string, erro = false) {
-    const status = porId("upload-planilhas-status");
-    status.textContent = mensagem;
-    status.setAttribute("role", erro ? "alert" : "status");
-    status.setAttribute("aria-live", erro ? "assertive" : "polite");
-    status.setAttribute("aria-atomic", "true");
-    status.className = "ckp-rodape__status";
-    if (erro) status.scrollIntoView?.({ block: "nearest" });
+    mudar({ status: { texto: mensagem, role: erro ? "alert" : "status", aoVivo: erro ? "assertive" : "polite", erro } });
   }
 
-  function renderizarPreviaUploadPlanilhas(result: ResultadoPrevia | null | undefined) {
+  function textoPreviaUploadPlanilhas(result: ResultadoPrevia | null | undefined): string {
     if (!result?.preview_token || !result?.arquivos || !result?.alteracoes) {
       throw new Error("A prévia recebida está incompleta. Gere uma nova prévia.");
     }
@@ -225,39 +218,18 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
         `Séries novas: ${formatar(alteracao.series_novas)}; removidas: ${formatar(alteracao.series_removidas)}; duplicadas no arquivo novo: ${formatar(alteracao.series_duplicadas_no_arquivo_novo)}.`
       );
     }
-    const preview = porId("upload-planilhas-preview");
-    preview.textContent = linhas.join("\n");
-    preview.className = "whitespace-pre-line";
-    preview.setAttribute("role", "status");
-    preview.setAttribute("aria-live", "polite");
-    preview.setAttribute("aria-atomic", "true");
-    preview.scrollIntoView?.({ block: "nearest" });
+    return linhas.join("\n");
   }
 
   function arquivoSelecionadoContinuaIgual(input: HTMLInputElement, arquivoPrevisto: File | undefined) {
     return input.files?.[0] === arquivoPrevisto;
   }
 
-  // Disables the given controls and shows a spinner on the button; returns a function that restores them.
-  function travarEnvioPlanilhas(button: HTMLElement, mensagem: string, controles: Array<HTMLElement & { disabled: boolean }>) {
-    const modal = porId("modal-atualizar-planilhas");
-    const originalHtml = button.innerHTML;
-    controles.forEach(controle => { controle.disabled = true; });
-    button.setAttribute("aria-busy", "true");
-    modal.setAttribute("aria-busy", "true");
-    const spinner = document.createElement("i");
-    spinner.setAttribute("data-lucide", "loader-2");
-    spinner.className = "w-3.5 h-3.5 animate-spin";
-    const texto = document.createElement("span");
-    texto.textContent = mensagem;
-    button.replaceChildren(spinner, texto);
-    lucide.createIcons({ root: button });
+  // Trava a tela (botão com spinner, inputs e checkbox via estado.ocupado) e devolve a função que a libera.
+  function travarEnvioPlanilhas(botao: "previa" | "confirmar", mensagem: string) {
+    mudar({ ocupado: { botao, mensagem } });
     return () => {
-      controles.forEach(controle => { controle.disabled = false; });
-      button.removeAttribute("aria-busy");
-      modal.removeAttribute("aria-busy");
-      button.innerHTML = originalHtml;
-      lucide.createIcons({ root: button });
+      mudar({ ocupado: null });
     };
   }
 
@@ -275,7 +247,10 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     return formData;
   }
 
+  // Trava síncrona por estado.ocupado (mudar() grava na hora): o disabled do React só vale depois do commit e um duplo
+  // clique rápido mandaria dois POST. A prévia também não roda durante a confirmação (não haveria POST concorrente).
   async function previsualizarPlanilhas() {
+    if (estado.ocupado) return;
     const endpointInput = porId<HTMLInputElement>("upload-endpoint-file");
     const detailsInput = porId<HTMLInputElement>("upload-details-file");
     const endpointFile = endpointInput.files?.[0];
@@ -285,24 +260,25 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
       return;
     }
 
-    const button = porId<HTMLButtonElement>("btn-previsualizar-planilhas");
-    const destravar = travarEnvioPlanilhas(button, "Validando arquivos...", [button, endpointInput, detailsInput]);
+    const destravar = travarEnvioPlanilhas("previa", "Validando arquivos...");
     const formData = formularioArquivosPlanilhas(endpointFile, detailsFile);
 
     try {
       const result = await apiFetch<ResultadoPrevia>("/api/planilhas/previsualizar", {
         method: "POST", body: formData, errorMessage: "Não foi possível gerar a prévia.",
       }).catch((error: ErroApi) => { throw erroRespostaPlanilhas(error); });
-      renderizarPreviaUploadPlanilhas(result);
+      const textoPrevia = textoPreviaUploadPlanilhas(result);
       appState.previaPlanilhasAtual = {
         endpointFile,
         detailsFile,
         previewToken: result.preview_token,
       };
-      porId("btn-previsualizar-planilhas").classList.add("hidden");
-      porId("btn-confirmar-planilhas").classList.remove("hidden");
-      mostrarEtapaPlanilhas("impacto");
-      mostrarStatusUpload("Confira as contagens e confirme somente se este impacto estiver correto.");
+      // Etapa "impacto": dialogos.tsx esconde "Pré-visualizar impacto" e mostra "Confirmar substituição" e "Voltar".
+      mudar({
+        previa: { texto: textoPrevia, classe: "whitespace-pre-line" },
+        etapa: "impacto",
+        status: { texto: "Confira as contagens e confirme somente se este impacto estiver correto.", role: "status", aoVivo: "polite", erro: false },
+      });
     } catch (error) {
       console.error("Erro ao pré-visualizar planilhas:", error);
       limparPreviaUploadPlanilhas(false);
@@ -369,13 +345,14 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     await app.mostrarResultadoNaAbaComparacao(comparison);
   }
 
+  // Só a própria confirmação trava aqui: durante a prévia, segue como antes e avisa "Gere uma prévia...".
   async function enviarPlanilhas() {
+    if (estado.ocupado?.botao === "confirmar") return;
     const endpointInput = porId<HTMLInputElement>("upload-endpoint-file");
     const detailsInput = porId<HTMLInputElement>("upload-details-file");
     const endpointFile = endpointInput.files?.[0];
     const detailsFile = detailsInput.files?.[0];
-    const autoExportInput = document.getElementById("auto-export-history-after-update") as HTMLInputElement | null;
-    const exportarHistoricoAutomaticamente = autoExportInput?.checked === true;
+    const exportarHistoricoAutomaticamente = estado.exportarHistorico;
     const preview = appState.previaPlanilhasAtual;
     if (!preview) {
       mostrarStatusUpload("Gere uma prévia dos arquivos antes de confirmar a substituição.", true);
@@ -390,12 +367,7 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
       return;
     }
 
-    const button = porId<HTMLButtonElement>("btn-confirmar-planilhas");
-    const destravar = travarEnvioPlanilhas(
-      button,
-      "Confirmando substituição...",
-      [button, endpointInput, detailsInput, autoExportInput].filter((controle): controle is HTMLInputElement | HTMLButtonElement => Boolean(controle)),
-    );
+    const destravar = travarEnvioPlanilhas("confirmar", "Confirmando substituição...");
     // Os dois arquivos existem: a prévia só vale enquanto a seleção continua igual (conferido acima).
     const formData = formularioArquivosPlanilhas(endpointFile as File, detailsFile as File);
     const idempotencyKey = chaveIdempotenciaUpload(endpointFile, detailsFile);
@@ -452,6 +424,8 @@ export function criarImportacaoPlanilhas(context: ContextoImportacaoPlanilhas) {
     }
   }
 
+  // Continua imperativo, de propósito: #btn-exportar-equipamentos vive no partial de outro painel (cockpit-tool-panels)
+  // e o fluxo termina na confirmação e no envio ao UX (escrita em sistema externo, acima).
   async function exportarEquipamentosAtualizados() {
     const btn = porId<HTMLButtonElement>("btn-exportar-equipamentos");
     const originalText = btn.innerHTML;
