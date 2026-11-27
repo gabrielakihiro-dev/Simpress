@@ -806,7 +806,7 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
             patch.object(se, "ESPERA_RELEITURA_MS", 700),
             patch.object(se, "GRACA_CONFIRMACAO_S", 2),
             patch.object(se, "ESPERA_ANEXO_MS", 8_000),
-            patch.object(se, "ESPERA_FINALIZAR_MS", 3_000),
+            # ESPERA_FINALIZAR_MS fica no valor real: com 3 s, um runner lento lia o cartão antes do fim e dava "incerto".
             patch.object(automacao, "ERROS_DIR", self.pasta / "erros"),
             patch.object(automacao, "LOGIN_TIMEOUT_S", 20),
             patch.object(automacao, "verificar_cancelamento"),
@@ -1217,7 +1217,7 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.bancada.chamados = [chamado(1, finalizacao=True, email_marcado_inicial=False)]
         page = self.abrir_lista()
         resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
-        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertEqual(resultado["status"], "ok", (resultado, self.mensagens))  # o log da rotina mostra a etapa que falhou
         self.assertAtendimentoPadrao(self.bancada.finalizados[0], email=True)
         self.assertTrue(resultado["detalhes"]["enviar_email"])
         self.assertSemEscrita()
@@ -1366,7 +1366,8 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
     def test_filtro_pos_finalizacao_nao_confunde_cartao_oculto_com_sucesso(self):
         self.bancada.chamados = [chamado(1566, finalizacao=True, somente_filtro=True, finalizar_falha=True)]
         page = self.abrir_lista()
-        resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL)
+        with patch.object(se, "ESPERA_FINALIZAR_MS", 3_000):  # a janela nunca fecha: só encurta a espera
+            resultado = se.finalizar_chamado(page, "UTIC-2026-1566", self.DESCRICAO_FINAL)
         # Finalizar já foi clicado: nunca "erro" repetível (26/11/2026)
         self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)
         self.assertEqual(len(self.bancada.finalizados), 1)
@@ -1463,7 +1464,8 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
     def test_finalizar_que_nao_tira_o_cartao_da_lista_e_incerto(self):
         self.bancada.chamados = [chamado(1, finalizacao=True, finalizar_falha=True)]
         page = self.abrir_lista()
-        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        with patch.object(se, "ESPERA_FINALIZAR_MS", 3_000):  # a janela nunca fecha: só encurta a espera
+            resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
         self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)
         self.assertEqual(self.abas_do_registro(), [])
         self.assertSemEscrita()
