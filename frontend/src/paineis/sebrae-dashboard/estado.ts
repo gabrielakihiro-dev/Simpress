@@ -2854,9 +2854,10 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const botao = dom.createTextElement("button", "ck-btn ck-btn--fantasma ck-btn--sm", texto);
     botao.type = "button";
     botao.addEventListener("click", async () => {
+      botao.disabled = true; // evita baixar duas vezes enquanto a cópia vem
       try {
         await baixarDaApi(`/api/sebrae/dashboard/envio/${encodeURIComponent(envioId)}/snapshot`, "Dashboard Operacional_SEBRAE.xlsx", "Não foi possível baixar a cópia deste envio.");
-      } catch (falha) { app.showToast((falha as ErroApi).message, "error"); }
+      } catch (falha) { app.showToast((falha as ErroApi).message, "error"); } finally { botao.disabled = false; }
     });
     return botao;
   }
