@@ -11,17 +11,17 @@ from domains.assistant_chat import SYSTEM_PROMPT
 from domains.assistant_instrucoes import montar_prompt
 from domains.assistant_tools import FERRAMENTAS_LOCAIS_UX, schemas_para_mensagem, tool_schemas
 
-# Hash de cada parte do que vai ao modelo, capturado no código antes da divisão de assistant_api.
+# Hash de cada parte do que vai ao modelo, capturado no origin/main (sem a divisão de assistant_api).
 # Se a mudança em ferramenta, prompt ou assinatura for intencional, atualize a seção que mudou.
 SHA256_POR_SECAO = {
-    "tool_schemas_true": "7672dd53bb444388fca5420d8fb70b38fabb718f5fc0cd8a61b3f9beda385220",
-    "tool_schemas_false": "e83d40d97420e737e7d1f16f61ccd299a823c9fef717814b00a98562b98940f1",
-    "mensagens": "79bf41d2e904f8d012bc49e78a2e287757893461828f43b11efedfdb48acee2a",
+    "tool_schemas_true": "39ea15dfa629589b553f8d1e93cd282764d4eba0e344f07c011bd517298166c7",
+    "tool_schemas_false": "91d1b373b6a63c5fe361ec79b70a32f70c62957031e95d7adc1bf478dd26f7f7",
+    "mensagens": "0ef0445c8267f170dca867716035c85fd442d8ac473dcbad7bfec81d480eac23",
     "ferramentas_locais_ux": "9f553132586c39cedaadae3e17483b41168bf424d532d8dc21780f2ebef4b3ba",
-    "system_prompt": "385338683d82b1cbf7c0960cd79e4ccdc1ed0be9599e3d25ea1f3f9e3d7eda72",
-    "montar_prompt": "32c9c32d16407ff1071d97cb40cf7f195bb12635050308b99508e582d3939073",
-    "membros": "573b59a341d16b5ea0849445c081e5816161b74e262df26772e2ed744530aa1a",
-    "assinaturas": "4a71ae37e01d77b1b0ab4a9bc45e8c48f12eb65a1511f8f6ba5bc59621dd3409",
+    "system_prompt": "df33dff23ca64113e6ebca85670b5f01c3eb39365cc1183158cd08defb3160dd",
+    "montar_prompt": "268d7fbc5fcc45700760cd0ba54a1a801d37f2242228fcf69db8e17003eb0595",
+    "membros": "5c94858e9b30915e6f9e997d03b039b68a9d3c7e938928b3b97101d4d3311664",
+    "assinaturas": "72b191c705d69fc8a32506de04684c917a2d4adde572990b2b68355ef7c71412",
 }
 
 NOMES_DA_FACHADA = (
