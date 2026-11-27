@@ -15,9 +15,8 @@ import base64
 import hashlib
 import logging
 import re
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -27,16 +26,15 @@ from core.errors import DomainBusyError, DomainConflictError, DomainError, Domai
 from core.config import REGIONAL_REPRESENTATIVE_DEFAULTS_FILE, REGIONAL_REPRESENTATIVES_FILE, format_size_limit
 from core.integrity import atomic_write_json, lock_paths
 from domains import (
-    local_setup, os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_categoria, sebrae_categoria_ia, sebrae_credenciais, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
+    local_setup, os_marcas_finalizacao as marcas, sebrae_arquivo, sebrae_categoria, sebrae_credenciais, sebrae_dashboard_gravacao, sebrae_finalizacao as fin,
     sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_os_nova, sebrae_os_recusadas, sebrae_vinculos,
 )
-from domains.assistant_lgpd import e_solicitante_sistema
-from domains.chrome_automation import ChromeAutomationRunner
 from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
+from domains import sebrae_dashboard_tela as tela
 from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c, ler_status_chamados
+from domains.sebrae_dashboard_tela import NOME_ATUALIZADO as NOME_ATUALIZADO, SebraeDashboardServices as SebraeDashboardServices  # reexportados (main.py e testes)
 
 MAX_CHAMADOS_POR_EXPORTACAO = 200
-NOME_ATUALIZADO = "Dashboard Operacional_SEBRAE.xlsx"
 logger = logging.getLogger(__name__)
 
 
@@ -72,18 +70,6 @@ class AtualizarPayload(BaseModel):
     # Decisão do usuário (25/11/2026): UTICs que o usuário confirmou na tela como finalizados por outro técnico; só eles, se a leitura
     # e a fechar não os acharem, viram ``finalizado_outro_tecnico`` (A, B, D=FINALIZADO e R conferidos antes; só com ``finalizar_softexpert``).
     confirmar_outro_tecnico: List[str] = Field(default_factory=list, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
-
-
-@dataclass(frozen=True)
-class SebraeDashboardServices:
-    caminhos: Callable[[], sebrae_novos.Caminhos]
-    max_upload_bytes: Callable[[], int]
-    registros: Callable[[], Sequence[Mapping[str, Any]]]  # equipment records by person name (EquipamentosDetalhes, Endpoint, Entra)
-    relatorio_chamados: Callable[[], Optional[Mapping[str, Any]]]  # ticket report, for column E
-    vinculos_os: Callable[[], Sequence[Mapping[str, Any]]] = lambda: ()  # manual links UTIC -> OS of the ticket table, for column E
-    apelidos: Callable[[], Mapping[str, str]] = lambda: {}  # SERIE -> apelido, só para exibir no cartão (nunca gravado)
-    indice_endpoint: Callable[[], Optional[Mapping[str, Any]]] = lambda: None  # Endpoint index + Simpress base serials, only for the MacBook ``S`` equivalence in column E
-    runner: Optional[Callable[[], ChromeAutomationRunner]] = None  # starts the ``fechar`` routine; without it nothing is finalized
 
 
 class FinalizarPayload(BaseModel):
@@ -199,29 +185,6 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         if not versao or versao != atual["versao"]:
             raise DomainConflictError("O Dashboard foi reimportado ou a tela está desatualizada. Recarregue e confira os campos antes de atualizar ou finalizar. Nada foi gravado ou finalizado.")
 
-    def _relatorio() -> Optional[Mapping[str, Any]]:
-        try:
-            return services.relatorio_chamados()
-        except (OSError, ValueError):
-            return None  # an unreadable ticket report only leaves column E empty
-
-    def _indice_endpoint() -> Optional[Mapping[str, Any]]:
-        try:
-            return services.indice_endpoint()
-        except Exception as erro:  # an optional fallback must never break the screen or the update
-            logger.warning("Índice do Endpoint indisponível para a OS de MacBook (erro=%s).", type(erro).__name__)
-            return None  # without the index E just keeps the exact-serial match
-
-    def _leitura_antigos() -> Dict[str, Dict[str, str]]:
-        """SoftExpert read of the old open tickets with the description edited on the site; the screen and "Atualizar" share it."""
-        antigos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(services.caminhos()))
-        return sebrae_novos.aplicar_descricoes_antigos(antigos, fin.descricoes_editadas(_pasta_estado())) if antigos else {}
-
-    def _nao_encontrados(antigos: Mapping[str, Mapping[str, str]]) -> set:
-        """Old tickets missing from SoftExpert's task center on the last read and absent from the cached read (one rule for the screen badge and the 422)."""
-        lidos = set((sebrae_novos.ler_resultado_antigos(services.caminhos()) or {}).get("nao_encontrados") or [])
-        return {str(n) for n in lidos} - set(antigos)
-
     def _falta_encerramento(numero: str) -> str:
         """Mesma frase no 422 de Atualizar e do botão por chamado (o front repete no singular: ``avisoEncerramento``)."""
         return f"Informe a DT ENCERRAMENTO (coluna R) do chamado {numero} antes de finalizar."
@@ -252,136 +215,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         guardado = next((str((a.get("valores") or {}).get("R") or "") for a in importado.get("abertos", []) if str(a.get("numero")) == numero), "")
         return fin.encerramento_valido(guardado)
 
-    def _automaticos_dos_abertos(
-        abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]],
-        relatorio: Optional[Mapping[str, Any]], indice: Optional[Mapping[str, Any]],
-    ) -> Dict[str, Dict[str, str]]:
-        """What "Atualizar Dashboard" fills in the old open rows: G, H and I from the SoftExpert read, then E, K, L and N
-        from the name cross-reference fed by that same read (screen and write use this one function).
-
-        ``relatorio`` and ``indice`` are read once by the caller and shared with ``_os_novas_dos_abertos``."""
-        efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
-        cruzados = sebrae_novos.preenchimentos(
-            efetivos, registros, relatorio, services.vinculos_os(), indice, sebrae_os_recusadas.ler_ou_vazio(_pasta_estado()),
-        )
-        lidos = sebrae_novos.preenchimentos_softexpert(abertos, antigos)
-        return {n: {**lidos.get(n, {}), **cruzados.get(n, {})} for n in {*lidos, *cruzados}}
-
-    def _os_novas_dos_abertos(
-        abertos: Sequence[Mapping[str, Any]], antigos: Mapping[str, Mapping[str, str]], registros: Sequence[Mapping[str, Any]],
-        automaticos: Mapping[str, Mapping[str, str]], relatorio: Optional[Mapping[str, Any]], indice: Optional[Mapping[str, Any]],
-    ) -> Dict[str, Dict[str, Any]]:
-        """``{numero: sugestão de OS nova}`` dos antigos em aberto (``sebrae_os_nova``); a tela e a gravação usam esta função.
-
-        A série (K) é a da planilha ou a que o cruzamento por nome acabou de achar; a E é só a da planilha (mais o vínculo
-        manual, dentro do domínio). Registro de recusas ilegível: nenhuma sugestão, nunca uma troca às cegas. Falha de
-        cálculo não derruba o F5; o log leva só o tipo do erro (sem nome, OS nem texto)."""
-        if not abertos:
-            return {}
-        efetivos = [
-            {**e, "automaticos": {
-                **(e.get("automaticos") or {}),
-                "K": str((e.get("automaticos") or {}).get("K") or "").strip() or str(automaticos.get(str(e.get("numero")), {}).get("K") or "").strip(),
-            }}
-            for e in sebrae_novos.complementar_antigos(abertos, antigos)
-        ]
-        try:
-            return sebrae_os_nova.os_novas(
-                efetivos, relatorio, list(services.vinculos_os()), sebrae_os_recusadas.ler(_pasta_estado()), registros, indice,
-                sebrae_os_recusadas.mantidas(_pasta_estado()),
-            )
-        except DomainBusyError as erro:
-            logger.warning("OS nova sugerida indisponível (%s).", type(erro).__name__)
-        except Exception as erro:  # noqa: BLE001 - a sugestão é só auxílio; o F5 segue sem ela
-            logger.warning("Falha ao calcular a OS nova sugerida (%s).", type(erro).__name__)
-        return {}
-
-    def _limpar_e_dos_abertos(abertos: Sequence[Mapping[str, Any]], trocas: Mapping[str, str]) -> Dict[str, str]:
-        """E que o usuário mandou Remover e que ainda são essa OS (``sebrae_os_nova.limpar_e``); registro ilegível: nada é limpo."""
-        try:
-            removidas = sebrae_os_recusadas.removidas(_pasta_estado())
-        except DomainBusyError:
-            return {}
-        return sebrae_os_nova.limpar_e(abertos, removidas, list(services.vinculos_os()), trocas)
-
-    def _sugestoes_antigo(aberto: Mapping[str, Any], efetivo: Mapping[str, Any], lido: Optional[Mapping[str, str]], opcoes_a: Sequence[str]) -> Dict[str, Optional[str]]:
-        """Sugestão de A e J de um chamado antigo em aberto, só para exibir (nada é gravado); campo já preenchido não é sugerido.
-
-        Só as regras locais (``sugerir_responsavel`` e ``sugerir_tipo`` sem índice): sem IA e sem sugestão de B."""
-        valores = aberto.get("valores") or {}
-        textos = (efetivo.get("titulo") or (lido or {}).get("titulo"), efetivo.get("descricao"), (lido or {}).get("atendimento"), efetivo.get("usuario"))
-        try:
-            return {
-                "sugestao_responsavel": None if str(valores.get("A") or "").strip() else sebrae_categoria.sugerir_responsavel(*textos, opcoes_a),
-                "sugestao_tipo": None if str(valores.get("J") or "").strip() else sebrae_categoria.sugerir_tipo(*textos, None),
-            }
-        except Exception as erro:  # noqa: BLE001 - uma sugestão nunca derruba a lista; log só o tipo, nunca o texto do chamado
-            logger.warning("Sugestão de A e J do chamado antigo indisponível (erro=%s).", type(erro).__name__)
-            return {"sugestao_responsavel": None, "sugestao_tipo": None}
-
-    def _uma_vez(leituras: Optional[Dict[str, Any]], chave: str, ler: Callable[[], Any]) -> Any:
-        """Each source read at most once per response (``leituras`` lives only for that response, so nothing goes stale)."""
-        if leituras is None:
-            return ler()
-        if chave not in leituras:
-            leituras[chave] = ler()
-        return leituras[chave]
-
-    def _abertos_com_sugestoes(
-        abertos: Sequence[Mapping[str, Any]], observacoes: Optional[Mapping[str, Mapping[str, str]]] = None, opcoes_a: Sequence[str] = (),
-        leituras: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
-        """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N.
-
-        An old ticket already read from SoftExpert (rotina ``antigos``) gets the same cross-reference as a new one:
-        its description and requester fill the Dashboard's empty H and I for the name lookup (the API keeps both as they are)."""
-        antigos = _leitura_antigos() if abertos else {}
-        # Not in SoftExpert's task center on the last read (e.g. closed by another technician): the F5 card is tinted to check later.
-        nao_encontrados = _nao_encontrados(antigos) if abertos else set()
-        efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
-        registros = _uma_vez(leituras, "registros", services.registros) if abertos else []
-        relatorio, indice = (_uma_vez(leituras, "relatorio", _relatorio), _indice_endpoint()) if abertos else (None, None)
-        sugestoes = _automaticos_dos_abertos(abertos, antigos, registros, relatorio, indice) if abertos else {}
-        os_novas = _os_novas_dos_abertos(abertos, antigos, registros, sugestoes, relatorio, indice)
-        finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
-        obs_map = observacoes if observacoes is not None else (obs.ler_observacoes(_pasta_estado()) if abertos else {})
-        apelidos = _uma_vez(leituras, "apelidos", services.apelidos) if abertos else {}
-        com_senha = sebrae_credenciais.numeros(_pasta_estado()) if abertos else frozenset()
-        return [
-            {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
-             "apelido": _apelido(apelidos, (a.get("automaticos") or {}).get("K") or sugestoes.get(str(a.get("numero")), {}).get("K")),
-             **sebrae_cruzamento.avisos_de_nome(e.get("descricao"), e.get("usuario"), registros),
-             "softexpert": fin.publico(finalizacao.get(str(a.get("numero")))),
-             "leitura_softexpert": antigos.get(str(a.get("numero"))),
-             "nao_encontrado_softexpert": str(a.get("numero")) in nao_encontrados,
-             "tem_credencial": str(a.get("numero")) in com_senha,  # only the flag; the value needs the click (GET .../credenciais)
-             "observacao": obs_map.get(str(a.get("numero") or ""), {}).get("observacao", ""),
-             "destaque": _destacado(obs_map, a.get("numero")),
-             **_os_nova_e_sem_relacao(os_novas.get(str(a.get("numero")))),  # ``softexpert`` is the finalization state; this is the read data
-             **_sugestoes_antigo(a, e, antigos.get(str(a.get("numero"))), opcoes_a)}
-            for a, e in zip(abertos, efetivos)
-        ]
-
-    def _os_nova_e_sem_relacao(sugestao: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        """``sem_relacao`` goes to its own key: the current F5 screen reads ``os_nova.nova`` and would break on it."""
-        if sugestao and sugestao.get("tipo") == "sem_relacao":
-            return {"os_nova": None, "os_sem_relacao": sugestao}
-        return {"os_nova": sugestao, "os_sem_relacao": None}
-
-    def _destacado(observacoes: Mapping[str, Mapping[str, Any]], numero: Any) -> bool:
-        return bool(observacoes.get(str(numero or ""), {}).get("destaque"))
-
-    def _apelido(apelidos: Mapping[str, str], serie: Any) -> str:
-        return apelidos.get(str(serie or "").strip().upper(), "")
-
-    def _pasta_estado():
-        return fin.pasta_estado(services.caminhos().existentes)
+    def _pasta_estado() -> Path:
+        return tela.pasta_estado(services)
 
     def _nomes_representantes() -> List[Any]:
         """Nomes dos representantes regionais (padrão local e alterados); arquivo ilegível vale só o padrão."""
         try:
             salvos, _ = local_setup.load_regional_representatives(REGIONAL_REPRESENTATIVES_FILE)
-        except Exception:  # noqa: BLE001 - só serve para mascarar nomes; o padrão continua valendo
+        except Exception as erro:  # noqa: BLE001 - só serve para mascarar nomes; o padrão continua valendo
+            logger.warning("Representantes regionais ilegíveis; vale só o padrão (%s).", type(erro).__name__)
             salvos = {}
         # O padrão vem do arquivo local (o código tem os nomes em branco): sem ele os nomes reais deixariam de ser mascarados.
         padroes_efetivos, _ = local_setup.effective_regional_representative_defaults(REGIONAL_REPRESENTATIVE_DEFAULTS_FILE)
@@ -399,118 +241,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
             logger.warning("Não atualizei o índice de sugestão de categoria (%s).", type(erro).__name__)
 
-    def _sugestoes_categoria(
-        linha: Mapping[str, Any], opcoes: Sequence[str], indice: Optional[Mapping[str, Any]],
-        sugestor: Optional[sebrae_categoria_ia.SugestorIA] = None, opcoes_a: Sequence[str] = (),
-    ) -> Dict[str, Optional[str]]:
-        """Sugestão de A, B e J de um chamado novo, só para exibir (nada é gravado); campo já preenchido não é sugerido.
-
-        A (Responsável) vem só das regras locais (``sugerir_responsavel``): CLIENTE para usuário, acesso e software,
-        SIMPRESS para defeito de hardware; nunca vai à IA.
-
-        Com ``sugestor`` (IA opcional, desligada por padrão) só os chamados que ficaram em OUTRO são enviados, e a IA só
-        troca OUTRO por outra categoria válida; o J da IA vale só se as regras locais não deram J.
-        """
-        a_atual, b_atual, j_atual = (str(linha.get(letra) or "").strip() for letra in ("A", "B", "J"))
-        textos = (linha.get("G"), linha.get("H"), linha.get("F"), linha.get("I"))  # título, descrição, atendimento, solicitante
-        try:
-            responsavel = None if a_atual else sebrae_categoria.sugerir_responsavel(*textos, opcoes_a)
-            categoria = None if b_atual else sebrae_categoria.sugerir(*textos, opcoes, indice)
-            tipo = None if j_atual else sebrae_categoria.sugerir_tipo(*textos, indice, categoria=b_atual or categoria)
-            sem_sinal = categoria is None or sebrae_categoria.normalizar(categoria) == "outro"
-            if sugestor is not None and not b_atual and not j_atual and sem_sinal and not e_solicitante_sistema(textos[3]):
-                resposta = sugestor.sugerir(textos[0], textos[1], textos[2], opcoes)
-                if resposta is not None:
-                    if sebrae_categoria.normalizar(resposta.categoria) != "outro":
-                        categoria = resposta.categoria
-                    tipo = tipo or resposta.tipo
-            return {"sugestao_responsavel": responsavel, "sugestao_categoria": categoria, "sugestao_tipo": tipo}
-        except Exception as erro:  # noqa: BLE001 - uma sugestão nunca derruba a tela; log só o tipo, nunca o texto do chamado
-            logger.warning("Sugestão de categoria indisponível (erro=%s).", type(erro).__name__)
-            return {"sugestao_responsavel": None, "sugestao_categoria": None, "sugestao_tipo": None}
-
-    def _novos(caminhos: sebrae_novos.Caminhos, lancados: Iterable[str]) -> Optional[Dict[str, Any]]:
-        """Chamados novos da última busca já com a descrição que o usuário editou no site (lápis do cartão)."""
-        novos = sebrae_novos.ler_novos(caminhos.novos, lancados)
-        if novos is not None:
-            novos["chamados"] = sebrae_novos.aplicar_descricoes_novos(novos["chamados"], fin.descricoes_editadas(_pasta_estado()))
-        return novos
-
-    def _estado(ia: bool = True) -> Dict[str, Any]:
-        corpo = _estado_base(ia)
-        # só aparecem quando existem: a tela vazia continua {"importado": None, "novos": None}
-        resultado = fin.ler_resultado(_pasta_estado())
-        if resultado is not None:
-            corpo["fechar"] = resultado
-        pendente = fin.aviso_do_pendente(_pasta_estado())
-        if pendente is not None:
-            corpo["sharepoint"] = pendente
-        return corpo
-
-    def _sugestor_ia(novos: Mapping[str, Any], importado: Optional[Mapping[str, Any]] = None) -> Optional[sebrae_categoria_ia.SugestorIA]:
-        """Sugestor por IA desta resposta (None com a chave SIMPRESS_SUGESTAO_IA desligada); conhece os nomes para mascarar."""
-        try:
-            sugestor = sebrae_categoria_ia.criar()
-            if sugestor is not None:
-                sugestor.registrar_nomes(_nomes_pessoas())
-                sugestor.registrar_nomes([chamado.solicitante for chamado in novos["chamados"]])
-                sugestor.registrar_nomes([linha.get("usuario") for linha in (importado or {}).get("abertos", [])])
-            return sugestor
-        except Exception as erro:  # noqa: BLE001 - the optional AI never breaks the list; log only the class, never ticket data
-            logger.warning("Sugestão de categoria por IA indisponível (erro=%s).", type(erro).__name__)
-            return None
-
-    def _estado_base(ia: bool = True) -> Dict[str, Any]:
-        caminhos = services.caminhos()
-        importado = sebrae_novos.ler_existentes(caminhos.existentes)
-        lancados = importado["numeros"] if importado else frozenset()
-        novos = _novos(caminhos, lancados) if importado else None
-        pasta = _pasta_estado()
-        finalizacao = fin.ler_estado(pasta) if (novos or importado) else {}
-        observacoes = obs.ler_observacoes(pasta) if (novos or importado) else {}
-        com_senha = sebrae_credenciais.numeros(pasta) if novos else frozenset()
-        leituras: Dict[str, Any] = {}
-        apelidos = _uma_vez(leituras, "apelidos", services.apelidos) if novos else {}
-        indice_categoria = sebrae_categoria.carregar_indice(_pasta_estado() / sebrae_categoria.ARQUIVO_INDICE) if novos else None  # uma leitura por resposta
-        lista_b = importado["listas"].get("B", []) if importado else []
-        vistas = {sebrae_categoria.normalizar(opcao) for opcao in lista_b}
-        opcoes_b = [*lista_b, *(c for c in sebrae_categoria.CATEGORIAS_NOVAS if sebrae_categoria.normalizar(c) not in vistas)]
-        opcoes_a = importado["listas"].get("A", []) if importado else []
-        sugestor = _sugestor_ia(novos, importado) if (novos and ia) else None  # IA opcional: fora de qualquer trava de arquivo (ia=False)
-        finalizados = [
-            {**f, "observacao": observacoes.get(str(f.get("numero") or ""), {}).get("observacao", ""),
-             "destaque": _destacado(observacoes, f.get("numero"))}
-            for f in fin.finalizados_no_dashboard(pasta)
-        ] if importado else []
-        return {
-            "importado": None if importado is None else {
-                "versao": importado["versao"], "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
-                "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"], observacoes, opcoes_a, leituras),
-                "finalizados": finalizados,
-                "atualizavel": sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), importado["sha256"]) is not None,
-                "saida_pronta": sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO).is_file(),
-            },
-            "novos": None if novos is None else {
-                "lidos_em": novos["lidos_em"], "ignorados": novos["ignorados"], "pendentes": novos["pendentes"],
-                "erros": novos["erros"],
-                "formulario": [
-                    {**item, "apelido": _apelido(apelidos, item["linha"].get("K")),
-                     "softexpert": fin.publico(finalizacao.get(item["numero"])),
-                     "observacao": observacoes.get(item["numero"], {}).get("observacao", ""),
-                     "destaque": _destacado(observacoes, item["numero"]),
-                     "tem_credencial": item["numero"] in com_senha,
-                     **_sugestoes_categoria(item["linha"], opcoes_b, indice_categoria, sugestor, opcoes_a)}
-                    for item in sebrae_novos.formulario(
-                        novos["chamados"], _uma_vez(leituras, "registros", services.registros), _uma_vez(leituras, "relatorio", _relatorio),
-                        services.vinculos_os())
-                ],
-            },
-        }
-
     @router.get("/api/sebrae/novos")
     def novos_chamados():
         """Dashboard importado e chamados novos lidos do SoftExpert, com as colunas automáticas já calculadas."""
-        return JSONResponse(_estado(), headers={"Cache-Control": "no-store"})
+        return JSONResponse(tela.estado(services, _nomes_pessoas), headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/dashboard")
     async def importar_dashboard(file: UploadFile = File(...), automatico: bool = Query(False)):
@@ -598,7 +332,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             aviso_linhas = _acompanhar_chaves_de_linha(anteriores)  # after the new base is stored: a retry never moves keys twice
             historico_ok = _registrar_historico(conteudo, nome, anteriores)
             # ia=False: the optional AI call (network, up to ~8 s) must not hold the file lock; the next GET fills the suggestions
-            corpo = {**_estado(ia=False), "historico_ok": historico_ok, "arquivo_ok": True, "saida_anterior_preservada": preservada is not None}
+            corpo = {**tela.estado(services, _nomes_pessoas, ia=False), "historico_ok": historico_ok, "arquivo_ok": True, "saida_anterior_preservada": preservada is not None}
             if substituida and preservada is not None:
                 corpo["saida_pendente_substituida"] = True
                 avisos.append(
@@ -678,7 +412,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             # These callers WRITE (marks, frozen OS): an unreadable refusal file must not let a strong-key swap through.
             recusadas = sebrae_os_recusadas.ler_ou_none(_pasta_estado())
             return sebrae_vinculos.vinculos_derivados(
-                abertos, _relatorio(), _indice_endpoint(), recusadas, chave_forte=recusadas is not None,
+                abertos, tela.relatorio(services), tela.indice_endpoint(services), recusadas, chave_forte=recusadas is not None,
                 manuais=list(services.vinculos_os()),
             )
 
@@ -784,7 +518,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         if importado is None:
             raise DomainValidationError("Importe o Dashboard antes de exportar.", status_code=422)
-        novos = _novos(caminhos, importado["numeros"])
+        novos = tela.novos(services, caminhos, importado["numeros"])
         if novos is None:
             raise DomainValidationError("Busque os chamados novos antes de exportar.", status_code=422)
         manuais = {item.numero: item.model_dump(exclude={"numero"}) for item in payload.chamados}
@@ -795,7 +529,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         if desconhecidos:
             raise DomainValidationError(f"{desconhecidos[0]} não está entre os chamados novos.", status_code=422)
         try:
-            resultado = sebrae_novos.exportar(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], services.vinculos_os())
+            resultado = sebrae_novos.exportar(escolhidos, manuais, services.registros(), tela.relatorio(services), importado["listas"], services.vinculos_os())
         except sebrae_novos.ManuaisInvalidos as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
         return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
@@ -809,6 +543,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
         with lock_paths([_base_guard()]):
             _exigir_versao(payload.versao_importacao)
+            # fechar/enviar (ou o pedido esperando) gravam D e R na mesma saída: refazê-la agora a deixaria sem o recém-finalizado
+            _exigir_sem_finalizacao("Aguarde a finalização ou o envio em andamento antes de atualizar o Dashboard. Nada foi gravado.")
             confirmados = dict.fromkeys(payload.confirmar_outro_tecnico, "") if payload.finalizar_softexpert else None
             importado, resultado, conteudo, gravada, edicoes = _gravar_atualizacao(payload, exigir_encerramento=True, confirmados=confirmados)
             fechar = (
@@ -895,14 +631,14 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 for numero, r in confirmados.items():
                     valores: Mapping[str, Any] = edicoes.get(numero) or novos.get(numero) or guardados.get(numero) or {}
                     _exigir_outro_tecnico(numero, {**valores, "R": r} if r else valores)
-            antigos = _leitura_antigos() if abertos else {}
+            antigos = tela.leitura_antigos(services) if abertos else {}
             registros = services.registros() if abertos else []
-            relatorio, indice = (_relatorio(), _indice_endpoint()) if abertos else (None, None)
-            automaticos = _automaticos_dos_abertos(abertos, antigos, registros, relatorio, indice) if abertos else {}
+            relatorio, indice = (tela.relatorio(services), tela.indice_endpoint(services)) if abertos else (None, None)
+            automaticos = tela.automaticos_dos_abertos(services, abertos, antigos, registros, relatorio, indice) if abertos else {}
             trocas = sebrae_os_nova.trocas_e(
-                _os_novas_dos_abertos(abertos, antigos, registros, automaticos, relatorio, indice), abertos, list(services.vinculos_os()),
+                tela.os_novas_dos_abertos(services, abertos, antigos, registros, automaticos, relatorio, indice), abertos, list(services.vinculos_os()),
             )
-            limpar = _limpar_e_dos_abertos(abertos, trocas)
+            limpar = tela.limpar_e_dos_abertos(services, abertos, trocas)
             descricoes = _descricoes_editadas_dos_antigos(abertos)
             if not linhas and not edicoes and not automaticos and not descricoes and not trocas and not limpar:
                 if aceita_vazio:
@@ -910,7 +646,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 raise DomainValidationError("Não há chamados novos, alterações nem dados para preencher.", status_code=422)
             gravar = {**edicoes, **{n: {**edicoes.get(n, {}), "H": h} for n, h in descricoes.items()}}
             if confirmados is not None:  # em branco não apaga: fica o D e o R da cópia importada
-                perdidos = _nao_encontrados(antigos) - set(confirmados)
+                perdidos = tela.nao_encontrados(services, antigos) - set(confirmados)
                 gravar = {
                     n: ({**v, "D": "", "R": ""} if n in perdidos and v.get("D") == sebrae_novos.STATUS_FINALIZADO else v)
                     for n, v in gravar.items()
@@ -947,12 +683,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return {n: novo for n, (novo, atual) in textos.items() if novo and not sebrae_dashboard_gravacao.h_ja_gravado(novo, atual)}
 
     def _reaplicar_encerramentos(conteudo: bytes) -> bytes:
-        """A saída é refeita da cópia importada a cada "Atualizar": as datas de encerramento registradas ao finalizar (o R que o usuário informou) voltam à coluna R."""
+        """A saída é refeita da cópia importada a cada "Atualizar": D=FINALIZADO e o R registrados ao finalizar voltam à linha do chamado.
+
+        Decisão do usuário (26/11/2026): linha que a cópia importada já traz com D FINALIZADO e R válido (``dd/MM/aaaa HH:mm``) não
+        muda, nem D nem R, mesmo com R diferente do registrado (o R digitado à mão vale). A gravação logo depois da ``fechar`` não passa por aqui."""
         encerramentos = fin.encerramentos_registrados(_pasta_estado())
         if not encerramentos:
             return conteudo
         try:
-            return sebrae_dashboard_gravacao.registrar_encerramentos(conteudo, encerramentos)[0].conteudo
+            return sebrae_dashboard_gravacao.registrar_encerramentos(conteudo, encerramentos, manter_finalizados=True)[0].conteudo
         except Exception as erro:  # noqa: BLE001 - a atualização não pode falhar por isso; log só o tipo
             logger.warning("Datas de encerramento não reaplicadas à saída (%s).", type(erro).__name__)
             return conteudo
@@ -966,7 +705,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         Quem chama passa só os confirmados pelo usuário (decisão de 25/11/2026)."""
         if not com_r:
             return {}
-        perdidos = _nao_encontrados(_leitura_antigos())
+        perdidos = tela.nao_encontrados(services, tela.leitura_antigos(services))
         return {numero: r for numero, r in com_r.items() if numero in perdidos}
 
     def _finalizar_marcados(edicoes: Mapping[str, Mapping[str, str]], confirmados: Iterable[str] = ()) -> Dict[str, Any]:
@@ -1008,6 +747,20 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             return None
         ativo = services.runner().state()
         return ativo if ativo.get("estado") == "em_andamento" else None
+
+    def _exigir_sem_finalizacao(mensagem: str) -> None:
+        """409 com pedido de finalização esperando ou ``fechar``/``enviar`` rodando (outras rotinas, como ``antigos``, não bloqueiam).
+
+        Estado do executor ilegível: 503, sem gravar (não dá para saber se a ``fechar`` está gravando a mesma saída)."""
+        try:
+            ativa = _rotina_em_andamento()
+        except Exception as erro:  # noqa: BLE001
+            logger.warning("Estado do executor de rotinas ilegível (%s).", type(erro).__name__)
+            raise DomainBusyError("Não foi possível conferir se há rotina em execução. Tente de novo.") from erro
+        if ativa is None and services.runner is not None and (orfaos := fin.descartar_job_orfao(_pasta_estado())) is not None:  # mesma regra de ``_exigir_rotina_livre``
+            logger.warning("Pedido de finalização órfão descartado (%s chamado(s)).", orfaos)
+        if fin.job_pendente(_pasta_estado()) or (ativa is not None and ativa.get("rotina") in ("fechar", "enviar")):
+            raise DomainConflictError(mensagem)
 
     def _exigir_rotina_livre(pasta) -> None:
         """409 quando há pedido de finalização esperando ou uma rotina rodando; um runner sem estado legível deixa o ``start`` decidir."""
@@ -1119,19 +872,19 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     @router.put("/api/sebrae/chamados/{numero}/os-recusada")
     def recusar_os(numero: str, payload: OsRecusadaPayload):
         """Recusa (ou mantém) a OS sugerida: o par chamado + OS nunca mais é sugerido nem trocado sozinho (só local)."""
-        sebrae_os_recusadas.recusar(_pasta_estado(), numero, payload.os)
+        sebrae_os_recusadas.recusar(_pasta_estado(), fin.validar_numero(numero), payload.os)  # só UTIC-AAAA-N: linha:N não identifica o chamado
         return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
     @router.put("/api/sebrae/chamados/{numero}/os-manter")
     def manter_os(numero: str, payload: OsRecusadaPayload):
         """Mantém a OS que já está na E (aviso "sem relação" encerrado); só local, nada é gravado no Dashboard."""
-        sebrae_os_recusadas.manter(_pasta_estado(), numero, payload.os)
+        sebrae_os_recusadas.manter(_pasta_estado(), fin.validar_numero(numero), payload.os)  # só UTIC-AAAA-N: linha:N não identifica o chamado
         return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
     @router.put("/api/sebrae/chamados/{numero}/os-remover")
     def remover_os(numero: str, payload: OsRecusadaPayload):
         """Recusa a OS e manda limpar a E: a próxima gravação do Dashboard esvazia só a E que ainda for essa OS."""
-        sebrae_os_recusadas.remover(_pasta_estado(), numero, payload.os)
+        sebrae_os_recusadas.remover(_pasta_estado(), fin.validar_numero(numero), payload.os)  # só UTIC-AAAA-N: linha:N não identifica o chamado
         return JSONResponse({"ok": True}, headers={"Cache-Control": "no-store"})
 
     @router.put("/api/sebrae/chamados/{numero}/destaque")
@@ -1298,10 +1051,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Grava as escolhas por conflito (``sharepoint`` ou ``site``); com ``enviar`` inicia a rotina ``enviar`` de novo.
 
         Exige a ``versao_importacao`` atual (409 se ausente ou antiga). ``site`` num conflito com ``aceita_site`` falso é 422."""
-        _exigir_versao(payload.versao_importacao)
         pasta = _pasta_estado()
         arquivo = fin.caminho_conflitos(pasta)
-        with lock_paths([arquivo]):
+        with lock_paths([_base_guard()]), lock_paths([arquivo]):  # mesma ordem da importação: uma reimportação não entra entre conferir e gravar
+            _exigir_versao(payload.versao_importacao)
             dados = fin.ler_conflitos(pasta) or {}
             conflitos = [conflito for conflito in dados.get("conflitos") or [] if isinstance(conflito, dict)]
             ids = {str(conflito.get("id")) for conflito in conflitos}
@@ -1384,7 +1137,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def _linhas_novas(payload: AtualizarPayload, importado: Mapping[str, Any], caminhos: sebrae_novos.Caminhos) -> List[Dict[str, str]]:
         if not payload.chamados:
             return []
-        novos = _novos(caminhos, importado["numeros"])
+        novos = tela.novos(services, caminhos, importado["numeros"])
         if novos is None:
             raise DomainValidationError("Busque os chamados novos antes de atualizar.", status_code=422)
         manuais = {item.numero: item.model_dump(exclude={"numero"}) for item in payload.chamados}
@@ -1397,14 +1150,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             if ja_no_dashboard:  # typed into the Dashboard by hand after the search
                 raise DomainValidationError(f"{ja_no_dashboard} já está no Dashboard (incluído à mão depois da busca); confira-o em Chamados antigos em aberto e atualize de novo.", status_code=422)
             raise DomainValidationError(f"{desconhecidos[0]} não está entre os chamados novos.", status_code=422)
-        return sebrae_novos.linhas_completas(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], exigir=False, vinculos=services.vinculos_os())
+        return sebrae_novos.linhas_completas(escolhidos, manuais, services.registros(), tela.relatorio(services), importado["listas"], exigir=False, vinculos=services.vinculos_os())
 
     def _edicoes(payload: AtualizarPayload, planilha: bytes, listas: Mapping[str, Sequence[str]], exigir_encerramento: bool = False) -> Dict[str, Dict[str, str]]:
         """Merged (stored + sent) manual values that are filled pass the same rules as a new ticket (A, D and J may stay
         blank); an off-list A/B it already has is kept. The title (G) goes only when typed, already masked.
 
         With ``exigir_encerramento``: D=FINALIZADO without a valid R (none sent, none stored) is refused (rule of 24/11/2026: the
-        closing date is always typed by the user, never the current time)."""
+        closing date is always typed by the user, never the current time). A stored R without the time, not sent again, counts as
+        blank (26/11/2026): it never blocks an edit of A, B, J or S and, blank, it is never rewritten."""
         if not payload.edicoes:
             return {}
         abertos = {c.numero: c for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)}
@@ -1417,6 +1171,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 raise DomainValidationError("Há chamados repetidos na atualização.", status_code=422)
             enviados = item.model_dump(exclude={"numero"})
             mesclados = {letra: str(enviados.get(letra) or "") or atual.valores.get(letra, "") for letra in MANUAIS}
+            if not str(enviados.get("R") or "").strip() and not fin.encerramento_valido(mesclados.get("R")):
+                mesclados["R"] = ""  # regra de 25/11/2026: R guardado só com a data é falta de R; não trava a edição e não é regravado
             try:
                 validados = sebrae_novos.validar_manuais(mesclados, exigir=False)
                 sebrae_novos.validar_listas(validados, listas, atual.valores)

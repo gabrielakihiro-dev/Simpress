@@ -9,3 +9,4 @@ Testes do Python, do front-end (`tests/frontend`) e e2e (`tests/e2e`). Valem jun
 - Termo aprovado que muda se propaga para os testes junto com interface e validação.
 - Dados reais ou operacionais (`data/state`, planilhas) nunca entram em fixtures versionadas; use dados sintéticos. Doc: `docs/operacao/regras-cadastro-historico.md`.
 - Cada critério de aceite dado como pronto traz `AC: <critério> — PROVEN BY <evidência>`; no máximo 3 ciclos de correção sobre a mesma falha.
+- Captura `*-win32.png` desatualizada por mudança de tela intencional: só o usuário regrava no Windows; passos em `docs/desenvolvimento/regras-agentes.md`, "Capturas de referência win32 (Playwright)".
