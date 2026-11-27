@@ -12,6 +12,8 @@ LOG_FILE_NAME = "simpress.log"
 LOG_FILE_MAX_BYTES = 2 * 1024 * 1024
 LOG_FILE_BACKUPS = 5
 _HANDLER_MARKER = "_simpress_handler"
+# HTTP clients log every request at INFO with the full URL, query string included (a search term can be a name or a CPF).
+HTTP_CLIENT_LOGGERS = ("httpx", "httpx2", "httpcore")
 
 
 class RedactingFormatter(logging.Formatter):
@@ -38,6 +40,12 @@ def redact_reference(value: object) -> str:
     return "ref-" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:10]
 
 
+def quiet_http_client_loggers() -> None:
+    """Keep HTTP client loggers at WARNING: request URLs never reach the log, errors still do."""
+    for name in HTTP_CLIENT_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def configure_logging(log_dir: Path, level: int = logging.INFO) -> Path:
     """Attach the application handlers to the root logger once and return the log file.
 
@@ -47,6 +55,7 @@ def configure_logging(log_dir: Path, level: int = logging.INFO) -> Path:
     """
     root = logging.getLogger()
     root.setLevel(level)
+    quiet_http_client_loggers()
     log_file = Path(log_dir) / LOG_FILE_NAME
     if any(getattr(handler, _HANDLER_MARKER, False) for handler in root.handlers):
         return log_file

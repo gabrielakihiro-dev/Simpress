@@ -1,6 +1,6 @@
 """The history and comparison reads of the assistant's API (`HistoricoMixin`, mixed into `SimpressApi` in `assistant_api`).
 
-Leaf module: shared helpers come from `assistant_api_comum`; nothing here may import `assistant_api` or `assistant_api_sebrae`.
+Leaf module: shared helpers come from `assistant_api_comum`; nothing here may import `assistant_api` or another mixin.
 """
 
 import calendar

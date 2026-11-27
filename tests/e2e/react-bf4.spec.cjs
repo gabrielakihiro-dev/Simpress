@@ -2,8 +2,9 @@
 // Planilhas e a janela Chamado x OS) migradas para o painel React ferramentas-cockpit
 // (frontend/src/paineis/ferramentas-cockpit/). frontend/src/aplicacao/cockpit-tool-panels.ts virou só a ponte.
 //
-// Só dados sintéticos: o servidor de fixture (tests/support/serve_ui_motion_preview.py) responde a todo /api/*; nada é
-// simulado aqui. O que se prova é o que o usuário vê (botão, atalho, título, <kbd>, ARIA, foco, Escape) e o contrato com
+// Só dados sintéticos: o servidor de fixture (tests/support/serve_ui_motion_preview.py) responde a todo /api/*. Só os testes
+// de Planilhas simulam, com page.route, GET /api/historico-comparacoes (lista e detalhe) para controlar o histórico; os demais
+// não simulam nada. O que se prova é o que o usuário vê (botão, atalho, título, <kbd>, ARIA, foco, Escape) e o contrato com
 // a página: window.abrirPainelCockpit / fecharPainelCockpit e window.SimpressReact["ferramentas-cockpit"].
 const { test, expect } = require("@playwright/test");
 
@@ -157,4 +158,203 @@ test("com o bundle: trocar de ferramenta mostra só a nova, o Voltar volta à an
   await conferirAberto(page, FERRAMENTAS[2]);
   await voltar.click();
   await conferirFechado(page, FERRAMENTAS[2]);
+});
+
+// ---- Planilhas: contrato visível da sub-aba (dados sintéticos simulados em /api/historico-comparacoes) ----
+const PLANILHAS = 'section[data-cockpit-tool-panel="planilhas"]';
+const EVENTO_PLANILHAS = {
+  id: "evt-sintetico-1", tipo: "importacao", horario: "2026-11-20T12:00:00-03:00",
+  arquivos_enviados: { endpoint: "endpoint_sintetico.xlsx", detalhes: "detalhes_sintetico.xlsx" },
+  comparacao: { total_detalhes: 12, total_endpoint: 10 },
+};
+// Sem o arquivo do Endpoint: a 1ª linha fica "Sem arquivo".
+const EVENTO_SEM_ARQUIVO = { ...EVENTO_PLANILHAS, arquivos_enviados: { detalhes: "detalhes_sintetico.xlsx" } };
+
+// modo: "ok" | "vazio" | "erro" | "sem-arquivo". Devolve o contador de requisições da lista e `segurar`: se for uma Promise,
+// a lista só responde depois dela (prova que a recarga veio da Planilhas, que mostra "Carregando…" enquanto espera).
+async function simularHistorico(page, modo) {
+  const contagem = { lista: 0, segurar: null };
+  const evento = modo === "sem-arquivo" ? EVENTO_SEM_ARQUIVO : EVENTO_PLANILHAS;
+  await page.route(/\/api\/historico-comparacoes(\/[^/?]+)?(\?.*)?$/, async rota => {
+    const detalhe = new URL(rota.request().url()).pathname.split("/")[3];
+    if (detalhe) return rota.fulfill({ json: { evento } });
+    contagem.lista += 1;
+    if (contagem.segurar) await contagem.segurar;
+    if (modo === "erro") return rota.fulfill({ status: 500, json: { detail: "Falha sintética do servidor." } });
+    return rota.fulfill({ json: { eventos: modo === "vazio" ? [] : [evento] } });
+  });
+  return contagem;
+}
+
+async function abrirPlanilhas(page) {
+  await abrirPagina(page);
+  await page.evaluate(() => window.abrirPainelCockpit("planilhas"));
+  await expect(page.locator(PLANILHAS)).toBeVisible();
+}
+
+// Erros de console e avisos do React; descarta só o 404 de GET /api/modelos-chamado, que a fixture não implementa (ruído da
+// partida, alheio a Planilhas, confirmado por log de resposta em 27/11/2026).
+const errosDeConsole = vistos => vistos.console.filter(texto => !/Failed to load resource: .*404 \(Not Found\)/.test(texto));
+
+const LINHAS = `${PLANILHAS} #cockpit-sheets-list-body tr`;
+const DETALHE_TITULO = "#cockpit-sheets-detail-title";
+
+test("Planilhas: carrega KPIs, status, duas linhas com data-label e detalhe da primeira", async ({ page }) => {
+  const vistos = vigiar(page);
+  await simularHistorico(page, "ok");
+  await abrirPlanilhas(page);
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText(/^Última atualização em .+/);
+  const kpis = page.locator("#cockpit-sheets-kpis .ck-kpi");
+  await expect(kpis).toHaveCount(4);
+  await expect(kpis.locator(".ck-kpi__rotulo")).toHaveText([
+    "Última atualização", "Equipamentos na Simpress", "Equipamentos no Endpoint", "Atualizações no histórico",
+  ]);
+  await expect(kpis.nth(1).locator(".ck-kpi__valor")).toHaveText("12");
+  await expect(kpis.nth(2).locator(".ck-kpi__valor")).toHaveText("10");
+  await expect(kpis.nth(3).locator(".ck-kpi__valor")).toHaveText("1");
+  const linhas = page.locator(LINHAS);
+  await expect(linhas).toHaveCount(2);
+  await expect(linhas.nth(0).locator("td").first()).toHaveText("No Endpoint");
+  await expect(linhas.nth(1).locator("td").first()).toHaveText("na Simpress");
+  for (const i of [0, 1]) {
+    await expect(linhas.nth(i).locator("td")).toHaveCount(5);
+    expect(await linhas.nth(i).locator("td").evaluateAll(tds => tds.map(td => td.dataset.label)))
+      .toEqual(["Planilha", "Arquivo atual", "Linhas", "Atualizado", "Situação"]);
+    await expect(linhas.nth(i)).toHaveAttribute("tabindex", "0");
+  }
+  await expect(linhas.nth(0)).toHaveAttribute("aria-selected", "true");
+  await expect(linhas.nth(1)).toHaveAttribute("aria-selected", "false");
+  await expect(page.locator(DETALHE_TITULO)).toHaveText("No Endpoint");
+  await expect(page.locator("#cockpit-sheets-detail-sub")).toHaveText(/endpoint_sintetico/);
+  await expect(page.locator("#cockpit-sheets-detail-badge [data-status]")).toHaveText("Atualizada");
+  await expect(page.locator("#cockpit-sheets-detail-badge [data-status]")).toHaveAttribute("data-status", "ok");
+  for (const i of [0, 1]) await expect(linhas.nth(i).locator('[data-label="Situação"] [data-status]')).toHaveAttribute("data-status", "ok");
+  expect(vistos.pagina).toEqual([]);
+});
+
+// toBeFocused na linha: melhoria intencional desta branch (a linha é re-renderizada pelo React sem perder o foco);
+// no main o foco caía no body depois da seleção, então este assert NÃO passa lá.
+test("Planilhas: selecionar a 2ª linha por clique troca aria-selected e atualiza o detalhe", async ({ page }) => {
+  const vistos = vigiar(page);
+  await simularHistorico(page, "ok");
+  await abrirPlanilhas(page);
+  await expect(page.locator(LINHAS)).toHaveCount(2);
+  await page.locator(LINHAS).nth(1).click();
+  await expect(page.locator(LINHAS).nth(1)).toBeFocused();
+  await expect(page.locator(LINHAS).nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(LINHAS).nth(0)).toHaveAttribute("aria-selected", "false");
+  await expect(page.locator(DETALHE_TITULO)).toHaveText("na Simpress");
+  await expect(page.locator("#cockpit-sheets-detail-sub")).toHaveText(/detalhes_sintetico/);
+  expect(vistos.pagina).toEqual([]);
+  expect(errosDeConsole(vistos)).toEqual([]);
+});
+
+for (const tecla of ["Enter", " "]) {
+  // O foco continua na linha depois da seleção (no main caía no body; só passa nesta branch).
+  test(`Planilhas: selecionar a 2ª linha por teclado (${tecla === " " ? "Espaço" : tecla}) com foco na linha`, async ({ page }) => {
+    const vistos = vigiar(page);
+    await simularHistorico(page, "ok");
+    await abrirPlanilhas(page);
+    await expect(page.locator(LINHAS)).toHaveCount(2);
+    await page.locator(LINHAS).nth(1).focus();
+    await page.keyboard.press(tecla);
+    await expect(page.locator(LINHAS).nth(1)).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(LINHAS).nth(1)).toBeFocused();
+    await expect(page.locator(LINHAS).nth(0)).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator(DETALHE_TITULO)).toHaveText("na Simpress");
+    expect(vistos.pagina).toEqual([]);
+    expect(errosDeConsole(vistos)).toEqual([]);
+  });
+}
+
+test("Planilhas: histórico vazio mostra a mensagem no status e na tabela", async ({ page }) => {
+  await simularHistorico(page, "vazio");
+  await abrirPlanilhas(page);
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText("Nenhuma atualização no histórico local.");
+  const vazio = page.locator("#cockpit-sheets-list-body td.ck-lista__vazio");
+  await expect(vazio).toHaveText("Nenhuma atualização no histórico local.");
+  await expect(vazio).toHaveAttribute("colspan", "5");
+  await expect(page.locator(DETALHE_TITULO)).toHaveText("—");
+});
+
+test("Planilhas: erro 500 do servidor mostra a mensagem no status e na tabela", async ({ page }) => {
+  await simularHistorico(page, "erro");
+  await abrirPlanilhas(page);
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText("Falha sintética do servidor.");
+  const vazio = page.locator("#cockpit-sheets-list-body td.ck-lista__vazio");
+  await expect(vazio).toHaveText("Falha sintética do servidor.");
+  await expect(vazio).toHaveAttribute("colspan", "5");
+});
+
+test("Planilhas: o botão Atualizar recarrega o histórico", async ({ page }) => {
+  const vistos = vigiar(page);
+  const contagem = await simularHistorico(page, "ok");
+  await abrirPlanilhas(page);
+  await expect(page.locator(LINHAS)).toHaveCount(2);
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText(/^Última atualização em .+/);
+  // A linha de base só vale depois da primeira carga da Planilhas; outras rotinas da página também buscam esta URL na partida.
+  const antes = contagem.lista;
+  let liberar;
+  contagem.segurar = new Promise(resolve => { liberar = resolve; });
+  await page.locator("#cockpit-sheets-refresh").click();
+  // "Carregando…" só aparece se a própria Planilhas pediu a recarga.
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText("Carregando…");
+  liberar();
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText(/^Última atualização em .+/);
+  expect(contagem.lista).toBeGreaterThanOrEqual(antes + 1);
+  await expect(page.locator(LINHAS)).toHaveCount(2);
+  expect(vistos.pagina).toEqual([]);
+  expect(errosDeConsole(vistos)).toEqual([]);
+});
+
+test("Planilhas: sem arquivo do Endpoint a linha mostra \"—\", o selo \"Sem arquivo\" em alerta e o detalhe diz \"Arquivo não informado\"", async ({ page }) => {
+  const vistos = vigiar(page);
+  await simularHistorico(page, "sem-arquivo");
+  await abrirPlanilhas(page);
+  const linhas = page.locator(LINHAS);
+  await expect(linhas).toHaveCount(2);
+  await expect(linhas.nth(0).locator('[data-label="Arquivo atual"]')).toHaveText("—");
+  const selo = linhas.nth(0).locator('[data-label="Situação"] [data-status]');
+  await expect(selo).toHaveText("Sem arquivo");
+  await expect(selo).toHaveAttribute("data-status", "alerta");
+  // A outra linha segue com arquivo.
+  await expect(linhas.nth(1).locator('[data-label="Situação"] [data-status]')).toHaveAttribute("data-status", "ok");
+  // A 1ª linha vem selecionada: detalhe sem arquivo.
+  await expect(linhas.nth(0)).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#cockpit-sheets-detail-sub")).toHaveText("Arquivo não informado");
+  const seloDetalhe = page.locator("#cockpit-sheets-detail-badge [data-status]");
+  await expect(seloDetalhe).toHaveText("Sem arquivo");
+  await expect(seloDetalhe).toHaveAttribute("data-status", "alerta");
+  // Ir para a linha com arquivo e voltar à sem arquivo reaplica o detalhe.
+  await linhas.nth(1).click();
+  await expect(page.locator("#cockpit-sheets-detail-sub")).toHaveText(/detalhes_sintetico/);
+  await linhas.nth(0).click();
+  await expect(page.locator("#cockpit-sheets-detail-sub")).toHaveText("Arquivo não informado");
+  expect(vistos.pagina).toEqual([]);
+  expect(errosDeConsole(vistos)).toEqual([]);
+});
+
+test("Planilhas: a seleção da 2ª linha continua depois de Atualizar", async ({ page }) => {
+  const vistos = vigiar(page);
+  const contagem = await simularHistorico(page, "ok");
+  await abrirPlanilhas(page);
+  const linhas = page.locator(LINHAS);
+  await expect(linhas).toHaveCount(2);
+  await linhas.nth(1).click();
+  await expect(linhas.nth(1)).toHaveAttribute("aria-selected", "true");
+  const antes = contagem.lista;
+  let liberar;
+  contagem.segurar = new Promise(resolve => { liberar = resolve; });
+  await page.locator("#cockpit-sheets-refresh").click();
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText("Carregando…");
+  liberar();
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText(/^Última atualização em .+/);
+  expect(contagem.lista).toBeGreaterThanOrEqual(antes + 1);
+  await expect(linhas).toHaveCount(2);
+  await expect(linhas.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(linhas.nth(0)).toHaveAttribute("aria-selected", "false");
+  await expect(page.locator(DETALHE_TITULO)).toHaveText("na Simpress");
+  await expect(page.locator("#cockpit-sheets-detail-sub")).toHaveText(/detalhes_sintetico/);
+  expect(vistos.pagina).toEqual([]);
+  expect(errosDeConsole(vistos)).toEqual([]);
 });

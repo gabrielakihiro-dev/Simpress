@@ -6,6 +6,7 @@ import { montarMovimento } from "../relatorio-mensal/grafico-semanal.ts";
 import { avisoTendencias, montarCabecalhoTendencias, montarCorpoTendencias } from "../relatorio-mensal/tendencias.ts";
 import { anunciarComparacoes, rotuloOpcaoComparacao, rotuloStatusComparacao } from "../resultado-comparacao/rotulos-comparacao.ts";
 import { capitalizar, mesPorExtenso, nomeDoMes } from "../relatorio-mensal/mes-extenso.ts";
+import { criarLojaPlanilhas } from "./planilhas-loja.ts";
 import type { ContextoFerramentasCockpit, ElementoCockpit, Funcao, Qualquer, Registro } from "./tipos";
 
 // Ferramentas do Cockpit (OS, Resumo, Histórico de apelidos, Relatório mensal, Planilhas e janela Chamado × OS):
@@ -37,8 +38,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   let previousTool = "";
   let goingBack = false;
   let sheetsRequest = 0;
-  let sheetsRows: Registro[] = [];
-  let selectedSheetKey = "";
+  const loja = context.lojaPlanilhas ?? criarLojaPlanilhas();
   let returnTarget: ElementoCockpit | null = null;
   let ticketData: Registro | null = null;
   let ticketTriage = "";
@@ -2047,37 +2047,6 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     }));
   }
 
-  // Linha de tabela; com onSelect vira selecionável por clique, Enter ou Espaço.
-  function tableRow(cells: Qualquer, { selected = false, onSelect = null }: { selected?: boolean; onSelect?: Funcao | null } = {}) {
-    const row = element("tr");
-    if (onSelect) {
-      row.tabIndex = 0;
-      row.setAttribute("aria-selected", String(selected));
-      row.addEventListener("click", onSelect);
-      row.addEventListener("keydown", event => {
-        // Botões dentro da linha (ex.: lápis do CNPJ) tratam Enter e Espaço sozinhos.
-        if (event.target !== row || (event.key !== "Enter" && event.key !== " ")) return;
-        event.preventDefault();
-        onSelect();
-      });
-    }
-    cells.forEach(([label, content, className]: Qualquer) => {
-      const cell = element("td", className || "");
-      cell.dataset.label = label;
-      cell.append(content instanceof Node ? content : document.createTextNode(String(content ?? "—")));
-      row.append(cell);
-    });
-    return row;
-  }
-
-  function tableEmpty(body: Qualquer, columns: Qualquer, message: Qualquer) {
-    const cell = element("td", "ck-lista__vazio", message);
-    cell.colSpan = columns;
-    const row = element("tr");
-    row.append(cell);
-    body.replaceChildren(row);
-  }
-
   async function fetchUpdateEvents() {
     const data = await apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico de planilhas." });
     return (Array.isArray(data.eventos) ? data.eventos : []).filter((event: Qualquer) => event.id && !event.somente_anotacoes_sincronizadas);
@@ -2090,37 +2059,15 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     return { endpoint: displaySource(files.endpoint), detalhes: displaySource(files.detalhes) };
   }
 
-  // Planilhas
-  function renderSheetDetail() {
-    const row = sheetsRows.find(item => item.key === selectedSheetKey);
-    byId("cockpit-sheets-detail-title").textContent = row ? row.label : "—";
-    byId("cockpit-sheets-detail-sub").textContent = row ? (row.file || "Arquivo não informado") : "Selecione uma planilha.";
-    byId("cockpit-sheets-detail-badge").replaceChildren(...(row ? [badge(row.situation, row.file ? "success" : "warning")] : []));
-  }
-
-  function renderSheetRows() {
-    const body = byId("cockpit-sheets-list-body");
-    if (!sheetsRows.length) return tableEmpty(body, 5, "Nenhuma atualização no histórico local.");
-    body.replaceChildren(...sheetsRows.map(row => tableRow([
-      ["Planilha", row.label], ["Arquivo atual", row.file || "—"], ["Linhas", displayCount(row.total), "ck-td--dir"],
-      ["Atualizado", displayDate(row.updatedAt)], ["Situação", badge(row.situation, row.file ? "success" : "warning")],
-    ], { selected: row.key === selectedSheetKey, onSelect: () => { selectedSheetKey = row.key; renderSheetRows(); renderSheetDetail(); } })));
-  }
-
+  // Planilhas: o DOM nasce em planilhas.tsx a partir da loja (planilhas-loja.ts).
   async function loadSheets() {
     const request = ++sheetsRequest;
-    const status = byId("cockpit-sheets-status");
-    status.textContent = "Carregando…";
-    renderKpis(byId("cockpit-sheets-kpis"), []);
-    tableEmpty(byId("cockpit-sheets-list-body"), 5, "Carregando…");
+    loja.atualizar({ status: "Carregando…", kpis: [], mensagemLista: "Carregando…" });
     try {
       const events = inventoryUpdates(await fetchUpdateEvents());
       if (request !== sheetsRequest || activeTool !== "planilhas") return;
       if (!events.length) {
-        sheetsRows = [];
-        status.textContent = "Nenhuma atualização no histórico local.";
-        renderSheetRows();
-        renderSheetDetail();
+        loja.atualizar({ linhas: [], status: "Nenhuma atualização no histórico local.", mensagemLista: null });
         return;
       }
       const data = await apiFetch(`/api/historico-comparacoes/${encodeURIComponent(events[0].id)}`, { errorMessage: "Não foi possível abrir a última atualização." });
@@ -2128,22 +2075,26 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       const latest = data.evento || events[0];
       const metrics = comparisonMetrics(latest);
       const files = eventFiles(latest);
-      sheetsRows = [
+      const updated = String(displayDate(latest.horario) ?? "—");
+      const linhas = [
         { key: "endpoint", label: "No Endpoint", file: files.endpoint, total: metrics.endpoint },
         { key: "detalhes", label: "na Simpress", file: files.detalhes, total: metrics.simpress },
-      ].map(row => ({ ...row, updatedAt: latest.horario, situation: row.file ? "Atualizada" : "Sem arquivo" }));
-      if (!sheetsRows.some(row => row.key === selectedSheetKey)) selectedSheetKey = sheetsRows[0].key;
-      renderKpis(byId("cockpit-sheets-kpis"), [
-        ["Última atualização", displayDate(latest.horario)], ["Equipamentos na Simpress", metrics.simpress],
-        ["Equipamentos no Endpoint", metrics.endpoint], ["Atualizações no histórico", events.length],
-      ]);
-      status.textContent = `Última atualização em ${displayDate(latest.horario)}`;
-      renderSheetRows();
-      renderSheetDetail();
+      ].map(row => ({ ...row, file: row.file as string, total: displayCount(row.total), atualizado: updated, situacao: row.file ? "Atualizada" : "Sem arquivo" }));
+      const atual = loja.ler().selecionada;
+      loja.atualizar({
+        linhas,
+        selecionada: linhas.some(row => row.key === atual) ? atual : linhas[0].key,
+        kpis: [
+          ["Última atualização", updated], ["Equipamentos na Simpress", displayCount(metrics.simpress)],
+          ["Equipamentos no Endpoint", displayCount(metrics.endpoint)], ["Atualizações no histórico", displayCount(events.length)],
+        ],
+        status: `Última atualização em ${updated}`,
+        mensagemLista: null,
+      });
     } catch (error: Qualquer) {
       if (request !== sheetsRequest || activeTool !== "planilhas") return;
-      status.textContent = error.message || "Não foi possível carregar as planilhas.";
-      tableEmpty(byId("cockpit-sheets-list-body"), 5, status.textContent);
+      const message = error.message || "Não foi possível carregar as planilhas.";
+      loja.atualizar({ status: message, mensagemLista: message });
     }
   }
 

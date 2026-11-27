@@ -1,4 +1,5 @@
 import type { ApiFetchOptions } from "../../api";
+import type { LojaPlanilhas } from "./planilhas-loja";
 
 // Tipos das ferramentas do Cockpit. Os dados do servidor (OS, comparações, apelidos, relatório mensal, planilhas)
 // e as ações que os outros painéis publicam em window mudam de campo com frequência e o código antigo os lia por
@@ -24,4 +25,6 @@ export interface ContextoFerramentasCockpit {
   historyFormat?: Registro;
   /** Painéis de dados no lugar da instância real (só os testes injetam). */
   dataPanels?: Registro;
+  /** Loja da sub-aba Planilhas; o montar cria a que o React lê (sem ela a fábrica usa uma própria). */
+  lojaPlanilhas?: LojaPlanilhas;
 }
