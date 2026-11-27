@@ -38,6 +38,19 @@ def _validate_history(value: Any) -> List[Dict[str, Any]]:
     return value
 
 
+def read_history(path: Path) -> List[Dict[str, Any]]:
+    """Raw records of the history file (no ``nome_pessoa``); ``TransferHistoryCorruptionError`` if unreadable."""
+    with _LOCK:
+        if not path.exists():
+            return []
+        try:
+            return _validate_history(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, UnicodeError, json.JSONDecodeError, TransferHistoryCorruptionError) as error:
+            raise TransferHistoryCorruptionError(
+                "O histórico local de transferências está ilegível; os dados foram preservados."
+            ) from error
+
+
 def _fold(value: Any) -> str:
     text = unicodedata.normalize("NFKD", str(value or "")).casefold()
     return "".join(char for char in text if not unicodedata.combining(char))
@@ -74,17 +87,10 @@ def create_transfer_history_router(services: TransferHistoryServices) -> Tuple[A
         busca: str = Query("", max_length=128),
     ):
         """Return the newest generated transfers first, optionally filtered by a search term."""
-        path = services.history_file()
-        with _LOCK:
-            if not path.exists():
-                return {"total": 0, "itens": []}
-            try:
-                history = _validate_history(json.loads(path.read_text(encoding="utf-8")))
-            except (OSError, UnicodeError, json.JSONDecodeError, TransferHistoryCorruptionError) as error:
-                raise HTTPException(
-                    status_code=503,
-                    detail="O histórico local de transferências está ilegível; os dados foram preservados.",
-                ) from error
+        try:
+            history = read_history(services.history_file())
+        except TransferHistoryCorruptionError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
         term = _fold(busca).strip()
         if term:
             history = [

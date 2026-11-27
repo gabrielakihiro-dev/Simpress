@@ -341,6 +341,72 @@ export type DivergenciaPayload = {
   "serie_recebida"?: string | null;
 };
 
+export type Dossie = {
+  "serie": string;
+  "modelo": string;
+  "os": DossieOs;
+  "linha_do_tempo": DossieLinhaDoTempo;
+};
+
+export type DossieEvento = {
+  "quando": string;
+  "so_data": boolean;
+  "tipo": "apelido_usuario" | "transferencia" | "os" | "sebrae" | "cobertura";
+  "titulo": string;
+  "detalhes": string[];
+};
+
+export type DossieEventoOs = {
+  "atualizado_em": string;
+  "tipo": string;
+  "mudancas": DossieMudanca[];
+};
+
+export type DossieHistoricoOs = {
+  "titulo": string;
+  "eventos": DossieEventoOs[];
+  "total": number;
+};
+
+export type DossieLinhaDoTempo = {
+  "eventos": DossieEvento[];
+  "total": number;
+  "limite": number;
+  "indisponiveis": string[];
+};
+
+export type DossieMudanca = {
+  "campo"?: unknown;
+  "anterior"?: unknown;
+  "atual"?: unknown;
+};
+
+export type DossieOrdem = {
+  "fonte": string;
+  "serie": string;
+  "os": string;
+  "status": string;
+  "fila": string;
+  "dias_aberta": number | null;
+  "utic": DossieUtic | null;
+};
+
+export type DossieOs = {
+  "estado": string;
+  "mensagem": string;
+  "total_importacoes": number;
+  "ultima_importacao_em": string;
+  "presente_na_ultima": boolean;
+  "ultima_vez_observada_em": string | null;
+  "ordens": DossieOrdem[];
+  "historico": DossieHistoricoOs;
+};
+
+export type DossieUtic = {
+  "chamado": string;
+  "origem": string;
+};
+
 export type EnviarEmailPayload = {
   "conta": string;
   "para"?: string;
@@ -644,6 +710,77 @@ export type OsObservacaoPayload = {
 
 export type OsRecusadaPayload = {
   "os": string;
+};
+
+export type PacoteLocalExportacao = {
+  "arquivo": string;
+  "tamanho_bytes": number;
+  "arquivos": number;
+  "ausentes": number;
+  "criado_em": string;
+};
+
+export type PacoteLocalItem = {
+  "arquivo": string;
+  "tipo": "exportacao" | "desfazer";
+  "criado_em": string;
+  "tamanho_bytes": number;
+};
+
+export type PacoteLocalLinkAlterado = {
+  "rotulo": string;
+  "antes"?: string | null;
+  "depois"?: string | null;
+};
+
+export type PacoteLocalLista = {
+  "pasta": string;
+  "pasta_padrao": boolean;
+  "pacotes": PacoteLocalItem[];
+  "erro_pasta"?: string | null;
+};
+
+export type PacoteLocalPastaPayload = {
+  "pasta"?: string;
+};
+
+export type PacoteLocalPrevia = {
+  "arquivo": string;
+  "tipo": "exportacao" | "desfazer";
+  "versao_app": string;
+  "criado_em": string;
+  "itens": PacoteLocalPreviaItem[];
+  "totais": PacoteLocalPreviaTotais;
+  "muda_links": boolean;
+  "links_alterados": PacoteLocalLinkAlterado[];
+  "invalidos": string[];
+  "preview_token": string;
+};
+
+export type PacoteLocalPreviaItem = {
+  "caminho": string;
+  "acao": "substituir" | "criar" | "igual" | "manter" | "apagar";
+};
+
+export type PacoteLocalPreviaTotais = {
+  "substituir": number;
+  "criar": number;
+  "igual": number;
+  "manter": number;
+  "apagar": number;
+};
+
+export type PacoteLocalRestauracao = {
+  "substituidos": number;
+  "criados": number;
+  "apagados": number;
+  "mantidos": number;
+  "pacote_desfazer": string;
+};
+
+export type PacoteLocalRestaurarPayload = {
+  "preview_token": string;
+  "confirmado"?: boolean;
 };
 
 export type PainelResposta = {
@@ -1410,7 +1547,7 @@ export interface Rotas {
   "GET /api/equipamento/{serial}/dossie": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: Dossie;
   };
   "POST /api/equipamentos/usuarios-logados": {
     consulta: never;
@@ -1666,6 +1803,31 @@ export interface Rotas {
     consulta: never;
     corpo: never;
     resposta: unknown;
+  };
+  "GET /api/pacote-local": {
+    consulta: never;
+    corpo: never;
+    resposta: PacoteLocalLista;
+  };
+  "POST /api/pacote-local/exportar": {
+    consulta: never;
+    corpo: never;
+    resposta: PacoteLocalExportacao;
+  };
+  "PUT /api/pacote-local/pasta": {
+    consulta: never;
+    corpo: PacoteLocalPastaPayload;
+    resposta: PacoteLocalLista;
+  };
+  "GET /api/pacote-local/{arquivo}/previa": {
+    consulta: never;
+    corpo: never;
+    resposta: PacoteLocalPrevia;
+  };
+  "POST /api/pacote-local/{arquivo}/restaurar": {
+    consulta: never;
+    corpo: PacoteLocalRestaurarPayload;
+    resposta: PacoteLocalRestauracao;
   };
   "GET /api/painel": {
     consulta: never;

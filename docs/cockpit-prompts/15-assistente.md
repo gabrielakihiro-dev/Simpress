@@ -315,6 +315,11 @@ Pedido do usuário de 13/11/2026: conferir todas as abas contra o Assistente, at
 
 - `consultar_ultima_comparacao` lê o último evento e o detalhe dele (`GET /api/historico-comparacoes/{id}`, a mesma visão filtrada das ferramentas de lista). As contagens de `ausentes_no_endpoint`, `ausentes_em_detalhes`, `sem_acesso_7_dias`, `divergencias_local` e `series_sem_mapeamento` em `resumo_divergencias` são o tamanho dessas listas na visão (sem séries do Sebrae, sem `Backup <Cidade>` identificado e sem Administrador no Endpoint), e não a contagem gravada na importação; assim o Assistente não diz "10 divergências" e lista 7. As outras chaves vêm do resumo da visão. Saída com os mesmos campos (`horario`, `tipo`, `resumo_divergencias`), só números, sem texto novo. Teste: `tests/test_assistant_ferramentas.py` (`UltimaComparacaoTests`).
 
+## Pacote local (26/11/2026)
+
+- O Assistente só explica o Pacote local (Configuração local, fim do modal): o que ele guarda, onde fica e como exportar e restaurar. Linha no `SYSTEM_PROMPT` de `domains/assistant_chat.py`, teste em `tests/test_pacote_local.py` (`test_prompt_diz_que_o_assistente_nao_mexe_no_pacote`).
+- Não há ferramenta nova. O Assistente não exporta, não lista e não restaura pacotes; exportar e restaurar são só por clique do usuário na tela. Detalhe em `docs/cockpit-prompts/19-configuracao-local.md`, seção "Pacote local".
+
 ## Limites conhecidos
 
 Backlog, não regra: itens conferidos no código (04/11/2026) e ainda sem correção.

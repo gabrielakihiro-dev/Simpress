@@ -100,6 +100,13 @@ __pycache__/
 /data/state/sebrae_*.json
 /data/state/sebrae_*.xlsx
 /data/state/sebrae_backups/
+# Pacote local (zips com dados pessoais) e a pasta escolhida para ele.
+/data/pacotes_locais/
+/config/pacote_local.json
+# Pacote local copiado ou salvo em qualquer pasta do repositório (e o temporário da gravação).
+pacote-local-*.zip
+desfazer-*.zip
+.pacote-local-*.tmp
 /data/state/sebrae_anexos/
 /data/state/sebrae_dashboard_pendente/
 /data/state/sebrae_dashboard_saida/

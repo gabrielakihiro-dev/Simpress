@@ -82,11 +82,13 @@ jobs:
         # 12 partes (17/11/2026, revisão do PR #284): os 6 testes "OS nova sugerida" saíram do sebrae-dashboard (9) para o
         # chamados-os (7). O 12 leva chamados-os e ux-chamados (do 7), react-bf2 (do 5) e react-infra (do 6).
         # Divisão sem medição nova: reconfira na CI.
+        # pacote-local.spec.cjs (Pacote local, 26/11/2026, 12 testes desktop + mobile, ~1 min local) entrou no 1; reconfira na CI.
         include:
           - shard: 1
             specs: >-
               assistente.spec.cjs resumo-os.spec.cjs regional-representative.spec.cjs cursor.spec.cjs
               saude-local.spec.cjs
+              pacote-local.spec.cjs
           - shard: 2
             specs: >-
               backups-regionais.spec.cjs react-g5.spec.cjs react-g6.spec.cjs alias-history.spec.cjs

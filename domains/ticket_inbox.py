@@ -80,6 +80,9 @@ def _try_worker_lock(path: Path) -> Iterator[bool]:
             handle.close()
         _WORKER_LOCK.release()
 
+# Público para o Pacote local recusar a restauração enquanto a caixa importa (sem esperar).
+try_worker_lock = _try_worker_lock
+
 
 class AutomaticTicketInbox:
     """Import stable workbook pairs and retain every input batch for audit."""
