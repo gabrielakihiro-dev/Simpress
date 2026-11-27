@@ -525,7 +525,7 @@ export function aplicarRascunho(rascunho: Qualquer, formulario: Qualquer, aberto
 if (typeof window !== "undefined") {
   window.SimpressSebraeDashboardModel = Object.freeze({
     CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, PADROES_MANUAIS, PADROES_API_SEBRAE, DESCRICAO_API_SEBRAE, SOLICITANTE_API_SEBRAE,
-    ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
+    ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, encerramentoAgora, payloadEdicoes, descricaoJaNoDashboard,
     tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, ROTULOS_RESULTADO, MOTIVOS_PULADO, formatarTamanho, textoResultado, textoPulado, podeFinalizar,
