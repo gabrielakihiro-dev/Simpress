@@ -182,8 +182,11 @@ test("apiRota builds the query string from consulta: same order, repeated keys f
   await apiRota("GET /api/automacao/execucoes/{execucao_id}/log", { caminho: { execucao_id: "a b/1" }, consulta: { linhas: 500 } });
   assert.equal(calls[3][0], "/api/automacao/execucoes/a%20b%2F1/log?linhas=500");
 
+  await apiRota("GET /api/automacao/estado", { consulta: { arquivo: "a b&c=d" } });
+  assert.equal(calls[4][0], "/api/automacao/estado?arquivo=a+b%26c%3Dd", "valor com espaço, & e = vai codificado");
+
   await apiRota("GET /api/automacao/historico", { consulta: {} });
-  assert.equal(calls[4][0], "/api/automacao/historico", "sem parâmetros não acrescenta ?");
+  assert.equal(calls[5][0], "/api/automacao/historico", "sem parâmetros não acrescenta ?");
 });
 
 test("apiRota with responseType response returns the raw 2xx Response, even with an illegible body", async t => {

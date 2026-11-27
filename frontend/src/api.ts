@@ -145,6 +145,7 @@ export type OpcoesRota<R extends keyof Rotas> = Omit<ApiFetchOptions, "method" |
 type ValorConsulta = string | number | boolean | null | undefined;
 
 // Monta "?a=1&b=x&b=y" na ordem das chaves: lista vira chave repetida; null e undefined ficam fora; "" vai como "a=".
+// shortcut: lista vazia num parâmetro obrigatório sai sem a chave (422 do servidor); nenhum chamador manda lista vazia hoje.
 function montarConsulta(consulta?: Record<string, ValorConsulta | readonly ValorConsulta[]>): string {
   const params = new URLSearchParams();
   for (const [nome, valor] of Object.entries(consulta ?? {})) {
