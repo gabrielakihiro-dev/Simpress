@@ -7,6 +7,18 @@ const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payload
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
   lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho, camposFaltando } = sebraeDashboardModel;
 
+test("window.SimpressSebraeDashboardModel publica tudo o que estado.ts tira do modelo (o app real lê de window, não do módulo)", () => {
+  const ler = caminho => require("node:fs").readFileSync(require.resolve(caminho), "utf8");
+  const nomesDe = (fonte, regex) => {
+    const bloco = regex.exec(fonte);
+    assert.ok(bloco, `achou ${regex}`);
+    return bloco[1].split(",").map(nome => nome.trim()).filter(Boolean);
+  };
+  const usados = nomesDe(ler("../../frontend/src/paineis/sebrae-dashboard/estado.ts"), /const \{([^}]*)\} = context\.sebraeDashboardModel;/);
+  const publicados = new Set(nomesDe(ler("../../frontend/src/comum/sebrae-dashboard-model.ts"), /window\.SimpressSebraeDashboardModel = Object\.freeze\(\{([^}]*)\}\);/));
+  assert.deepEqual(usados.filter(nome => !publicados.has(nome)), [], "faltam em window.SimpressSebraeDashboardModel");
+});
+
 test("camposFaltando lista A, Status em FINALIZADO, J, a DT ENCERRAMENTO (R) e a descrição que faltam para finalizar", () => {
   const completo = { A: "CLIENTE", D: "FINALIZADO", J: "INCIDENTE", R: "2026-10-28T10:10" };
   assert.deepEqual(camposFaltando(completo, "Troquei o teclado."), []);
