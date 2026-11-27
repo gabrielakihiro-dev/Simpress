@@ -746,6 +746,12 @@ export type PendenciaUsuarioPayload = {
   "decisao": string;
 };
 
+export type PontoSemAcesso = {
+  "horario": string;
+  "data": string;
+  "total": number;
+};
+
 export type PowerShellPayload = {
   "hostname": string;
   "modo": "sistema" | "usuario";
@@ -878,6 +884,11 @@ export type SalvarModeloPayload = {
   "texto": string;
 };
 
+export type SemAcesso7Dias = {
+  "pontos": PontoSemAcesso[];
+  "historico_desde": string | null;
+};
+
 export type SolicitantePayload = {
   "nome": string;
   "email": string;
@@ -889,6 +900,22 @@ export type SolicitanteTicketPayload = {
   "nome": string;
   "email": string;
   "telefone": string;
+};
+
+export type TempoMedioOs = {
+  "media_dias": number | null;
+  "encerradas": number;
+  "encerradas_sem_data": number;
+  "media_dias_anterior": number | null;
+  "encerradas_anterior": number;
+};
+
+export type TendenciasRelatorioMensal = {
+  "dias": number;
+  "inicio": string;
+  "data_corte": string;
+  "tempo_medio_os": TempoMedioOs;
+  "sem_acesso_7_dias": SemAcesso7Dias;
 };
 
 export type TicketExportPayload = {
@@ -1763,6 +1790,11 @@ export interface Rotas {
     consulta: { "mes": string; };
     corpo: never;
     resposta: Record<string, unknown>;
+  };
+  "GET /api/relatorio-mensal/tendencias": {
+    consulta: { "dias": number; };
+    corpo: never;
+    resposta: TendenciasRelatorioMensal;
   };
   "GET /api/sebrae/antigos/ler": {
     consulta: never;
