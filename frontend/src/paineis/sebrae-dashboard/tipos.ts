@@ -99,6 +99,7 @@ export interface AppSebrae {
   confirmarAcao(dialogo: DialogoConfirmacao): Promise<boolean | null>;
   abrirJanelaChamadoOs?: (alvo: { chamado: string; serie: unknown; os: unknown }, origem: ElementoSebrae) => unknown;
   atualizarEstadoAutomacao?: () => void;
+  acompanharExecucaoAutomacao?: (estado: Registro) => void;
   carregarResumoHistoricoSebrae?: () => unknown;
   carregarConflitosSebrae?: () => unknown;
   normalizarFiltroChamados?: (valor: unknown) => string;

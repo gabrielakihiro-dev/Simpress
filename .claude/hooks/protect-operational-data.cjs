@@ -4,7 +4,12 @@
 // Saída 2 bloqueia a ferramenta e devolve a mensagem de stderr ao agente.
 "use strict";
 
-const path = require("node:path");
+const nodePath = require("node:path");
+
+// Caminho com letra de unidade (C:) segue as regras do Windows (separadores e maiúsculas) em qualquer SO.
+function pathFor(value) {
+  return /^[a-zA-Z]:/.test(String(value)) ? nodePath.win32 : nodePath;
+}
 
 const SPREADSHEET_EXTENSIONS = new Set([".xlsx", ".xls", ".xlsm", ".csv", ".tsv", ".zip"]);
 const ALLOWED_STATE_FILES = new Set([".gitkeep", "readme.md"]);
@@ -16,7 +21,9 @@ function fromPosixDrive(value) {
 }
 
 function relativeToProject(filePath, projectDir) {
+  const path = pathFor(fromPosixDrive(projectDir));
   const root = path.resolve(fromPosixDrive(projectDir));
+  // Unidades do Windows não diferenciam maiúsculas; path.win32.relative já compara assim em qualquer SO.
   const relative = path.relative(root, path.resolve(root, fromPosixDrive(filePath)));
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null;
   return relative.split(path.sep).join("/").toLowerCase();
@@ -24,13 +31,14 @@ function relativeToProject(filePath, projectDir) {
 
 // Em worktree (<principal>/.claude/worktrees/<nome>), devolve a raiz do checkout principal.
 function mainCheckoutRoot(projectDir) {
+  const path = pathFor(fromPosixDrive(projectDir));
   const root = path.resolve(fromPosixDrive(projectDir));
   const match = root.split(path.sep).join("/").match(/^(.*?)\/\.claude\/worktrees\/[^/]+(?:\/|$)/i);
   return match ? path.resolve(match[1]) : null;
 }
 
 function reasonForRelative(relative) {
-  const name = path.posix.basename(relative);
+  const name = nodePath.posix.basename(relative);
   if (relative.startsWith("data/state/")) {
     return ALLOWED_STATE_FILES.has(name) ? null : "históricos, anotações e filas em data/state";
   }
@@ -38,7 +46,7 @@ function reasonForRelative(relative) {
   for (const root of ["data/planilhas_entrada/", "planilhas_entrada/"]) {
     if (!relative.startsWith(root)) continue;
     if (relative.startsWith(`${root}_backups/`)) return "backups de planilhas";
-    if (SPREADSHEET_EXTENSIONS.has(path.posix.extname(relative))) return "planilhas operacionais";
+    if (SPREADSHEET_EXTENSIONS.has(nodePath.posix.extname(relative))) return "planilhas operacionais";
   }
   return null;
 }

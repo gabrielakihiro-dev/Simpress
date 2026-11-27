@@ -62,7 +62,7 @@ function aplicarEstado(dados: DadosEstado) {
   atualizarBotoes();
   const verBackups = verBackupsDepois({ emAndamento, estavaAtivo, rotinaAnterior, statusUltima: dados.ultima?.status });
   if (verBackups !== null) mudar({ verBackups });
-  if (estavaAtivo && !emAndamento && ["sebrae", "dashboard"].includes(rotinaAnterior)) appAntigo().carregarNovosSebrae?.();
+  if (estavaAtivo && !emAndamento && ["sebrae", "dashboard", "enviar"].includes(rotinaAnterior)) appAntigo().carregarNovosSebrae?.();
   if (osImportadaAoTerminar({ emAndamento, estavaAtivo, rotinaAnterior })) document.dispatchEvent(new CustomEvent("simpress:chamados-atualizados"));
   if (estavaAtivo && !emAndamento && interno.acompanharFim) {
     interno.acompanharFim = false;
