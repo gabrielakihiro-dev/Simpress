@@ -1,8 +1,7 @@
 """The assistant's access to Simpress data: the same routes the screens use, called inside this process.
 
-`asgi_transport` builds a loopback request by hand and runs it through the FastAPI app, so every
-call passes the same safety middleware as a browser request (no network, no extra server).
-`SimpressApi` shapes each answer for the model: short lists, labels approved in AGENTS.md and
+The loopback transport lives in `assistant_transporte` and the validators in `assistant_validacao`
+(both re-exported here). `SimpressApi` shapes each answer for the model: short lists, labels approved in AGENTS.md and
 personal data cleaned with `limpar_texto_sensivel`.
 """
 
@@ -11,21 +10,15 @@ import calendar
 import json
 import logging
 import re
-import secrets
 import unicodedata
 from collections import Counter
-from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
-from urllib.parse import quote, urlencode
-
-from pydantic import ValidationError
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from domains import sebrae_finalizacao as fin
 from domains.sebrae_observacoes import numero_observacao_valido
 from domains.os_observacoes import chave_os
 from core.errors import DomainValidationError
-from security import sessao_local
 from domains.assistant_lgpd import SEM_USUARIO, e_solicitante_sistema, limpar_texto_sensivel
 from domains.chrome_automation import ROUTINE_LABELS, ROUTINES
 from domains.coverage import dobrar
@@ -33,23 +26,18 @@ from domains.dashboard_agendamento import INTERVALO_PADRAO, INTERVALOS_PERMITIDO
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial, normalize_reference_value
 from domains.regras_negocio import cadastro_e_macbook
-from domains.local_setup import (
-    REGIONAL_REPRESENTATIVE_CITIES, REGIONAL_REPRESENTATIVE_DEFAULTS, REGIONAL_REPRESENTATIVE_FIELDS, RepresentanteRegionalPayload,
+from domains.local_setup import REGIONAL_REPRESENTATIVE_CITIES
+from domains.assistant_transporte import ArquivoUpload, Transport, asgi_transport  # noqa: F401  (re-exported: callers and tests import these names from here)
+from domains.assistant_validacao import (  # noqa: F401  (re-exported: callers and tests import these names from here)
+    ACOES_APELIDO_MANUAL, DECISOES_VALIDAS, FONTES_VINCULO_OS, MAX_ANOTACAO, _dict, diferencas_representante, montar_contato_origem,
+    montar_representante_regional, representante_efetivo, representante_padrao, resolver_cidade_representante, validar_anotacao,
+    validar_transferencia, validar_vinculo_os,
 )
-from domains.transfers import TransferenciaPayload, formatar_telefone_brasileiro
 
 logger = logging.getLogger(__name__)
 
-# (method, path, query params, JSON body or an ArquivoUpload for multipart) -> (HTTP status, decoded JSON or text)
-Transport = Callable[[str, str, Optional[Dict[str, Any]], Any], Tuple[int, Any]]
-
-CALL_TIMEOUT_SECONDS = 30.0
-ENDPOINT_LOOKUP_TIMEOUT_SECONDS = 1200.0  # Endpoint login wait (600 s) + navigation and filters (480 s); keeps the route thread from outliving the call.
-MAX_ANSWER_BYTES = 8 * 1024 * 1024
-
 ROTINAS_VALIDAS = ("login", "os", "inventarios", "ambas", "usuarios", "sebrae", "dashboard")
 MAX_DESCRICAO_FINALIZACAO = 4000  # same limit as domains.sebrae_finalizacao.MAX_DESCRICAO
-DECISOES_VALIDAS =("permitir", "recusar", "remover", "manter")
 
 # Limits keep the text returned to the model inside its context window.
 MAX_ITENS_LISTA = 20
@@ -60,7 +48,6 @@ MAX_PAGINAS_NOMES = 200
 MAX_TEXTO_CHAMADO = 300
 MAX_LINHAS_LOG = 40
 MAX_APELIDO = 160
-MAX_ANOTACAO = 2000  # same limit as the annotation routes (history_annotations.MAX_ANNOTATION_LENGTH)
 # Annotatable sections of a history event (comparison key -> name shown on screen and on the card).
 _SECOES_ANOTAVEIS = {
     "apelidos_sem_atualizacao": "Linhas mantidas para conferência",
@@ -145,123 +132,6 @@ _ROTULOS_SECAO = {
     "diverge_detalhes": "diverge_na_simpress",
     "diverge_invall": "diverge_no_endpoint",
 }
-
-
-@dataclass(frozen=True)
-class ArquivoUpload:
-    """A file for a multipart/form-data call (08/11/2026): goes in the `corpo` slot of a Transport call, instead of a JSON dict.
-
-    Kept in memory only; `conteudo` stays out of repr so a log line or a traceback never prints it.
-    """
-
-    campo: str
-    nome: str
-    conteudo: bytes = field(repr=False)
-    tipo: str = "application/pdf"
-
-
-def _corpo_multipart(arquivo: ArquivoUpload) -> Tuple[bytes, str]:
-    """(body, content-type) of a one-field multipart request, as a browser would send it."""
-    fronteira = "simpress" + secrets.token_hex(16)
-    # The name comes from the user: no quote, backslash or line break may reach the Content-Disposition header.
-    nome = re.sub(r'[\r\n"\\\x00-\x1f\x7f]', "_", arquivo.nome)
-    cabecalho = (
-        f"--{fronteira}\r\n"
-        f'Content-Disposition: form-data; name="{arquivo.campo}"; filename="{nome}"\r\n'
-        f"Content-Type: {arquivo.tipo}\r\n\r\n"
-    ).encode("utf-8")
-    return cabecalho + arquivo.conteudo + f"\r\n--{fronteira}--\r\n".encode("ascii"), f"multipart/form-data; boundary={fronteira}"
-
-
-async def _asgi_call(
-    app: Any, port: int, method: str, path: str, params: Optional[Dict[str, Any]], body: Union[Dict[str, Any], ArquivoUpload, None],
-) -> Tuple[int, Any]:
-    tipo_corpo = ""
-    if isinstance(body, ArquivoUpload):
-        payload, tipo_corpo = _corpo_multipart(body)
-    elif body is not None:
-        payload, tipo_corpo = json.dumps(body, ensure_ascii=False).encode("utf-8"), "application/json"
-    else:
-        payload = b""
-    headers: List[Tuple[bytes, bytes]] = [
-        (b"host", f"127.0.0.1:{port}".encode("ascii")),
-        (b"accept", b"application/json"),
-    ]
-    # Same process as the server, so this SEGREDO is the live one (security/sessao_local.py).
-    headers += [(nome.lower().encode("ascii"), valor.encode("ascii")) for nome, valor in sessao_local.cabecalhos_sessao(port).items()]
-    if tipo_corpo:
-        headers += [(b"content-type", tipo_corpo.encode("ascii")), (b"content-length", str(len(payload)).encode("ascii"))]
-    scope = {
-        "type": "http",
-        "asgi": {"version": "3.0"},
-        "http_version": "1.1",
-        "method": method,
-        "scheme": "http",
-        "path": path,
-        "raw_path": quote(path, safe="/").encode("ascii"),
-        "query_string": urlencode(params or {}).encode("ascii"),
-        "root_path": "",
-        "headers": headers,
-        "client": ("127.0.0.1", 50000),
-        "server": ("127.0.0.1", port),
-    }
-    sent_body = False
-    finished = asyncio.Event()
-    status = 0
-    chunks: List[bytes] = []
-    size = 0
-    content_type = ""
-
-    async def receive() -> Dict[str, Any]:
-        nonlocal sent_body
-        if not sent_body:
-            sent_body = True
-            return {"type": "http.request", "body": payload, "more_body": False}
-        await finished.wait()
-        return {"type": "http.disconnect"}
-
-    async def send(message: Dict[str, Any]) -> None:
-        nonlocal status, size, content_type
-        if message["type"] == "http.response.start":
-            status = int(message["status"])
-            for name, value in message.get("headers", []):
-                if name.lower() == b"content-type":
-                    content_type = value.decode("latin-1")
-        elif message["type"] == "http.response.body":
-            chunk = message.get("body", b"")
-            size += len(chunk)
-            if size <= MAX_ANSWER_BYTES:
-                chunks.append(chunk)
-
-    try:
-        await app(scope, receive, send)
-    finally:
-        finished.set()
-    if size > MAX_ANSWER_BYTES:
-        raise ValueError("answer too large")
-    raw = b"".join(chunks)
-    if "json" in content_type:
-        return status, json.loads(raw.decode("utf-8") or "null")
-    if "spreadsheetml" in content_type:  # exported .xlsx: keep the bytes
-        return status, raw
-    return status, raw.decode("utf-8", errors="replace")
-
-
-def asgi_transport(app_getter: Callable[[], Any], port: int) -> Transport:
-    """A Transport that runs the request inside the FastAPI app. Meant for a worker thread (sync routes)."""
-
-    def call(method: str, path: str, params: Optional[Dict[str, Any]], body: Union[Dict[str, Any], ArquivoUpload, None]) -> Tuple[int, Any]:
-        async def run() -> Tuple[int, Any]:
-            timeout = CALL_TIMEOUT_SECONDS
-            if method == "POST" and path in ("/api/endpoint/consultar", "/api/endpoint/controle-remoto", "/api/endpoint/powershell"):
-                timeout = ENDPOINT_LOOKUP_TIMEOUT_SECONDS
-            elif method == "POST" and path in ("/api/ux/abrir-chamado/preparar", "/api/ux/abrir-chamado/enviar"):
-                timeout = 580.0
-            return await asyncio.wait_for(_asgi_call(app_getter(), port, method, path, params, body), timeout)
-
-        return asyncio.run(run())
-
-    return call
 
 
 def _rotular_item(dados: Any) -> Any:
@@ -633,152 +503,6 @@ def _status_automacao(dados: Dict[str, Any]) -> Dict[str, Any]:
 def e_macbook(equip: Dict[str, Any]) -> bool:
     """Same test as Simpress (categorize_equipment): 'MACBOOK' in the type or the model."""
     return cadastro_e_macbook(equip.get("categoria"), equip.get("tipo"), equip.get("modelo"))
-
-
-def validar_anotacao(texto: Any) -> str:
-    """The text as the route will receive it; ValueError (pt-BR) when the route would refuse it."""
-    texto = "" if texto is None else str(texto)
-    if len(texto) > MAX_ANOTACAO:
-        raise ValueError(f"A anotação passa de {MAX_ANOTACAO} caracteres.")
-    return texto
-
-
-_CHAMADO_UTIC = re.compile(r"^UTIC-(\d{4})-(\d{1,24})$")
-FONTES_VINCULO_OS = ("simpress", "oracle")
-
-
-def validar_vinculo_os(fonte: Any, serie: Any, ordem: Any, chamado: Any) -> Dict[str, Any]:
-    """The body the vinculos-os route will receive; ValueError (pt-BR) when the route would refuse it."""
-    fonte, serie, ordem = str(fonte or "").strip().lower(), str(serie or "").strip().upper(), str(ordem or "").strip()
-    achado = _CHAMADO_UTIC.match(str(chamado or "").strip().upper())
-    if fonte not in FONTES_VINCULO_OS:
-        raise ValueError(f"Fonte inválida. Opções: {', '.join(FONTES_VINCULO_OS)}.")
-    if not serie or len(serie) > 128 or not ordem or len(ordem) > 160:
-        raise ValueError("Informe a série (até 128 caracteres) e a OS (até 160 caracteres).")
-    if achado is None or not 2000 <= int(achado.group(1)):
-        raise ValueError("Chamado inválido. Use o formato UTIC-AAAA-número (ex.: UTIC-2026-42).")
-    return {"fonte": fonte, "serie": serie, "os": ordem, "ano": int(achado.group(1)), "numero": achado.group(2)}
-
-
-# Origin contact of the transfer form: (route field, tool argument, name on the card, limit as in ContatoOrigemPayload).
-_CAMPOS_CONTATO_ORIGEM = (
-    ("retirada_contato", "contato", "Nome", 160),
-    ("retirada_email", "email", "E-mail", 254),
-    ("retirada_telefone", "telefone", "Celular", 64),
-)
-
-
-def montar_contato_origem(atual: Dict[str, Any], contato: Any, email: Any, telefone: Any) -> Tuple[Dict[str, str], List[Tuple[str, str, str]]]:
-    """(body for the contato-origem route, [(label, current, new)] of the fields that change); ValueError (pt-BR) when the route would refuse.
-
-    Omitted fields keep the current value. A field set by environment variable cannot be changed here (the variable wins over the file)."""
-    fontes = _dict(atual.get("contato_origem_fontes"))
-    novos = {"retirada_contato": contato, "retirada_email": email, "retirada_telefone": telefone}
-    corpo: Dict[str, str] = {}
-    mudancas: List[Tuple[str, str, str]] = []
-    for campo, chave, rotulo, limite in _CAMPOS_CONTATO_ORIGEM:
-        antigo = str(atual.get(campo) or "").strip()
-        valor = novos[campo]
-        valor = valor.strip() if isinstance(valor, str) else ""
-        ambiente = fontes.get(campo) == "ambiente"
-        if valor and "OCULTADO]" in valor:
-            raise ValueError(f"{rotulo} digitado no chat é ocultado do modelo (LGPD). Peça ao usuário para preencher na tela de Transferência.")
-        if valor and ambiente:
-            raise ValueError(f"{rotulo} é definido por variável de ambiente e não pode ser alterado aqui.")
-        if len(valor) > limite:
-            raise ValueError(f"{rotulo} longo demais (máximo {limite} caracteres).")
-        if valor and campo == "retirada_email":
-            valor = TransferenciaPayload.validate_email(valor)
-        elif valor and campo == "retirada_telefone":
-            valor = formatar_telefone_brasileiro(TransferenciaPayload.validate_phone(valor))
-        if valor and valor != antigo:
-            mudancas.append((rotulo, antigo, valor))
-        final = "" if ambiente else (valor or antigo)
-        if not final and not ambiente:
-            raise ValueError(f"O campo {rotulo} ainda não está configurado: informe também ele.")
-        corpo[chave] = final
-    if not mudancas:
-        raise ValueError("Nenhum valor novo: informe nome, e-mail ou celular diferente do atual. Nada a alterar.")
-    return corpo, mudancas
-
-
-# Regional representative of a city: (body field, tool argument, name on the card as on the screen, limit as in RepresentanteRegionalPayload).
-_CAMPOS_REPRESENTANTE = (
-    ("nome", "nome", "Nome", 160), ("email", "email", "E-mail", 254), ("telefone", "telefone", "Celular", 64),
-    ("horario", "horario", "Expediente", 64), ("almoco", "almoco", "Almoço", 64), ("pausaDuracao", "pausa", "Pausa", 16),
-)
-_ALMOCO_NAO_FECHA = "Escritório não fecha"
-
-
-def _chave_cidade(texto: Any) -> str:
-    sem_acento = "".join(c for c in unicodedata.normalize("NFD", str(texto or "")) if unicodedata.category(c) != "Mn")
-    return " ".join(sem_acento.casefold().split())
-
-
-def resolver_cidade_representante(cidade: Any) -> str:
-    """The known city (with accents) the text points at, ignoring accent and case; ValueError (pt-BR) otherwise."""
-    chave = _chave_cidade(cidade)
-    for conhecida in REGIONAL_REPRESENTATIVE_CITIES:
-        if chave and _chave_cidade(conhecida) == chave:
-            return conhecida
-    raise ValueError(f"Cidade sem representante regional: informe uma destas: {', '.join(REGIONAL_REPRESENTATIVE_CITIES)}.")
-
-
-def representante_padrao(cidade: str, padroes: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
-    """Default of the city: the code's, overridden by the effective default the route returns (`padroes`, by city)."""
-    local = _dict((padroes or {}).get(cidade))
-    base = REGIONAL_REPRESENTATIVE_DEFAULTS[cidade]
-    return {c: local[c] if isinstance(local.get(c), str) else base[c] for c in REGIONAL_REPRESENTATIVE_FIELDS}
-
-
-def representante_efetivo(cidade: str, salvos: Dict[str, Any], padroes: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, str], bool]:
-    """(default merged with the saved change of the city, whether a change is saved)."""
-    salvo, padrao = _dict(salvos.get(cidade)), representante_padrao(cidade, padroes)
-    return {c: salvo[c] if isinstance(salvo.get(c), str) else padrao[c] for c in REGIONAL_REPRESENTATIVE_FIELDS}, bool(salvo)
-
-
-def diferencas_representante(antes: Dict[str, str], depois: Dict[str, str]) -> List[Tuple[str, str, str]]:
-    """[(label, before, after)] of the fields that differ, with the labels of the screen."""
-    return [(rotulo, antes.get(c, ""), depois.get(c, "")) for c, _, rotulo, _ in _CAMPOS_REPRESENTANTE if antes.get(c, "") != depois.get(c, "")]
-
-
-def montar_representante_regional(
-    efetivo: Dict[str, str], nome: Any, email: Any, telefone: Any, horario: Any, almoco: Any, pausa: Any,
-) -> Tuple[Dict[str, str], List[Tuple[str, str, str]]]:
-    """(body of the PUT route with the 6 fields, [(label, current, new)] that change); ValueError (pt-BR) when the route would refuse.
-
-    A field that is None keeps the current value; an empty text clears it (name, e-mail, phone, pause)."""
-    novos = {"nome": nome, "email": email, "telefone": telefone, "horario": horario, "almoco": almoco, "pausaDuracao": pausa}
-    corpo: Dict[str, str] = {}
-    for campo, _, rotulo, limite in _CAMPOS_REPRESENTANTE:
-        valor = novos[campo]
-        if valor is None:
-            corpo[campo] = str(efetivo.get(campo) or "").strip()
-            continue
-        valor = str(valor).strip()
-        if campo in ("nome", "email", "telefone") and "OCULTADO]" in valor:
-            raise ValueError(f"{rotulo} digitado no chat é ocultado do modelo (LGPD). Peça ao usuário para usar o botão Editar, ao lado do representante regional, na tela de Transferência.")
-        if len(valor) > limite:
-            raise ValueError(f"{rotulo} longo demais (máximo {limite} caracteres).")
-        if valor and campo == "email":
-            valor = TransferenciaPayload.validate_email(valor)
-        elif valor and campo == "telefone":
-            valor = formatar_telefone_brasileiro(TransferenciaPayload.validate_phone(valor))
-        corpo[campo] = valor
-    mudancas = diferencas_representante({c: str(efetivo.get(c) or "").strip() for c in corpo}, corpo)
-    if not mudancas:
-        raise ValueError("Nenhum valor novo: informe algum campo diferente do atual. Nada a alterar.")
-    try:
-        RepresentanteRegionalPayload(**corpo)
-    except ValidationError as erro:
-        raise ValueError(str(erro.errors()[0]["msg"]).removeprefix("Value error, ")) from None
-    if corpo["almoco"] != _ALMOCO_NAO_FECHA and not corpo["pausaDuracao"]:  # same rule as the screen
-        raise ValueError('Preencha a pausa, por exemplo 1h30, ou use almoço "Escritório não fecha".')
-    return corpo, mudancas
-
-
-def _dict(valor: Any) -> Dict[str, Any]:
-    return valor if isinstance(valor, dict) else {}
 
 
 def _intervalo_agendamento(valor: Any) -> int:
@@ -3004,23 +2728,3 @@ class SimpressApi:
             "sucesso": True, "mensagem": f"Base recarregada de {limpar_texto_sensivel(dados.get('arquivo_origem', ''))}.",
             "total_equipamentos": dados.get("total_equipamentos"),
         }
-
-
-ACOES_APELIDO_MANUAL = ("manter", "excluir")
-CAMPOS_TRANSFERENCIA = ("serial", "entrega_cnpj", "entrega_endereco", "entrega_contato", "entrega_cidade", "descricao_equipamento", "entrega_obs")
-OBRIGATORIOS_TRANSFERENCIA = ("serial", "entrega_cnpj", "entrega_endereco", "entrega_contato")
-
-
-def validar_transferencia(args: Dict[str, Any]) -> Dict[str, str]:
-    """Body for the transfer history: the required fields plus the few optional ones the tool offers. ValueError with text for the model."""
-    corpo = {c: str(args.get(c) or "").strip() for c in CAMPOS_TRANSFERENCIA}
-    corpo["serial"] = corpo["serial"].upper()
-    if not all(corpo[c] for c in OBRIGATORIOS_TRANSFERENCIA):
-        raise ValueError("Informe serial, CNPJ, endereço e contato da entrega.")
-    corpo = {c: v for c, v in corpo.items() if v}
-    try:
-        TransferenciaPayload.model_validate(corpo)
-    except ValidationError as erro:
-        primeiro = erro.errors()[0]
-        raise ValueError(f"Campo {'.'.join(str(p) for p in primeiro['loc'])} inválido: {str(primeiro['msg']).removeprefix('Value error, ')}") from None
-    return corpo

@@ -84,6 +84,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Também: `routers/inventory_history.py:13` importa `_history_display_files` e `routers/operations.py:43` importa `_serial_key`, funções privadas de outros módulos.
 - Impacto: mudar uma rota pode quebrar o Assistente (F9); cria risco de import circular.
 - Solução: mover para `domains/` as funções que o Assistente usa desses routers e tornar públicas (sem `_`) as funções importadas de fora.
+- Resolvido para o Assistente em 26/11/2026 (commit `5d374b4`; conferido em 27/11/2026): `domains/assistant_api.py` não importa mais `routers/` (importa `domains.local_setup`; `domains.transfers` hoje é importado por `domains/assistant_validacao.py`). Grep em `domains/` por `from routers`/`import routers` não achou nada. Os outros pontos do achado (`routers/inventory_history.py` e `routers/operations.py`) continuam abertos.
 
 **2. Exceções engolidas sem registro.** Média, confirmado.
 - Evidência:
@@ -152,6 +153,11 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Evidência: `iniciar_servidor.bat:95` mostra o endereço `/docs`, que responde 404 sem `SIMPRESS_ENABLE_DOCS=1`.
 - Solução: mostrar o link só quando a variável estiver ligada.
 - Resolvido em 26/11/2026: `iniciar_servidor.bat` só mostra `/docs` com `SIMPRESS_ENABLE_DOCS=1`.
+
+**12. `domains/assistant_api.py` concentrado numa classe.** Média, confirmado.
+- Evidência: `domains/assistant_api.py` tinha 3.022 linhas, ~2.140 delas na classe `SimpressApi`.
+- Andamento (27/11/2026, PARCIAL, 1ª etapa): transporte e validadores saíram para `domains/assistant_transporte.py` e `domains/assistant_validacao.py`; o arquivo caiu para 2.729 linhas e segue reexportando esses nomes (fachada). O teste `tests/test_assistant_contrato_modelo.py` fixa a lista de ferramentas (hash), os schemas, o `SYSTEM_PROMPT`, `montar_prompt` e as assinaturas públicas de `SimpressApi`.
+- Falta: dividir `SimpressApi` em mixins por tema (Sebrae/F5; histórico e comparação; representantes, cobertura e backups; automação e escrita), mantendo a fachada.
 
 ### 5.2 Melhorias (sem falha)
 

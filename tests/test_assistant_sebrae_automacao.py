@@ -1,8 +1,8 @@
 """Assistant and the Sebrae old-tickets read: card before any POST, own route, counts only, no SharePoint send."""
 
-import inspect
 import json
 import unittest
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import domains.assistant_api as assistant_api
@@ -239,7 +239,7 @@ class _AlvoFalso:
 class NenhumEnvioAoSharePointTests(unittest.TestCase):
     def test_static_no_send_routes_in_the_assistant_code(self) -> None:
         # Static guard: the assistant code never names the send/update routes nor the 'enviar' routine.
-        fonte = inspect.getsource(assistant_api) + inspect.getsource(assistant_tools)
+        fonte = "".join(f.read_text(encoding="utf-8") for f in sorted(Path(assistant_api.__file__).parent.glob("assistant_*.py")))
         for rota in PROIBIDAS_ROTAS:
             self.assertNotIn(rota, fonte)
         for rotina in ("enviar", "fechar", "antigos"):
