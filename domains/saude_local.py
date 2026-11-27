@@ -15,10 +15,10 @@ import re
 import shutil
 import threading
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Sequence, Tuple, get_args
 
-from core.limpeza_temporarios import QUARANTINE_DIRECTORY, CleanupBlockedError, cleanup_local_temps
+from core.limpeza_temporarios import QUARANTINE_DIRECTORY, CleanupBlockedError, cleanup_local_temps, inside_root
 from core.local_paths import is_link_or_junction
 from domains.assistant_lgpd import mascarar_cpfs
 
@@ -94,7 +94,7 @@ def _arquivos(pasta: Path) -> Iterator[Tuple[Path, int, bool]]:
         for entrada in entradas:
             caminho = Path(entrada.path)
             try:
-                if is_link_or_junction(caminho):
+                if is_link_or_junction(caminho) or not inside_root(caminho, pasta):
                     continue
                 if entrada.is_dir(follow_symlinks=False):
                     pilha.append((caminho, em_quarentena or entrada.name == QUARANTINE_DIRECTORY))
@@ -123,7 +123,9 @@ def _pasta_pacotes(base: Path) -> Optional[Path]:
     if not isinstance(texto, str) or not texto.strip():
         return base / "data" / "pacotes_locais"
     texto = texto.strip()
-    if texto.startswith(("\\\\", "//")):
+    # Any mix of "/" and "\" that starts a UNC path (\\server, //server, /\server, \/server) is a network folder.
+    normalizado = texto.replace("/", "\\")
+    if normalizado.startswith("\\\\") or PureWindowsPath(normalizado).drive.startswith("\\\\"):
         return None
     pasta = Path(texto).expanduser()
     return pasta if pasta.is_absolute() else base / pasta

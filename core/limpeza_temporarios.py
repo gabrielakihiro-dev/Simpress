@@ -7,6 +7,7 @@ through their modules: the tests patch them there.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -38,7 +39,7 @@ class CleanupBlockedError(RuntimeError):
         self.codigo = codigo
 
 
-def _inside(path: Path, root: Path) -> bool:
+def inside_root(path: Path, root: Path) -> bool:
     try:
         return path.resolve(strict=False).is_relative_to(root.resolve(strict=False))
     except OSError:
@@ -90,6 +91,7 @@ def _committed_reference_files(target: Path, input_dir: Path) -> List[Path]:
         references.extend(
             path for path in _walk_files(input_dir / "_backups")
             if path.name == target.name and path.is_file() and not is_link_or_junction(path)
+            and inside_root(path, input_dir)
         )
     return references
 
@@ -97,7 +99,7 @@ def _committed_reference_files(target: Path, input_dir: Path) -> List[Path]:
 def _quarantine_temporary(temporary: Path, digest: str, scan_root: Path) -> None:
     """Write metadata before moving; keep both the snapshot and its report locally."""
     quarantine = temporary.parent / QUARANTINE_DIRECTORY
-    if is_link_or_junction(quarantine) or not _inside(quarantine, scan_root):
+    if is_link_or_junction(quarantine) or not inside_root(quarantine, scan_root):
         raise CleanupBlockedError("A pasta de quarentena não pode ser um link ou junção.")
     quarantine.mkdir(exist_ok=True)
     batch = Path(tempfile.mkdtemp(prefix="snapshot-", dir=quarantine))
@@ -188,7 +190,7 @@ def cleanup_local_temps(
         area = candidates[temporary]
         scan_root = scan_roots[area]
         result["examinados"] += 1
-        if is_link_or_junction(temporary) or not _inside(temporary, scan_root):
+        if is_link_or_junction(temporary) or not inside_root(temporary, scan_root):
             result["formato_desconhecido_preservado"] += 1
             continue
         target = _target_for_temporary(temporary)
@@ -206,8 +208,10 @@ def cleanup_local_temps(
             "bytes": metadata.st_size,
         }
 
+        # The prévia only reads and hashes: it takes no lock, so it creates no .lock file.
+        guard = contextlib.nullcontext() if dry_run else integrity.lock_paths([target], timeout=0.0)
         try:
-            with integrity.lock_paths([target], timeout=0.0):
+            with guard:
                 reference_files = _committed_reference_files(target, input_dir)
                 if not reference_files:
                     result["sem_destino_preservados"] += 1
@@ -233,7 +237,8 @@ def cleanup_local_temps(
                     result["removidos"] += 1
                 if itens is not None:
                     itens.append({"acao": "remover", **item})
-        except integrity.FileBusyError:
+        except (integrity.FileBusyError, integrity.FileTransactionError):
+            # The message may carry the file name: count it, never propagate it to a log.
             result["bloqueados_preservados"] += 1
 
     return result

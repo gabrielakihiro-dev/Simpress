@@ -4,6 +4,7 @@ Contract: docs/arquitetura/CONTRATOS_API_BACKEND.md ("Saúde local"). The GETs n
 cleanup never recovers a transaction; no answer carries a path outside the cleanup items.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +17,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.limpeza_temporarios import CleanupBlockedError
 from domains import saude_local
 from domains.saude_local import ChaveArea, CodigoRecusa, ErroJson, EstadoProntidao, NomeJson, SituacaoJson
+
+logger = logging.getLogger(__name__)
 
 _ISO_UTC = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
 _CHAVE_PRONTIDAO = r"^[a-z][a-z0-9_]{0,63}$"
@@ -152,6 +155,10 @@ def create_saude_local_router(services: SaudeLocalRouteServices) -> APIRouter:
             raise HTTPException(409, detail={"codigo": recusa.codigo, "mensagem": recusa.mensagem}) from None
         except (OSError, CleanupBlockedError):
             raise HTTPException(503, detail=MSG_LIMPEZA) from None
+        except Exception as erro:
+            # Error texts may carry a file name (a person's name): log only the class, never the message or traceback.
+            logger.warning("Limpeza de temporários interrompida (erro=%s).", type(erro).__name__)
+            raise HTTPException(503, detail=MSG_LIMPEZA) from None
 
     @router.get("/api/saude-local", response_model=SaudeLocal)
     def get_saude_local() -> Dict[str, Any]:
@@ -163,7 +170,7 @@ def create_saude_local_router(services: SaudeLocalRouteServices) -> APIRouter:
 
     @router.post("/api/saude-local/limpeza/previa", response_model=Limpeza, responses=_RECUSA_409)
     def previa_limpeza() -> Dict[str, Any]:
-        """Dry-run: lists what the cleanup would remove or quarantine; may create empty .lock files."""
+        """Dry-run: lists what the cleanup would remove or quarantine; reads and hashes only, writes nothing."""
         return _limpar(False)
 
     @router.post("/api/saude-local/limpeza", response_model=Limpeza, responses=_RECUSA_409)

@@ -167,6 +167,18 @@ def _read_json(path: Path) -> Optional[Dict[str, Any]]:
     return data if isinstance(data, dict) else None
 
 
+def live_lock_owner(lock_file: Path, is_alive: Callable[[int], bool] = pid_alive) -> Optional[Dict[str, Any]]:
+    """The lock JSON while its pid is alive, else None. Only reads: no runner, no record written."""
+    data = _read_json(lock_file)
+    if not data:
+        return None
+    try:
+        pid = int(data.get("pid") or 0)
+    except (TypeError, ValueError):
+        return None
+    return data if is_alive(pid) else None
+
+
 def _write_json(path: Path, data: Dict[str, Any]) -> None:
     try:
         atomic_write_json(path, data)
@@ -291,14 +303,7 @@ class ChromeAutomationRunner:
             self._finish_record(path, record, None, log_path)
 
     def _lock_owner(self) -> Optional[Dict[str, Any]]:
-        data = _read_json(self.contract.lock_file)
-        if not data:
-            return None
-        try:
-            pid = int(data.get("pid") or 0)
-        except (TypeError, ValueError):
-            return None
-        return data if self._is_alive(pid) else None
+        return live_lock_owner(self.contract.lock_file, self._is_alive)
 
     def _finish_run_locked(self, run: _Run, code: Optional[int]) -> None:
         """Writes the final summary once, whether the poll or the waiting thread sees the exit first."""

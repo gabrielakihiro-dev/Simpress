@@ -28,7 +28,7 @@ Mostrar, num só lugar, o espaço usado pelo Simpress neste computador, a situa�
 
 ## Limpeza: o que remove, o que quarentena e o que nunca toca
 
-A prévia é sempre a primeira etapa. Ela não grava nada (pode criar um arquivo `.lock` vazio, por isso é um POST). A aplicação refaz a análise do zero e não usa token: vale o que estiver no disco no momento do clique.
+A prévia é sempre a primeira etapa. Ela não grava nada, nem arquivo `.lock`: só lê e calcula hash (é um POST por ser o passo inicial de uma ação). A aplicação refaz a análise do zero e não usa token: vale o que estiver no disco no momento do clique.
 
 | Ação | O que atinge | Regra |
 |---|---|---|

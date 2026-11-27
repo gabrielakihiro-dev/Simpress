@@ -41,15 +41,17 @@ def _escrever(path: Path, conteudo: bytes) -> Path:
     return path
 
 
-def _snapshot(raiz: Path, filtro: Callable[[Path], bool] = lambda _p: True) -> Dict[str, Tuple[int, bytes]]:
-    """mtime + content of every regular file under ``raiz`` (no link followed)."""
+def _snapshot(raiz: Path) -> Dict[str, Tuple[int, bytes]]:
+    """mtime + content of every file and folder under ``raiz`` (folders by mtime; no link followed)."""
     resultado: Dict[str, Tuple[int, bytes]] = {}
     for atual, pastas, arquivos in os.walk(raiz, followlinks=False):
+        for nome in pastas:
+            pasta = Path(atual) / nome
+            resultado[pasta.relative_to(raiz).as_posix() + "/"] = (pasta.lstat().st_mtime_ns, b"")
         for nome in arquivos:
             caminho = Path(atual) / nome
-            if caminho.is_symlink() or not filtro(caminho):
-                continue
-            resultado[caminho.relative_to(raiz).as_posix()] = (caminho.stat().st_mtime_ns, caminho.read_bytes())
+            conteudo = b"<link>" if caminho.is_symlink() else caminho.read_bytes()
+            resultado[caminho.relative_to(raiz).as_posix()] = (caminho.lstat().st_mtime_ns, conteudo)
     return resultado
 
 
@@ -138,9 +140,6 @@ class SaudeLocalBase(unittest.TestCase):
         self.addCleanup(client.close)
         return client
 
-    def _sem_lock(self, caminho: Path) -> bool:
-        return not caminho.name.endswith(".lock")
-
 
     def _sem_dado_pessoal(self, texto: str, *, extra: Tuple[str, ...] = ()) -> None:
         proibidos = ("Fulano", "fulano", CPF, "12345678909", EMAIL, str(self.root), "Users", "Termo_") + extra
@@ -155,7 +154,7 @@ class SaudeLocalBase(unittest.TestCase):
 
 class LimpezaTests(SaudeLocalBase):
     def test_previa_nao_altera_e_limpeza_nunca_toca_arquivos_protegidos(self) -> None:
-        antes = _snapshot(self.root, self._sem_lock)
+        antes = _snapshot(self.root)
         protegidos = {p.relative_to(self.root).as_posix(): antes[p.relative_to(self.root).as_posix()] for p in self.protegidos}
 
         previa = self.client.post("/api/saude-local/limpeza/previa")
@@ -170,7 +169,7 @@ class LimpezaTests(SaudeLocalBase):
         )
         self.assertEqual(corpo["totais"]["remover_arquivos"], 2)
         self.assertEqual(corpo["totais"]["quarentena_bytes"], len(b"versao antiga"))
-        self.assertEqual(_snapshot(self.root, self._sem_lock), antes)
+        self.assertEqual(_snapshot(self.root), antes)
 
         limpeza = self.client.post("/api/saude-local/limpeza", json={"confirmado": True})
         self.assertEqual(limpeza.status_code, 200, limpeza.text)
@@ -181,7 +180,7 @@ class LimpezaTests(SaudeLocalBase):
         self.assertFalse(self.tmp_anexo.exists())
         self.assertFalse(self.tmp_antigo.exists())
         self.assertEqual(len(list((self.alvo.parent / ".temp-quarantine").glob(f"*/{self.tmp_antigo.name}"))), 1)
-        depois = _snapshot(self.root, self._sem_lock)
+        depois = _snapshot(self.root)
         for relativo, valor in protegidos.items():
             self.assertEqual(depois.get(relativo), valor, relativo)
         self.assertEqual(self.alvo.read_bytes(), b"historico atual")
@@ -271,6 +270,74 @@ class LimpezaTests(SaudeLocalBase):
         self.assertEqual(_snapshot(self.root / ".transactions"), antes)
         self.assertTrue(manifesto.is_file())
 
+    def test_gets_e_previa_nao_gravam_nada(self) -> None:
+        _escrever(self.root / ".transactions" / "tx-1" / "manifest.json", b"{}")
+        antes = _snapshot(self.root)
+        self.assertEqual(self.client.get("/api/saude-local").status_code, 200)
+        self.assertEqual(_snapshot(self.root), antes)
+        self.assertEqual(self.client.get("/api/saude-local/diagnostico").status_code, 200)
+        self.assertEqual(_snapshot(self.root), antes)
+        (self.root / ".transactions" / "tx-1" / "manifest.json").unlink()
+        (self.root / ".transactions" / "tx-1").rmdir()
+        (self.root / ".transactions").rmdir()
+        antes = _snapshot(self.root)
+        previa = self.client.post("/api/saude-local/limpeza/previa")
+        self.assertEqual(previa.status_code, 200)
+        self.assertEqual(len(previa.json()["itens"]), 3)
+        self.assertEqual(_snapshot(self.root), antes)  # no .lock, no folder, no mtime change
+
+    def _capturar(self, acao: Callable[[], Any]) -> Tuple[Any, List[str]]:
+        captura = _CapturaLogs()
+        raiz_log = logging.getLogger()
+        nivel = raiz_log.level
+        raiz_log.addHandler(captura)
+        raiz_log.setLevel(logging.DEBUG)
+        try:
+            return acao(), captura.textos
+        finally:
+            raiz_log.removeHandler(captura)
+            raiz_log.setLevel(nivel)
+
+    def test_falha_ao_mover_para_quarentena_e_preservada_sem_nome_no_log(self) -> None:
+        from core.integrity import FileTransactionError
+
+        erro = FileTransactionError("Falha ao substituir '.Termo_Fulano.pdf.abcd1234.tmp': 12345678909.")
+        with patch("core.integrity._replace_with_retries", side_effect=erro):
+            resposta, logs = self._capturar(
+                lambda: self.client.post("/api/saude-local/limpeza", json={"confirmado": True}))
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["totais"]["quarentena_arquivos"], 0)
+        self.assertGreaterEqual(resposta.json()["totais"]["preservados"], 1)
+        self.assertEqual(self.tmp_antigo.read_bytes(), b"versao antiga")
+        for texto in logs:
+            for proibido in ("Fulano", "fulano", "Termo_", "12345678909"):
+                self.assertNotIn(proibido, texto)
+
+    def test_erro_inesperado_vira_503_sem_nome_no_log(self) -> None:
+        with patch.object(saude_local, "cleanup_local_temps", side_effect=RuntimeError(f"Termo_Fulano {CPF}")):
+            resposta, logs = self._capturar(
+                lambda: self.client.post("/api/saude-local/limpeza", json={"confirmado": True}))
+        self.assertEqual(resposta.status_code, 503)
+        self.assertEqual(resposta.json(), {"detail": "Não foi possível concluir a limpeza com segurança."})
+        self.assertTrue(any("RuntimeError" in texto for texto in logs))
+        for texto in logs:
+            for proibido in ("Fulano", "fulano", "Termo_", CPF, "12345678909"):
+                self.assertNotIn(proibido, texto)
+
+    def test_pasta_de_quarentena_link_recusa_e_preserva_o_temporario(self) -> None:
+        contexto = tempfile.TemporaryDirectory(prefix="saude-quarentena-fora-")
+        self.addCleanup(contexto.cleanup)
+        fora = Path(contexto.name)
+        try:
+            os.symlink(fora, self.alvo.parent / ".temp-quarantine", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("Sem permissão para criar link simbólico.")
+        resposta = self.client.post("/api/saude-local/limpeza", json={"confirmado": True})
+        self.assertEqual(resposta.status_code, 503)
+        self.assertEqual(resposta.json(), {"detail": "Não foi possível concluir a limpeza com segurança."})
+        self.assertEqual(self.tmp_antigo.read_bytes(), b"versao antiga")
+        self.assertEqual(list(fora.iterdir()), [])
+
 class DiagnosticoTests(SaudeLocalBase):
     def test_saude_e_diagnostico_sem_dado_pessoal(self) -> None:
         self.prontidao = {
@@ -309,7 +376,7 @@ class DiagnosticoTests(SaudeLocalBase):
         for resposta in (saude, diagnostico, sem_confirmado, recusa):
             self._sem_dado_pessoal(resposta.text, extra=("a.xlsx", "C:"))
         for texto in captura.textos:
-            for proibido in ("Fulano", "fulano", CPF, EMAIL, str(self.root), "Termo_"):
+            for proibido in ("Fulano", "fulano", CPF, "12345678909", EMAIL, str(self.root), "Termo_"):
                 self.assertNotIn(proibido, texto)
 
         corpo = diagnostico.json()
@@ -378,6 +445,22 @@ class DiagnosticoTests(SaudeLocalBase):
                          "/api/saude-local/diagnostico"} <= caminhos)
 
 
+class ChromeOcupadoNoMainTests(SaudeLocalBase):
+    def test_leitura_da_trava_nao_cria_o_runner_nem_grava(self) -> None:
+        state = self.root / "data" / "state"
+        logs = self.root / "data" / "logs"
+        with patch.object(main, "_chrome_automation_runner", None), patch.object(main, "STATE_DIR", state), \
+                patch.object(main, "LOG_DIR", logs), patch.object(main, "BASE_DIR", self.root), \
+                patch.object(main, "ChromeAutomationRunner", side_effect=AssertionError("criou o runner")):
+            antes = _snapshot(self.root)
+            self.assertFalse(main._chrome_automation_busy())
+            self.assertEqual(_snapshot(self.root), antes)
+            (state / "automacao_chrome.lock").write_text(json.dumps({"pid": os.getpid(), "rotina": "os"}), encoding="utf-8")
+            antes = _snapshot(self.root)
+            self.assertTrue(main._chrome_automation_busy())
+            self.assertEqual(_snapshot(self.root), antes)
+            self.assertIsNone(main._chrome_automation_runner)
+
 class LinksEPacotesTests(SaudeLocalBase):
     def test_link_para_fora_da_raiz_nao_e_medido_nem_apagado(self) -> None:
         contexto = tempfile.TemporaryDirectory(prefix="saude-fora-")
@@ -426,8 +509,9 @@ class LinksEPacotesTests(SaudeLocalBase):
         self.assertNotIn(PESSOA, texto)
         self.assertNotIn(str(configurada), texto)
 
-        config.write_text(json.dumps({"pasta": "\\\\servidor\\pacotes"}), encoding="utf-8")
-        self.assertEqual(self._pacotes(), {"chave": "pacotes_locais", "arquivos": 0, "bytes": 0, "existe": False})
+        for rede in ("\\\\servidor\\pacotes", "//servidor/pacotes", "/\\servidor\\pacotes", "\\/servidor\\pacotes"):
+            config.write_text(json.dumps({"pasta": rede}), encoding="utf-8")
+            self.assertEqual(self._pacotes(), {"chave": "pacotes_locais", "arquivos": 0, "bytes": 0, "existe": False}, rede)
         config.write_text(json.dumps({"pasta": str(configurada / "nao-existe")}), encoding="utf-8")
         self.assertEqual(self._pacotes(), {"chave": "pacotes_locais", "arquivos": 0, "bytes": 0, "existe": False})
         for invalido in ("{quebrado", json.dumps({"pasta": ""}), json.dumps(["x"])):

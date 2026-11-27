@@ -240,7 +240,7 @@ from routers.assistant import AssistantRouteServices, create_assistant_router
 from routers.automation import AutomationRouteServices, create_automation_router
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos, sebrae_finalizacao, sebrae_os_recusadas, os_marcas_finalizacao
-from domains.chrome_automation import ChromeAutomationRunner, default_contract
+from domains.chrome_automation import ChromeAutomationRunner, default_contract, live_lock_owner
 from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
 from domains.dashboard_agendamento import AgendadorDashboard
 from domains import endpoint_removals
@@ -1843,8 +1843,8 @@ app.include_router(system_router)
 app.include_router(create_saude_local_router(SaudeLocalRouteServices(
     base_dir=lambda: BASE_DIR,
     entradas=lambda: (AUTOMATIC_INVENTORY_INBOX_DIR, AUTOMATIC_TICKET_INBOX_DIR, ENTRA_INBOX_DIR),
-    # Looked up on each call: the runner is created lazily further down and writes its records on creation.
-    chrome_ocupado=lambda: get_chrome_automation_runner().ocupado(),
+    # Looked up on each call (defined further down); never creates the runner, which writes records on creation.
+    chrome_ocupado=lambda: _chrome_automation_busy(),
     prontidao=lambda: get_startup_readiness(),
     versao_app=lambda: app.version,
 )))
@@ -2375,6 +2375,15 @@ def get_chrome_automation_runner() -> ChromeAutomationRunner:
         if _chrome_automation_runner is None:
             _chrome_automation_runner = ChromeAutomationRunner(default_contract(BASE_DIR, STATE_DIR, LOG_DIR))
         return _chrome_automation_runner
+
+
+def _chrome_automation_busy() -> bool:
+    """Read-only: asks the runner only when it already exists; otherwise reads just the lock file."""
+    with _chrome_automation_runner_lock:
+        runner = _chrome_automation_runner
+    if runner is not None:
+        return runner.ocupado()
+    return live_lock_owner(default_contract(BASE_DIR, STATE_DIR, LOG_DIR).lock_file) is not None
 
 
 def _warm_automation_history() -> None:
