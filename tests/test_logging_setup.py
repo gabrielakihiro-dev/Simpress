@@ -79,7 +79,6 @@ class LoggingSetupTests(unittest.TestCase):
         self.assertNotIn("FICTICIA", token)
         self.assertEqual(logging_setup.redact_reference(""), "-")
 
-
     def test_http_client_request_urls_with_personal_data_stay_out_of_the_log(self):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
