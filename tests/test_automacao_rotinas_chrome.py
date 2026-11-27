@@ -2687,6 +2687,25 @@ class EnviarDashboardTests(unittest.TestCase):
         page.locators["substituir"].filter.return_value.first.click.assert_not_called()
         page.keyboard.press.assert_called_with("Escape")
 
+    def test_cancel_before_the_dialog_renders_leaves_the_folder_by_goto_and_fails(self):
+        # Cancelado logo depois de escolher o arquivo, sem diálogo ainda: o goto descarta o upload pendente e um Replace futuro.
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True)
+        marcar = MagicMock()
+        with self.assertRaises(automacao.RotinaCancelada):
+            self._enviar(page, concluido=False, dialogo=False, marcar_incerto=marcar, cancelar=lambda: page.expect_file_chooser.called)
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_PASTA_MS)
+        marcar.assert_not_called()
+
+    def test_cancel_before_the_dialog_renders_and_goto_fails_marks_uncertain(self):
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True)
+        page.goto.side_effect = RuntimeError("a aba não respondeu")
+        marcar = MagicMock()
+        with self.assertRaises(automacao.RotinaCancelada):
+            self._enviar(page, concluido=False, dialogo=False, marcar_incerto=marcar, cancelar=lambda: page.expect_file_chooser.called)
+        marcar.assert_called_once()
+
     def test_guard_exhausted_with_the_dialog_still_open_marks_uncertain(self):
         page = self._pagina({"substituir"})
         self._dialogo_que_fecha(page, fecha=False)
@@ -2732,7 +2751,7 @@ class EnviarDashboardTests(unittest.TestCase):
     # Rotina enviar inteira com o estado real do registro; só o navegador e o acompanhamento do upload são simulados.
 
     def _rodar_com_dashboard_aberto(self, *, aba=lambda: False, acompanhar=("ok",), cancelar=lambda: False, baixados=None, envio_preparado=False,
-                                    duplicar_falha=None, dialogo_fecha=True):
+                                    duplicar_falha=None, dialogo_fecha=True, goto_falha=None):
         """``acompanhar``: por escolha do arquivo, "bloqueado" (toast antes do Replace) ou "ok" (Replace e concluído).
 
         Devolve (código ou exceção, registro, mocks)."""
@@ -2746,6 +2765,7 @@ class EnviarDashboardTests(unittest.TestCase):
         roteiro = list(acompanhar)
         botoes = page.get_by_role.return_value.or_.return_value.filter.return_value  # diálogo Replace/Keep both depois do Escape
         botoes.count.return_value = 0 if dialogo_fecha else 1
+        page.goto.side_effect = goto_falha
 
         def baixar(_page):
             destino = raiz / f"baixado{len(fila)}.xlsx"
@@ -2865,9 +2885,9 @@ class EnviarDashboardTests(unittest.TestCase):
         self._espera_fechada()
 
     def test_cancel_with_the_replace_dialog_open_in_the_routine(self):
-        for fecha, status in ((True, "falhou"), (False, "incerto")):
-            with self.subTest(fecha=fecha):
-                resultado, registro, _ = self._rodar_com_dashboard_aberto(acompanhar=("cancelado",), dialogo_fecha=fecha)
+        for fecha, goto_falha, status in ((True, None, "falhou"), (False, None, "incerto"), (True, RuntimeError("aba presa"), "incerto")):
+            with self.subTest(fecha=fecha, goto_falha=goto_falha):
+                resultado, registro, _ = self._rodar_com_dashboard_aberto(acompanhar=("cancelado",), dialogo_fecha=fecha, goto_falha=goto_falha)
                 self.assertIsInstance(resultado, automacao.RotinaCancelada)
                 self.assertEqual(registro["status"], status)
 

@@ -2934,6 +2934,13 @@ def enviar_arquivo_para_pasta(
             # sobreporia o Dashboard sem registro, então o envio fica incerto.
             if not marcado and not _dialogo_de_nome_fechado(page):
                 _incerto()
+            if not marcado:
+                # O diálogo pode ainda nem ter aparecido: navegar descarta o upload pendente e qualquer diálogo futuro na aba que
+                # fica para trás. Sem conseguir navegar, nada prova que o Replace não vai aparecer armado: incerto.
+                try:
+                    page.goto(pasta_dashboard_url(), wait_until="domcontentloaded", timeout=GOTO_PASTA_MS)
+                except Exception:
+                    _incerto()
             raise
         except Exception:
             _incerto()
