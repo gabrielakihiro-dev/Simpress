@@ -637,6 +637,23 @@ test("Já atualizei manualmente descarta o aviso do SharePoint sem reenviar e gu
   expect(await page.evaluate(() => localStorage.getItem("sebrae_sharepoint_aviso_descartado"))).toContain("pendente 2026-10-28 1030");
 });
 
+test("aviso do SharePoint sem cópia local não oferece Tentar substituir de novo nem Cópia local pendente, só descartar", async ({ page }) => {
+  await page.route("**/api/sebrae/finalizar-softexpert", route => route.request().method() === "GET"
+    ? route.fulfill({ json: { em_andamento: false, resultado: null, conflitos: 0, sharepoint: { falhou: true, motivo: "o SharePoint pediu login de novo", copia_local: "", copia_sharepoint: false, sugestoes: ["Confira o login do SharePoint."] } } })
+    : route.continue());
+  await page.goto("/");
+  await page.locator("#tab-automacao").click();
+  await page.locator("#btn-sebrae-abrir-chamados").click();
+  const aviso = page.locator('[data-cockpit-tool-panel="sebrae-chamados"] #sebrae-sharepoint-aviso');
+  await expect(aviso).toBeVisible();
+  await expect(aviso).toContainText("O Dashboard não foi substituído no SharePoint.");
+  await expect(aviso).toContainText("Motivo: o SharePoint pediu login de novo");
+  await expect(aviso).not.toContainText("Cópia local pendente");
+  await expect(aviso.locator("#btn-sebrae-reenviar")).toHaveCount(0);
+  await expect(aviso.getByRole("button", { name: BOTAO_REENVIAR })).toHaveCount(0);
+  await expect(aviso.locator("#btn-sebrae-descartar-aviso")).toBeVisible();
+});
+
 test("o aviso do SharePoint e o resultado respeitam movimento reduzido e não criam rolagem horizontal no celular", async ({ page, request }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 800 });
@@ -1104,6 +1121,82 @@ test("Conflitos de edição: lista cada célula, só libera o reenvio com todas 
   await expect(page.locator(TOAST).filter({ hasText: "Conflitos resolvidos e Dashboard enviado ao SharePoint." })).toBeVisible();
   const { post } = await (await request.get("/__fixture_conflitos")).json();
   expect(post).toEqual({ escolhas: { c1: "site", c2: "sharepoint", c3: "sharepoint" }, enviar: true, versao_importacao: "versao-fixture-conflitos" });
+});
+
+const ESTADO_ENVIAR = { estado: "em_andamento", rotina: "enviar", inicio: "2026-10-28T10:40:00-03:00", log: { arquivo: "", offset: 0, linhas: [] }, ultima: null };
+const ESTADO_LIVRE = { estado: "livre", rotina: "", ultima: { id: "enviar-fixture", status: "concluido", rotina: "enviar" } };
+
+// Conta só as consultas à rota de conflitos (a lista da tela), sem mexer na resposta da fixture.
+function contarConflitos(page) {
+  const contagem = { n: 0 };
+  page.on("request", r => { if (r.method() === "GET" && new URL(r.url()).pathname === "/api/sebrae/dashboard/conflitos") contagem.n += 1; });
+  return contagem;
+}
+
+test("fim do enviar iniciado pelo Atualizar Dashboard, com a aba Automação oculta, recarrega os conflitos", async ({ page, request }) => {
+  test.setTimeout(60_000);
+  let fase = "livre";
+  let consultasEnviar = 0;
+  await page.route("**/api/automacao/estado*", route => {
+    if (fase === "andando") consultasEnviar += 1;
+    return route.fulfill({ json: fase === "andando" ? ESTADO_ENVIAR : ESTADO_LIVRE });
+  });
+  await page.route("**/api/sebrae/dashboard/atualizar", route => { fase = "andando"; return route.continue(); });
+  const conflitos = contarConflitos(page);
+  const { painel, antigo } = await abrirAntigo(page, request);
+  await completarCampos(antigo);
+  await expect(page.locator("#tab-panel-automacao")).toBeHidden(); // sem a aba Automação o polling dela não roda sozinho
+  await painel.locator("#btn-sebrae-atualizar").click();
+  const modal = page.locator("#modal-confirmar-acao");
+  await expect(modal).toBeVisible();
+  await Promise.all([page.waitForEvent("download"), modal.locator("#btn-confirmar-acao-ok").click()]); // atualiza e envia: a fixture devolve enviar.iniciado
+  await expect.poll(() => consultasEnviar, { timeout: 15000 }).toBeGreaterThan(1); // a Automação acompanha sozinha
+  const antes = conflitos.n;
+  fase = "livre"; // a rotina enviar terminou
+  await expect.poll(() => conflitos.n, { timeout: 15000 }).toBeGreaterThan(antes);
+});
+
+test("fim do reenviar (sem itens em resultados, com conflitos) recarrega a lista de conflitos", async ({ page }) => {
+  let fase = "antes";
+  let consultasAndando = 0;
+  const resultado = { acao: "reenviar_pendente", iniciado_em: "2026-10-28T10:20:00-03:00", em_andamento: false, resultados: [], pulados: [] };
+  const copia = "data/state/sebrae_dashboard_pendente/Dashboard Operacional_SEBRAE (pendente 2026-10-28 1030).xlsx";
+  await page.route("**/api/sebrae/finalizar-softexpert", route => {
+    if (fase === "antes") return route.fulfill({ json: { em_andamento: false, resultado: null, conflitos: 0, sharepoint: { falhou: true, motivo: "o SharePoint pediu login de novo", copia_local: copia, sugestoes: [] } } });
+    if (++consultasAndando === 1) return route.fulfill({ json: { em_andamento: true, resultado: { ...resultado, em_andamento: true }, conflitos: 0, sharepoint: null } });
+    return route.fulfill({ json: { em_andamento: false, resultado, conflitos: 1, sharepoint: null } });
+  });
+  await page.route("**/api/sebrae/dashboard/pendente/reenviar", route => { fase = "andando"; return route.fulfill({ status: 202, json: { iniciado: true } }); });
+  const conflitos = contarConflitos(page);
+  await page.goto("/");
+  await page.locator("#tab-automacao").click();
+  await page.locator("#btn-sebrae-abrir-chamados").click();
+  const aviso = page.locator('[data-cockpit-tool-panel="sebrae-chamados"] #sebrae-sharepoint-aviso');
+  await expect(aviso.locator("#btn-sebrae-reenviar")).toBeEnabled();
+  const antes = conflitos.n;
+  await aviso.locator("#btn-sebrae-reenviar").click();
+  await expect.poll(() => consultasAndando, { timeout: 10000 }).toBeGreaterThan(1); // andando e depois concluído
+  await expect.poll(() => conflitos.n, { timeout: 10000 }).toBeGreaterThan(antes);
+});
+
+test("sessão vencida (401) na consulta da automação durante o reenvio dos conflitos para na 1ª consulta e mostra o texto aprovado", async ({ page, request }) => {
+  let expirou = false;
+  let consultas = 0;
+  await page.route("**/api/automacao/estado*", route => expirou
+    ? route.fulfill({ status: 401, json: { detail: "Sessão ausente." } })
+    : route.fulfill({ json: ESTADO_LIVRE }));
+  page.on("request", r => { const u = new URL(r.url()); if (expirou && u.pathname === "/api/automacao/estado" && u.search === "") consultas += 1; }); // só a do acompanharEnvio (sem ?offset)
+  const { painel } = await abrirPainel(page, request, "&conflitos=1");
+  const secao = painel.locator("#sebrae-conflitos");
+  await expect(secao.getByRole("group")).toHaveCount(3);
+  await secao.getByRole("group").first().getByRole("radio", { name: "Usar o do site" }).check();
+  await secao.getByRole("group").nth(1).getByRole("radio", { name: "Manter o do SharePoint" }).check();
+  await secao.getByRole("group").nth(2).getByRole("radio", { name: "Manter o do SharePoint" }).check();
+  expirou = true;
+  await secao.getByRole("button", { name: "Salvar escolhas e reenviar", exact: true }).click();
+  await expect(secao.locator("#sebrae-conflitos-status")).toHaveText("A sessão do Simpress expirou. Abra o site de novo pelo iniciar_servidor.bat para continuar.");
+  await page.waitForTimeout(4500); // mais que o intervalo de 3 s: nenhuma segunda consulta
+  expect(consultas).toBe(1);
 });
 
 test("Conflitos de edição: sem rolagem horizontal de 320px a 2560px e sem falha de acessibilidade nos dois temas", async ({ page, request }) => {
