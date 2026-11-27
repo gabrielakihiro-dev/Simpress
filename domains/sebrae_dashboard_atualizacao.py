@@ -2,7 +2,8 @@
 ``routers/sebrae_dashboard.py``.
 
 Não depende de HTTP: cada função recebe ``services`` e valores simples (``chamados``/``edicoes`` são os dicts completos de
-``ChamadoManual.model_dump()``, com ``numero``); payload, trava da base e rotinas ficam no router.
+``ChamadoManual.model_dump()``, com ``numero``); payload e trava da base ficam no router;
+as rotinas ``fechar``/``enviar`` estão em ``domains/sebrae_dashboard_rotinas.py``.
 """
 
 from __future__ import annotations
