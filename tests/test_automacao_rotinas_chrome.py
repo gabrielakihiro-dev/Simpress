@@ -2763,6 +2763,23 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(str(resultado), automacao.MSG_DASHBOARD_TENTATIVAS)
         self.assertEqual(registro["status"], "falhou")
 
+    def test_no_screenshot_while_the_locked_notice_with_an_email_is_on_screen(self):
+        copia = Path(self.enterContext(tempfile.TemporaryDirectory())) / "Dashboard Operacional_SEBRAE (pendente 2026-11-27 1000).xlsx"
+        copia.write_bytes(b"x")
+        for toast, capturas in ((True, 0), (False, 1)):
+            with self.subTest(toast=toast), patch.object(automacao, "nova_aba"), patch.object(automacao, "aguardar_login"), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=automacao.EnvioNaoIniciado(automacao.MSG_COPIA_BLOQUEADA)), \
+                    patch.object(automacao, "_aviso_de_bloqueio_visivel", return_value=toast), \
+                    patch.object(automacao, "registrar_erro") as registrar, patch.object(automacao, "log"):
+                with self.assertRaises(automacao.EnvioNaoIniciado):
+                    automacao.enviar_copia_pendente(MagicMock(), copia)
+            self.assertEqual(registrar.call_count, capturas)
+
+    def test_new_failure_messages_keep_the_text_the_assistant_recognizes(self):
+        for mensagem in (automacao.MSG_DASHBOARD_CONTINUOU_ABERTO, automacao.MSG_DASHBOARD_TENTATIVAS, automacao.MSG_COPIA_BLOQUEADA,
+                         automacao.MSG_BLOQUEIO_DEPOIS_DO_REPLACE):
+            self.assertIn("em uso ou bloqueado", mensagem)
+
 
 class PastaDashboardNaoConfiguradaTests(unittest.TestCase):
     def test_without_configured_folder_the_routines_refuse_before_opening_a_tab(self):

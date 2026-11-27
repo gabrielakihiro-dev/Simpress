@@ -2222,14 +2222,15 @@ MSG_DASHBOARD_ABERTO = (
 )
 AVISO_DASHBOARD_ABERTO = "Feche o Dashboard no Excel; o envio ao SharePoint continua sozinho quando ele for liberado."
 MSG_DASHBOARD_LIBERADO = f"{MARCA_DASHBOARD_LIBERADO}; continuando."
+# "em uso ou bloqueado" nas mensagens: domains/assistant_api_comum.py reconhece a falha por esse trecho (dashboard_em_uso_no_sharepoint).
 MSG_DASHBOARD_CONTINUOU_ABERTO = (
-    f"O Dashboard continuou aberto por {ESPERA_DASHBOARD_LIVRE_S // 60} min; nada foi substituído no SharePoint. Feche-o e envie de novo."
+    f"O Dashboard continuou em uso ou bloqueado (aberto no Excel) por {ESPERA_DASHBOARD_LIVRE_S // 60} min; nada foi substituído no SharePoint. Feche-o e envie de novo."
 )
 MSG_DASHBOARD_TENTATIVAS = (
-    f"O SharePoint recusou o envio {TENTATIVAS_ENVIO_BLOQUEADO} vezes com o Dashboard bloqueado; nada foi substituído. Feche-o e envie de novo."
+    f"O SharePoint recusou o envio {TENTATIVAS_ENVIO_BLOQUEADO} vezes com o Dashboard em uso ou bloqueado; nada foi substituído. Feche-o e envie de novo."
 )
-MSG_COPIA_BLOQUEADA = "O SharePoint recusou o envio com o aviso de arquivo bloqueado; nada foi enviado."
-MSG_BLOQUEIO_DEPOIS_DO_REPLACE = "O SharePoint mostrou o aviso de arquivo bloqueado depois do Replace; o Dashboard pode não ter sido substituído."
+MSG_COPIA_BLOQUEADA = "O SharePoint recusou o envio: o arquivo está em uso ou bloqueado; nada foi enviado."
+MSG_BLOQUEIO_DEPOIS_DO_REPLACE = "O SharePoint mostrou o Dashboard em uso ou bloqueado depois do Replace; o Dashboard pode não ter sido substituído."
 
 
 def _localizar_linha_do_dashboard(page: "Page"):
@@ -3022,6 +3023,14 @@ def conferir_recebimento(page: "Page", enviado: bytes, antes: bytes) -> "bool | 
     return False
 
 
+def _registrar_erro_do_envio(page: "Page | None") -> None:
+    """Captura do erro, exceto com o aviso de bloqueio na tela: ele traz o e-mail de quem abriu o Dashboard (LGPD)."""
+    if page is not None and _aviso_de_bloqueio_visivel(page):
+        log("Dashboard", "Captura da tela pulada: o aviso de arquivo bloqueado (com dado pessoal) está na tela.")
+        return
+    registrar_erro(page, "Dashboard")
+
+
 def enviar_copia_pendente(context: "BrowserContext", arquivo: Path) -> None:
     """Sobe ``arquivo`` à pasta com o nome que ele já tem, sem duplicar, baixar nem conferir: nunca substitui o Dashboard original (o nome é outro).
 
@@ -3035,7 +3044,7 @@ def enviar_copia_pendente(context: "BrowserContext", arquivo: Path) -> None:
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
         enviar_arquivo_para_pasta(page, arquivo)
     except Exception:
-        registrar_erro(page, "Dashboard")
+        _registrar_erro_do_envio(page)
         raise
     page.close()
 
@@ -3204,7 +3213,7 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
                     pass  # A logging/close error cannot undo a matching durable confirmation.
                 return 0
             sebrae_finalizacao.cancelar_envio_preparado(state_dir, envio_id)
-        registrar_erro(page, "Dashboard")
+        _registrar_erro_do_envio(page)
         raise
     except RotinaCancelada:
         # BaseException: fora do except acima. Cancelado antes do que pode ter subido, o registro ainda "preparado" vira "falhou".
