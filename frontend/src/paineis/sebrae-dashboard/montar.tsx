@@ -17,6 +17,7 @@ export function montar(_container: HTMLElement) {
     copiarTextoParaAreaTransferencia: texto => janela.copiarTextoParaAreaTransferencia(texto),
     confirmarAcao: dialogo => janela.confirmarAcao(dialogo),
     atualizarEstadoAutomacao: () => janela.atualizarEstadoAutomacao?.(),
+    acompanharExecucaoAutomacao: dados => janela.acompanharExecucaoAutomacao?.(dados),
     carregarResumoHistoricoSebrae: () => janela.carregarResumoHistoricoSebrae?.(),
     carregarConflitosSebrae: () => janela.carregarConflitosSebrae?.(),
     // Precisa continuar `undefined` quando ausente: abrirJanelaChamadoOs é chamada com `?.`.
