@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -228,7 +228,7 @@ def executar_antigos(
         for numero in a_ler:
             rotinas.verificar_cancelamento(f"Cancelado antes de ler {numero}.")
             try:
-                lido = _ler_chamado(context, pagina, numero, rotinas, modulo)
+                lido = _ler_chamado(context, cast("Page", pagina), numero, rotinas, modulo)
                 if isinstance(lido, str):
                     resultado["falhas"][numero] = lido[:200]
                     if isinstance(lido, _NaoEncontrado):

@@ -28,7 +28,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Locator, Page
@@ -519,7 +519,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
 def limpar_filtro(page: "Page", automacao: ModuleType, coluna: str) -> None:
     """Remove o filtro da coluna; com um filtro antigo ativo, a próxima pesquisa cruzaria os dois."""
     _preencher_filtro(page, automacao, coluna, "")
-    if _aguardar_grade_estavel(page, automacao, lambda g: bool(g["linhas"]) and (achar_cabecalho(g, coluna) is not None) and _valor_do_campo(page, achar_cabecalho(g, coluna)) == "", CONFIRMACAO_FILTRO_S) is None:
+    if _aguardar_grade_estavel(page, automacao, lambda g: bool(g["linhas"]) and (achar_cabecalho(g, coluna) is not None) and _valor_do_campo(page, cast(dict, achar_cabecalho(g, coluna))) == "", CONFIRMACAO_FILTRO_S) is None:
         raise automacao.RotinaErro(f"A grade do Endpoint não confirmou a limpeza do filtro '{coluna}'.")
 
 
