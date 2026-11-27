@@ -5,7 +5,8 @@ import { apiFetch } from "../../api";
 import type { PacoteLocalLista, PacoteLocalPrevia, PacoteLocalPreviaItem, PacoteLocalRestauracao } from "../../api-tipos.gerado";
 
 type Lista = PacoteLocalLista;
-type Previa = PacoteLocalPrevia;
+// links_alterados e invalidos: campos novos da prévia; remover a extensão quando api-tipos.gerado for regenerado.
+type Previa = PacoteLocalPrevia & { links_alterados?: { rotulo: string; antes: string | null; depois: string | null }[]; invalidos?: string[] };
 type Acao = PacoteLocalPreviaItem["acao"];
 
 const BASE = "/api/pacote-local";
@@ -182,6 +183,16 @@ export function SecaoPacoteLocal({ visivel, revisao, Cabecalho }: Props) {
               <button type="button" id="cfg-local-pacote-mostrar-todos" className="ck-btn ck-btn--secundario ck-btn--sm ckp-pacote__btn" onClick={() => setMostrarTodos(true)}>Mostrar todos (Igual e Manter)</button>
             ) : null}
             {previa.muda_links ? <p className="ckp-pacote__aviso" id="cfg-local-pacote-previa-links" data-status="alerta">Atenção: este pacote muda links e contas das automações. Confira antes de confirmar.</p> : null}
+            {previa.links_alterados?.length ? (
+              <ul className="ckp-pacote__links" id="cfg-local-pacote-previa-links-lista">
+                {previa.links_alterados.map(l => (
+                  <li key={l.rotulo}>{l.antes !== null || l.depois !== null ? `${l.rotulo}: ${l.antes ?? "(vazio)"} → ${l.depois ?? "(vazio)"}` : `${l.rotulo}: alterado`}</li>
+                ))}
+              </ul>
+            ) : null}
+            {previa.invalidos?.length ? (
+              <p className="ckp-meta ckp-pacote__invalidos" id="cfg-local-pacote-previa-invalidos">Voltam exatamente como estavam, mesmo com conteúdo inválido: {previa.invalidos.join(", ")}.</p>
+            ) : null}
             <p className="ckp-meta">Antes de restaurar, um pacote de desfazer do estado atual é criado automaticamente.</p>
             <div className="ckp-linha">
               {!jaIgual ? (

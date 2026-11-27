@@ -20,6 +20,12 @@ const PREVIA = {
   ],
   totais: { substituir: 1, criar: 1, igual: 1, manter: 1, apagar: 0 },
   muda_links: true, preview_token: "token-sintetico-1",
+  links_alterados: [
+    { rotulo: "Link do Dashboard", antes: "dashboard-antigo.exemplo.invalid", depois: "dashboard-novo-com-um-nome-de-host-muito-longo.exemplo.invalid" },
+    { rotulo: "Link do Endpoint", antes: null, depois: "endpoint.exemplo.invalid" },
+    { rotulo: "Contrato", antes: null, depois: null },
+  ],
+  invalidos: ["cliente.json", "lembretes.json"],
 };
 const MSG_PASTA = "A pasta não existe ou não aceita escrita.";
 
@@ -155,6 +161,13 @@ test("Pacote local: prévia, confirmação com corpo exato e conclusão", async 
   await expect(itens).toHaveCount(4);
   await expect(page.locator("#cfg-local-pacote-mostrar-todos")).toHaveCount(0);
   await expect(page.locator("#cfg-local-pacote-previa-links")).toHaveText("Atenção: este pacote muda links e contas das automações. Confira antes de confirmar.");
+  await expect(page.locator("#cfg-local-pacote-previa-links-lista li")).toHaveText([
+    "Link do Dashboard: dashboard-antigo.exemplo.invalid → dashboard-novo-com-um-nome-de-host-muito-longo.exemplo.invalid",
+    "Link do Endpoint: (vazio) → endpoint.exemplo.invalid",
+    "Contrato: alterado",
+  ]);
+  await expect(page.locator("#cfg-local-pacote-previa-invalidos")).toHaveText("Voltam exatamente como estavam, mesmo com conteúdo inválido: cliente.json, lembretes.json.");
+  expect(await semRolagemHorizontal(page)).toBe(true);
   expect(posts(s, "/restaurar")).toHaveLength(0);
 
   await page.locator("#cfg-local-pacote-confirmar").click();
@@ -169,10 +182,12 @@ test("Pacote local: prévia, confirmação com corpo exato e conclusão", async 
 });
 
 test("Pacote local: prévia sem mudança de links não mostra o aviso e Apagar só aparece se > 0", async ({ page }) => {
-  await simular(page, { previa: { ...PREVIA, muda_links: false, totais: { ...PREVIA.totais, apagar: 2 } } });
+  await simular(page, { previa: { ...PREVIA, muda_links: false, links_alterados: [], invalidos: [], totais: { ...PREVIA.totais, apagar: 2 } } });
   await abrirSecao(page);
   await page.locator(`button[data-pacote-restaurar="${ARQ_EXP}"]`).click();
   await expect(page.locator("#cfg-local-pacote-previa-links")).toHaveCount(0);
+  await expect(page.locator("#cfg-local-pacote-previa-links-lista")).toHaveCount(0);
+  await expect(page.locator("#cfg-local-pacote-previa-invalidos")).toHaveCount(0);
   await expect(page.locator("#cfg-local-pacote-previa-totais li[data-acao]")).toHaveText(["Substituir: 1", "Criar: 1", "Igual: 1", "Manter: 1", "Apagar: 2"]);
 });
 

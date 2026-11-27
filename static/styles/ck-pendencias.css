@@ -230,6 +230,8 @@ select.ck-entrada { appearance: none; padding-right: 28px; background-image: lin
 .ckp-pacote__itens li { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--cor-borda-suave); overflow-wrap: anywhere; }
 .ckp-pacote__acao-rotulo { flex: none; color: var(--cor-texto-mudo); }
 .ckp-pacote__itens li[data-acao="apagar"] .ckp-pacote__acao-rotulo { color: var(--cor-erro-texto); }
+.ckp-pacote__links { margin: 0; padding: 0 0 0 18px; font-size: var(--fs-ui); color: var(--cor-texto-suave); line-height: 1.5; }
+.ckp-pacote__links li, .ckp-pacote__invalidos { overflow-wrap: anywhere; }
 .ckp-pacote__detalhes { font-size: var(--fs-ui); color: var(--cor-texto-suave); }
 .ckp-pacote__detalhes summary { cursor: pointer; min-height: var(--altura-controle-sm); display: flex; align-items: center; }
 .ckp-pacote__detalhes p { margin: 6px 0 0; line-height: 1.5; }
