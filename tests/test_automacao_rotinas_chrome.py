@@ -2582,8 +2582,8 @@ class EnviarDashboardTests(unittest.TestCase):
         marcar.assert_called_once()
 
     def test_locked_notice_waits_goes_back_by_goto_checks_and_chooses_again_without_retry(self):
-        # O toast não some: goto na pasta LOGO (o "Retry" some; nunca reload), espera, grava o fim da espera, confere o SharePoint e
-        # escolhe de novo; Replace só depois.
+        # O toast não some: goto na pasta LOGO (o "Retry" some; nunca reload), espera, confere o SharePoint e escolhe de novo; o fim
+        # da espera só sai no diálogo Replace (depois do goto o aviso some, mas o arquivo pode continuar bloqueado).
         page = self._pagina({"substituir"})
         ordem = []
         voltas_no_aviso = []
@@ -2609,7 +2609,7 @@ class EnviarDashboardTests(unittest.TestCase):
             em_uso=em_uso, dialogo=lambda: page.goto.called, concluido=lambda: self._substituiu(page),
         )
         # ("goto", True): nenhuma espera entre ver o aviso e voltar à pasta
-        self.assertEqual(ordem, [("goto", True), "retomar depois do fim da espera", "incerto", "replace"])
+        self.assertEqual(ordem, [("goto", True), "retomar", "incerto", "replace"])
         self.assertGreater(page.wait_for_timeout.call_count, voltas_no_aviso[-1] + 30)  # a espera vem depois do goto
         page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_PASTA_MS)
         page.reload.assert_not_called()
@@ -2621,15 +2621,19 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertFalse([t for t in textos if "retry" in t.lower() or "tentar de novo" in t.lower()])
         self.assertNotIn("pessoa@exemplo.invalid", self.logs)
 
-    def test_locked_notice_on_every_attempt_stops_after_the_limit_without_replace(self):
+    def test_locked_notice_on_every_attempt_keeps_one_notice_and_stops_at_the_total_deadline_without_replace(self):
+        # Bloqueios seguidos: um "AÇÃO NECESSÁRIA" só e nenhum "Dashboard liberado" (o painel não pisca); o prazo total limita.
         page = self._pagina({"substituir"})
         escolhas = page.expect_file_chooser
         marcar = MagicMock()
-        with patch.object(automacao, "TENTATIVAS_ENVIO_BLOQUEADO", 3), self.assertRaises(automacao.RotinaErro) as erro:
+        with patch.object(automacao, "ESPERA_DASHBOARD_LIVRE_S", 150), self.assertRaises(automacao.RotinaErro) as erro:
             self._enviar(page, espera=automacao.EsperaDashboard(), ao_retomar=MagicMock(), marcar_incerto=marcar, dialogo=False, concluido=False,
                          em_uso=lambda: escolhas.call_count > page.goto.call_count)
-        self.assertEqual(str(erro.exception), automacao.MSG_DASHBOARD_TENTATIVAS)
-        self.assertEqual((escolhas.call_count, page.goto.call_count), (3, 2))
+        self.assertEqual(str(erro.exception), automacao.MSG_DASHBOARD_CONTINUOU_ABERTO)
+        self.assertGreaterEqual(escolhas.call_count, 2)
+        self.assertEqual(escolhas.call_count, page.goto.call_count)
+        self.assertEqual(self.logs.count(automacao.MARCA_DASHBOARD_ABERTO), 1)
+        self.assertNotIn(automacao.MARCA_DASHBOARD_LIBERADO, self.logs)
         marcar.assert_not_called()
         self.avisar.assert_called_once()
         page.locators["substituir"].filter.return_value.first.click.assert_not_called()
@@ -2664,8 +2668,15 @@ class EnviarDashboardTests(unittest.TestCase):
             self._enviar(page, concluido=False, marcar_incerto=marcar)
         marcar.assert_not_called()
 
+    def _dialogo_que_fecha(self, page, fecha: bool):
+        """Diálogo Replace/Keep both visível; o Escape fecha (``fecha``) ou não."""
+        page.locators.setdefault("substituir", MagicMock())
+        botoes = page.locators["substituir"].or_.return_value.filter.return_value
+        botoes.count.side_effect = lambda: 0 if fecha and page.keyboard.press.called else 1
+
     def test_guard_exhausted_before_replace_fails_without_marking_uncertain(self):
         page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True)
         marcar = MagicMock()
         guarda = automacao.RotinaErro("Substituir o Dashboard no SharePoint: o cursor do sistema se moveu antes do clique; não cliquei.")
         with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
@@ -2675,6 +2686,32 @@ class EnviarDashboardTests(unittest.TestCase):
         marcar.assert_not_called()
         page.locators["substituir"].filter.return_value.first.click.assert_not_called()
         page.keyboard.press.assert_called_with("Escape")
+
+    def test_guard_exhausted_with_the_dialog_still_open_marks_uncertain(self):
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=False)
+        marcar = MagicMock()
+        guarda = automacao.RotinaErro("Substituir o Dashboard no SharePoint: o estado mudou antes do clique; não cliquei.")
+        with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
+                self.assertRaises(automacao.RotinaErro) as erro:
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        self.assertNotIsInstance(erro.exception, automacao.EnvioNaoIniciado)
+        self.assertIn("continuou na tela", str(erro.exception))
+        marcar.assert_called_once()
+        page.locators["substituir"].filter.return_value.first.click.assert_not_called()
+
+    def test_cancel_with_the_replace_dialog_open_fails_only_if_escape_closes_it(self):
+        for fecha, incerto in ((True, False), (False, True)):
+            with self.subTest(fecha=fecha):
+                page = self._pagina({"substituir"})
+                self._dialogo_que_fecha(page, fecha=fecha)
+                marcar = MagicMock()
+                with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=automacao.RotinaCancelada()), \
+                        self.assertRaises(automacao.RotinaCancelada):
+                    self._enviar(page, concluido=False, marcar_incerto=marcar)
+                self.assertEqual(marcar.called, incerto)
+                page.keyboard.press.assert_called_with("Escape")
+                page.locators["substituir"].filter.return_value.first.click.assert_not_called()
 
     def test_unexpected_failure_after_choosing_the_file_marks_uncertain(self):
         page = self._pagina({"substituir"})
@@ -2695,7 +2732,7 @@ class EnviarDashboardTests(unittest.TestCase):
     # Rotina enviar inteira com o estado real do registro; só o navegador e o acompanhamento do upload são simulados.
 
     def _rodar_com_dashboard_aberto(self, *, aba=lambda: False, acompanhar=("ok",), cancelar=lambda: False, baixados=None, envio_preparado=False,
-                                    duplicar_falha=None):
+                                    duplicar_falha=None, dialogo_fecha=True):
         """``acompanhar``: por escolha do arquivo, "bloqueado" (toast antes do Replace) ou "ok" (Replace e concluído).
 
         Devolve (código ou exceção, registro, mocks)."""
@@ -2707,6 +2744,8 @@ class EnviarDashboardTests(unittest.TestCase):
         fila = list(baixados or [b"sharepoint"] * 5)
         page = MagicMock()
         roteiro = list(acompanhar)
+        botoes = page.get_by_role.return_value.or_.return_value.filter.return_value  # diálogo Replace/Keep both depois do Escape
+        botoes.count.return_value = 0 if dialogo_fecha else 1
 
         def baixar(_page):
             destino = raiz / f"baixado{len(fila)}.xlsx"
@@ -2719,6 +2758,8 @@ class EnviarDashboardTests(unittest.TestCase):
                 return True
             if passo == "guarda":
                 raise automacao.EnvioNaoIniciado("a guarda estourou antes do Replace")
+            if passo == "cancelado":
+                raise automacao.RotinaCancelada()
             incerto()
             if passo == "erro":
                 raise RuntimeError("falha depois do Replace")
@@ -2814,12 +2855,21 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(mocks["page"].expect_file_chooser.call_count, 2)
         self.avisar.assert_called_once()
 
-    def test_locked_notice_until_the_attempt_limit_fails_the_send_and_never_leaves_it_uncertain(self):
-        with patch.object(automacao, "TENTATIVAS_ENVIO_BLOQUEADO", 2):
-            resultado, registro, _ = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado",) * 2, baixados=[b"c"] * 5)
-        self.assertEqual(str(resultado), automacao.MSG_DASHBOARD_TENTATIVAS)
+    def test_locked_notice_until_the_total_deadline_fails_the_send_and_never_leaves_it_uncertain(self):
+        with patch.object(automacao, "ESPERA_DASHBOARD_LIVRE_S", 150):
+            resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado",) * 10, baixados=[b"c"] * 10)
+        self.assertEqual(str(resultado), automacao.MSG_DASHBOARD_CONTINUOU_ABERTO)
         self.assertEqual(registro["status"], "falhou")
+        self.assertGreaterEqual(mocks["acompanhar"].call_count, 2)
+        self.assertEqual(sum(t.startswith(automacao.MARCA_DASHBOARD_ABERTO) for t in self.logs_rotina), 1)
         self._espera_fechada()
+
+    def test_cancel_with_the_replace_dialog_open_in_the_routine(self):
+        for fecha, status in ((True, "falhou"), (False, "incerto")):
+            with self.subTest(fecha=fecha):
+                resultado, registro, _ = self._rodar_com_dashboard_aberto(acompanhar=("cancelado",), dialogo_fecha=fecha)
+                self.assertIsInstance(resultado, automacao.RotinaCancelada)
+                self.assertEqual(registro["status"], status)
 
     def test_guard_exhausted_before_replace_leaves_the_send_failed(self):
         resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("guarda",))
@@ -2828,8 +2878,15 @@ class EnviarDashboardTests(unittest.TestCase):
         mocks["registrar"].assert_not_called()
 
     def test_cancel_between_the_steps_of_the_resume_downloads_nothing(self):
-        liberado = lambda: automacao.MARCA_DASHBOARD_LIBERADO in str(self.log_rotina.call_args_list)  # noqa: E731
-        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado", "ok"), cancelar=liberado)
+        sondas_depois_do_goto = []  # a sonda da aba no começo da volta seguinte é o último passo antes da retomada
+
+        def aba():
+            sondas_depois_do_goto.append(self.page.goto.called)
+            return False
+
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(
+            acompanhar=("bloqueado", "ok"), aba=aba, cancelar=lambda: any(sondas_depois_do_goto),
+        )
         self.assertIsInstance(resultado, automacao.RotinaCancelada)
         self.assertEqual(registro["status"], "falhou")
         self.assertEqual(mocks["baixar"].call_count, 1)  # só o download conferido; a retomada parou antes de baixar
@@ -2863,9 +2920,11 @@ class EnviarDashboardTests(unittest.TestCase):
         registrar.assert_called_once()  # antes do envio a captura continua
 
     def test_new_failure_messages_keep_the_text_the_assistant_recognizes(self):
-        for mensagem in (automacao.MSG_DASHBOARD_CONTINUOU_ABERTO, automacao.MSG_DASHBOARD_TENTATIVAS, automacao.MSG_COPIA_BLOQUEADA,
-                         automacao.MSG_BLOQUEIO_DEPOIS_DO_REPLACE):
+        for mensagem in (automacao.MSG_DASHBOARD_CONTINUOU_ABERTO, automacao.MSG_COPIA_BLOQUEADA):
             self.assertIn("em uso ou bloqueado", mensagem)
+        # Depois do Replace o envio é incerto: nunca "em uso" (que leva a reenviar), e sim "não vi o aviso de envio concluído".
+        self.assertNotIn("em uso ou bloqueado", automacao.MSG_BLOQUEIO_DEPOIS_DO_REPLACE)
+        self.assertIn("Não vi o aviso de envio concluído", automacao.MSG_BLOQUEIO_DEPOIS_DO_REPLACE)
 
 
 TOAST_HTML = """<!doctype html><html><body>

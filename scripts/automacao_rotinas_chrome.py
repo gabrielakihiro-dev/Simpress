@@ -2215,7 +2215,6 @@ LINHAS_NA_MENSAGEM = 5
 ESPERA_DASHBOARD_LIVRE_S = 15 * 60  # prazo único por execução, contado da primeira espera; nunca reiniciado
 INTERVALO_SONDA_DASHBOARD_S = 5
 INTERVALO_NOVA_TENTATIVA_ENVIO_S = 60  # o aviso de bloqueio não some sozinho: espera isso antes de voltar à pasta e escolher de novo
-TENTATIVAS_ENVIO_BLOQUEADO = 15
 MARCA_DASHBOARD_ABERTO = "AÇÃO NECESSÁRIA: feche o Dashboard"
 MARCA_DASHBOARD_LIBERADO = "Dashboard liberado"
 MSG_DASHBOARD_ABERTO = (
@@ -2230,11 +2229,11 @@ GOTO_PASTA_MS = 30_000  # volta à pasta depois do aviso de bloqueio: prazo curt
 MSG_DASHBOARD_CONTINUOU_ABERTO = (
     f"O Dashboard continuou em uso ou bloqueado (aberto no Excel) por {ESPERA_DASHBOARD_LIVRE_S // 60} min; nada foi substituído no SharePoint. Feche-o e envie de novo."
 )
-MSG_DASHBOARD_TENTATIVAS = (
-    f"O SharePoint recusou o envio {TENTATIVAS_ENVIO_BLOQUEADO} vezes com o Dashboard em uso ou bloqueado; nada foi substituído. Feche-o e envie de novo."
-)
 MSG_COPIA_BLOQUEADA = "O SharePoint recusou o envio: o arquivo está em uso ou bloqueado; nada foi enviado."
-MSG_BLOQUEIO_DEPOIS_DO_REPLACE = "O SharePoint mostrou o Dashboard em uso ou bloqueado depois do Replace; o Dashboard pode não ter sido substituído."
+MSG_BLOQUEIO_DEPOIS_DO_REPLACE = (
+    "Não vi o aviso de envio concluído: o SharePoint mostrou o aviso de arquivo bloqueado depois do Replace; "
+    "o Dashboard pode não ter sido substituído."
+)
 
 
 def _localizar_linha_do_dashboard(page: "Page"):
@@ -2338,12 +2337,12 @@ def _voltar_a_pasta_depois_do_bloqueio(page: "Page", espera: EsperaDashboard) ->
 def aguardar_dashboard_livre(page: "Page", espera: EsperaDashboard) -> bool:
     """Espera enquanto o Dashboard estiver aberto (aba do Excel neste Chrome ou aviso de bloqueio); ``True`` se esperou.
 
-    Livre, grava o fim da espera (``EsperaDashboard.liberado``) antes de devolver, inclusive depois de uma volta à pasta por causa
-    do aviso de bloqueio. Depois de uma espera que aconteceu após o download conferido, quem chama confere de novo o SharePoint.
+    Não grava o fim da espera: depois do goto o aviso some mesmo com o arquivo ainda bloqueado. O fim sai no diálogo Replace ou no
+    aviso de concluído (``_acompanhar_envio``), antes da Duplicata (quem chama) ou na saída da rotina (``EsperaDashboard.encerrar``).
+    Depois de uma espera que aconteceu após o download conferido, quem chama confere de novo o SharePoint.
     """
     # A trava sebrae_dashboard_base.guard (rodar_rotina_enviar) continua presa durante a espera: importação e atualização esperam junto.
     if not _dashboard_em_uso(page):
-        espera.liberado()
         return False
     espera.avisar_aberto()
     while True:
@@ -2352,8 +2351,8 @@ def aguardar_dashboard_livre(page: "Page", espera: EsperaDashboard) -> bool:
         else:
             espera.esperar(page, INTERVALO_SONDA_DASHBOARD_S)
         if not _dashboard_em_uso(page):
-            espera.liberado()
             return True
+
 
 def _linhas_selecionadas(page: "Page"):
     return page.get_by_role("row", selected=True)
@@ -2917,7 +2916,7 @@ def enviar_arquivo_para_pasta(
             raise EtapaInstavel(str(erro)) from erro
 
     retomar = False
-    for tentativa in range(1, TENTATIVAS_ENVIO_BLOQUEADO + 1):
+    while True:  # cada volta depois do aviso de bloqueio passa por EsperaDashboard.esperar: o prazo total limita
         # Dashboard aberto antes de escolher o arquivo; depois de qualquer espera aqui (já depois do download conferido), confere de novo.
         if espera is not None and aguardar_dashboard_livre(page, espera):
             retomar = True
@@ -2930,18 +2929,32 @@ def enviar_arquivo_para_pasta(
             bloqueado = _acompanhar_envio(page, espera, _incerto)
         except EnvioNaoIniciado:
             raise
+        except RotinaCancelada:
+            # Cancelado antes do Replace: fecha o diálogo de nome repetido; se ele continuar na tela, um clique esquecido em Replace
+            # sobreporia o Dashboard sem registro, então o envio fica incerto.
+            if not marcado and not _dialogo_de_nome_fechado(page):
+                _incerto()
+            raise
         except Exception:
             _incerto()
             raise
         if not bloqueado:
             return
-        if tentativa == TENTATIVAS_ENVIO_BLOQUEADO:
-            break
         assert espera is not None  # sem espera, o aviso de bloqueio já levantou EnvioNaoIniciado
         espera.avisar_aberto()
         _voltar_a_pasta_depois_do_bloqueio(page, espera)  # goto logo (o "Retry" do aviso some) e só depois espera
         retomar = True
-    raise RotinaErro(MSG_DASHBOARD_TENTATIVAS)
+
+
+def _dialogo_de_nome_fechado(page: "Page") -> bool:
+    """Escape no diálogo Replace/Keep both; ``True`` só se nenhum dos dois botões continua visível (sem como conferir: ``False``)."""
+    try:
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(500)
+        botoes = page.get_by_role("button", name=_BOTAO_SUBSTITUIR).or_(page.get_by_role("button", name=_BOTAO_MANTER_AMBOS))
+        return botoes.filter(visible=True).count() == 0
+    except Exception:
+        return False
 
 
 def _acompanhar_envio(page: "Page", espera: "EsperaDashboard | None", incerto: Callable[[], None]) -> bool:
@@ -2986,11 +2999,9 @@ def _acompanhar_envio(page: "Page", espera: "EsperaDashboard | None", incerto: C
             try:
                 aguardar_estabilidade_pre_clique(lambda: visivel(substituir), "Substituir o Dashboard no SharePoint")
             except RotinaErro as erro:  # o Replace não foi clicado: fecha o diálogo e nada é substituído
-                try:
-                    page.keyboard.press("Escape")
-                except Exception:
-                    pass
-                raise EnvioNaoIniciado(str(erro)) from erro
+                if _dialogo_de_nome_fechado(page):
+                    raise EnvioNaoIniciado(str(erro)) from erro
+                raise RotinaErro(f"{erro} O diálogo Replace/Keep both continuou na tela; confira a pasta antes de enviar de novo.") from erro
             incerto()  # depois da guarda, logo antes do clique: guarda estourada não deixa o registro incerto
             substituir.first.click()
             substituiu = True
@@ -3057,7 +3068,7 @@ def conferir_recebimento(page: "Page", enviado: bytes, antes: bytes) -> "bool | 
 def _registrar_erro_do_envio(page: "Page | None", *, no_envio: bool) -> None:
     """Captura do erro só antes do envio: depois de começar a escolher o arquivo, o aviso do SharePoint (com o e-mail de quem abriu
     o Dashboard) pode estar na tela numa variante que o padrão não reconhece. Falha fechada (LGPD)."""
-    if no_envio or (page is not None and _aviso_de_bloqueio_visivel(page)):
+    if no_envio:
         log("Dashboard", "Captura da tela pulada: pode haver dado pessoal na tela (aviso do SharePoint).")
         return
     registrar_erro(page, "Dashboard")
@@ -3109,8 +3120,9 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
         page = nova_aba(context, pasta_dashboard_url(), "Dashboard")
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
         definir_pagina_ativa_para_recuperacao(page)
-        # Antes da Duplicata (nada baixado ainda: o download conferido vem depois, sem retomada aqui).
-        aguardar_dashboard_livre(page, espera)
+        # Antes da Duplicata (nada baixado ainda: o download conferido vem depois, sem retomada aqui). Aqui só a aba conta (aba nova).
+        if aguardar_dashboard_livre(page, espera):
+            espera.liberado()
 
         # Sem retry aqui: duplicar_dashboard_na_pasta já refaz só a navegação internamente
         # (etapa_resiliente em _abrir_menu_duplicata); envolver a função inteira repetiria
