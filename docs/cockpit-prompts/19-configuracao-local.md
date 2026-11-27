@@ -64,7 +64,7 @@ Regras:
 
 - Senha e MFA **nunca** são pedidos nem gravados. O modal diz: "Senha e MFA você digita no Chrome de automação."
 - Variável de ambiente vence o arquivo (`core/config.py`, `local_setting`). Se `SIMPRESS_DASHBOARD_EMAIL` (ou outra) estiver definida, o campo aparece **só leitura** com o aviso `Definido por variável de ambiente`.
-- Validação no servidor: e-mail com formato válido; `endpoint_usuario` sem `@`, sem `\` e sem espaço; `dashboard_pasta_url` começando com `https://`.
+- Validação no servidor: e-mail com formato válido; `endpoint_usuario` sem `@`, sem `\` e sem espaço; `dashboard_pasta_url` começando com `https://`, sem `\` e sem `@` no endereço (usuário embutido), porque `https://a.com\@b.com` mostraria um site e abriria outro (27/11/2026). Vale no `PUT` e na validação do Pacote local.
 
 ### Seção 2: Dados do cliente (`config/cliente.json`)
 
@@ -164,6 +164,150 @@ O `.env` é lido em cada carga de `OpenRouterSettings.load` (`read_env_file`), s
   - O Solicitante do UX não aparece (já tem tela no modal do UX e a API não devolve status).
   - O artefato de referência (`DGgv5VBXhu4NrZ9DbxFQhC`) não pôde ser lido; o visual segue o painel e os modais atuais.
   - `Usar também no Outlook` usa o `.ckp-alternar` existente, que marcado fica em âmbar como nos outros interruptores.
+
+## Pacote local (aprovado em 26/11/2026)
+
+Exporta e restaura, num arquivo `.zip` deste computador, configurações, históricos e planilhas atuais. Chaves de IA, senhas e marcas de ações irreversíveis ficam de fora. O nome da função é sempre "Pacote local"; a palavra "backup" não aparece em rótulo, rota ou arquivo (ela é de Backups (F3), outra coisa).
+
+### Onde fica
+
+- Último bloco do modal `Configuração local` (`Prontidão da base > Configuração local`), depois de "Assistente com IA". Sem aba nem atalho novo.
+- Seção `#cfg-local-secao-pacote`, em `frontend/src/paineis/configuracao-local/pacote.tsx` (montada por `corpo.tsx`). Usa `Cabecalho`, `ckp-secao`, `ck-campo`, `ck-entrada` e `ck-btn`.
+- Domínio: `domains/pacote_local.py`. Rotas: `routers/pacote_local.py` (`/api/pacote-local`), montadas em `main.py`. Contrato: `docs/arquitetura/CONTRATOS_API_BACKEND.md`, seção "Pacote local".
+
+### Pasta do pacote
+
+- Padrão: `data/pacotes_locais/` (criada se faltar). Fora do Git (`/data/pacotes_locais/` no `.gitignore`; `pacote-local-*.zip`, `desfazer-*.zip` e `.pacote-local-*.tmp` também, em qualquer pasta).
+- A pasta escolhida fica em `config/pacote_local.json` (`{"pasta": "<caminho absoluto>", "desfazer_conhecidos": [<SHA-256>]}`; pasta vazia ou ausente = padrão; `desfazer_conhecidos` é o registro dos `desfazer-*.zip` criados por este app, ver "Arquivo atual inválido"; salvar a pasta preserva o registro e vice-versa; chave ausente = lista vazia). Fora do Git (`/config/pacote_local.json`). Esse arquivo **nunca** entra no pacote e nunca é restaurado.
+- Validação ao salvar **e** ao usar a pasta: sem caractere de controle; absoluta, existente, pasta de verdade, gravável (cria e apaga um arquivo temporário); nem ela nem nenhum pai é link ou junção; dentro do repositório só a pasta padrão (fora dela o zip, com dado pessoal, poderia ir ao Git; isso já exclui `static/` e `.transactions/`). Nuvem, rede e repositório são conferidos no caminho resolvido, então `..` não contorna.
+- Recusa rede e unidade removível: caminhos `\\` ou `//` (também depois de resolver, o que pega unidade de rede mapeada); no Windows, só unidade fixa (`DRIVE_FIXED`) **e** fora de HD externo ou cartão (decisão do usuário em 27/11/2026): o Windows informa HD USB como fixo, então o barramento do volume é consultado (`IOCTL_STORAGE_QUERY_PROPERTY`, `BusType`) e USB, 1394, iSCSI, SD e MMC são recusados com a mesma mensagem; se a consulta falhar, a pasta também é recusada. Em outros sistemas essa checagem é pulada. Testado só com dublês (sem Windows real aqui).
+- Recusa pastas sincronizadas: dentro das variáveis `OneDrive`, `OneDriveCommercial` ou `OneDriveConsumer` (raiz também resolvida), dentro de um ponto de sincronização do OneDrive/SharePoint registrado no Windows (`HKCU\Software\SyncEngines\Providers\OneDrive\*\MountPoint`; sem a chave, nada muda), ou com um componente de caminho que contenha `onedrive`, `dropbox`, `google drive` ou `icloud` (sem diferenciar maiúsculas).
+- Mensagens de erro (textos exatos; a tela mostra a do servidor em `role="alert"`):
+  - `A pasta não existe ou não aceita escrita.` (inexistente ou sem escrita)
+  - `Use uma pasta deste computador (sem OneDrive, rede ou unidade removível).` (rede, sincronizada ou removível)
+  - `Pasta não permitida.` (dentro do repositório fora da padrão, link ou caractere de controle)
+- Salvar a pasta: 422 com a mensagem acima, nada gravado. Gravação atômica com trava (409 `Arquivos ocupados; tente de novo em instantes.`; 503 `Não foi possível salvar a pasta; tente de novo.` se o disco recusar). Pasta configurada que sumiu: a lista mostra `erro_pasta` e nenhum pacote.
+
+### Textos aprovados da tela
+
+- Título `Pacote local`; descrição `Guarda configurações, históricos e planilhas atuais num arquivo .zip nesta máquina. Chaves de IA e senhas ficam de fora.`; aviso `Contém dados pessoais; não compartilhe.`
+- Campo `Pasta do pacote` com o botão `Salvar pasta`; ajuda `Vazio = padrão data/pacotes_locais/. Só pasta deste computador (sem OneDrive, rede ou unidade removível).`; linha `Pasta: <pasta configurada>`.
+- Botão `Exportar pacote` / `Exportando…`; status `Pacote exportado: <arquivo>` (também vai ao toast).
+- Vazio: `Nenhum pacote na pasta. Exporte um pacote ou copie um .zip para a pasta.`
+- Prévia: título `Prévia da restauração`; `<arquivo> · criado em <data> · versão <x.y.z>`; contagens `Substituir`, `Criar`, `Igual`, `Manter` e `Apagar` (só se maior que zero); `Mostrar todos (Igual e Manter)`; `Atenção: este pacote muda links e contas das automações. Confira antes de confirmar.` (só se `muda_links`); `Antes de restaurar, um pacote de desfazer do estado atual é criado automaticamente.`; botões `Confirmar restauração` / `Restaurando…` (perigo) e `Cancelar`.
+- Sucesso: `Restauração concluída. Pacote de desfazer: <arquivo>` com o botão `Recarregar página`.
+- Recusas: `Pacote recusado: <motivo>` (na prévia) e `Restauração recusada: <motivo>` (a prévia continua na tela).
+- Quadro `O que entra e o que fica de fora` (`<details>`), com o texto aprovado da spec.
+
+### Estados da tela
+
+- **Lista:** tabela no desktop (Arquivo, Tipo `Exportação`/`Desfazer`, Criado em `dd/mm/aaaa hh:mm`, Tamanho e `Restaurar…`); em tela estreita, o mesmo conteúdo em cartões. Mais recente primeiro. Recarrega a cada abertura do modal.
+- **Exportando:** botão desabilitado com `Exportando…`.
+- **Prévia:** o título recebe o foco. Por padrão só aparecem Substituir, Criar e Apagar; `Mostrar todos` inclui Igual e Manter.
+- **Restaurando:** a seção tem `aria-busy="true"`; os botões ficam desabilitados.
+- **Já igual:** se a restauração voltar 409 `Este pacote já corresponde ao estado atual.`, a tela mostra essa frase e esconde `Confirmar restauração`.
+- **Concluído:** `Recarregar página` (faz `location.reload()`). A página não recarrega sozinha.
+- **Erros:** 422 da prévia vira `Pacote recusado`; 409 da restauração vira `Restauração recusada` (role `alert`, com foco na mensagem); 500 vira `Falha ao restaurar. Os arquivos anteriores foram recuperados.` Quando a volta automática também falha, a mensagem diz para conferir `.transactions` antes de usar o app.
+
+### Exportar
+
+1. `POST /api/pacote-local/exportar`, sem corpo. Lê todos os itens da allowlist numa só trava (`lock_paths`), então a cópia é coerente.
+2. Confere o conteúdo de cada arquivo atual (a mesma validação da prévia). Se um estiver inválido, para com 422 `Pacote recusado: conteúdo inválido em <nome do arquivo>`, só o nome (ex.: `cliente.json`), nunca o caminho, e nada é gravado. Senão, grava `pacote-local-AAAAMMDD-HHMMSS.zip` com um `manifesto.json` (formato 1, tipo, versão do app, data, lista de arquivos com tamanho e SHA-256, lista de ausentes e `invalidos`, sempre vazia na exportação). Grava num temporário `.pacote-local-*.tmp` com fsync, reserva o nome (criação exclusiva), troca com `os.replace` e faz fsync da pasta.
+3. Reabre o zip e o confere com a mesma validação da prévia. Se não passar (por exemplo, um arquivo atual inválido), apaga o zip e responde 422 `Pacote recusado: <motivo>`.
+4. Nunca sobrescreve: se o nome já existe, espera um segundo e tenta outro; se mesmo assim colidir, 409.
+5. Limites: 60 MB por arquivo (o `MAX_UPLOAD_BYTES` do app) e 300 MB no total. Acima disso, 422.
+
+### Restaurar (ordem do código)
+
+1. Sem `confirmado: true` no corpo: 422, nada acontece. A tela envia `true` só no clique de `Confirmar restauração`.
+2. Guardas, sem espera (409 se alguma estiver ocupada): importação em andamento, por upload ou por caixa de entrada (`uma importação está em andamento`); automação do Chrome em andamento (`uma automação está em execução`); gravação pendente em `.transactions` (`há uma gravação pendente para conferir em .transactions`). Logo depois da guarda de upload liga a trava `RESTAURANDO`: até o fim da restauração, iniciar uma rotina do Chrome pelo site (ou pelo agendamento) responde 409 `Uma restauração do Pacote local está em andamento; tente de novo em instantes.`
+3. Valida o zip inteiro (ver "Validação" abaixo) sem gravar nada.
+4. Recalcula o `preview_token` (SHA-256 do zip e dos hashes atuais dos itens da allowlist, comparados com `hmac.compare_digest`). Se mudou: 409 `o estado mudou desde a prévia; abra a prévia de novo`. Se nada muda: 409 `Este pacote já corresponde ao estado atual.`
+5. Abre a transação `inventory_state_transaction` sobre a allowlist (nível 1 e 2 numa chamada só). Dentro dela, reconfere os hashes.
+6. **Antes de gravar**, cria o pacote de desfazer `desfazer-AAAAMMDD-HHMMSS.zip` na mesma pasta com o estado atual, como está (arquivo atual inválido vai com os bytes brutos e entra em `invalidos`), e o confere a partir dos mesmos bytes que gravou (montado em memória, sem reler a pasta). Se falhar, apaga o desfazer e para com 409 `o pacote de desfazer do estado atual não passou na conferência (...)`. Nada é gravado. O SHA-256 desses bytes entra em `desfazer_conhecidos` de `config/pacote_local.json` **na mesma transação** (o arquivo também é alvo da transação), então, se a restauração voltar atrás, o registro volta junto.
+7. Prepara cada arquivo `criar` ou `substituir` (com a conferência dos bytes) e apaga só o que o desfazer manda apagar. Confere de novo a automação (uma rotina iniciada fora do site): se houver, 409 e nada é gravado. Aplica, carrega o banco para provar que o conjunto abre, faz commit e publica o estado. Se o banco não carregar: sem cadastro, ou com um desfazer cujo `invalidos` tem o cadastro ou o InvAll (devolve um estado que já estava inválido antes), publica o estado vazio, como um app sem planilhas; fora isso, volta atrás.
+8. Falha: rollback pela transação, e o desfazer criado no passo 6 é apagado (o estado não mudou). Se a gravação já tinha sido feita e só o recarregamento falhou: 500 `A restauração foi gravada, mas o site não recarregou os dados; reinicie o app.`
+9. Log: só ação, contagens, SHA-256 do pacote e o tipo do erro. Nunca conteúdo, valores ou nomes de pessoas.
+
+Regra da restauração: arquivo da allowlist que existe hoje e não está no pacote fica **mantido** (`manter`). A única exceção é o `ausentes` de um pacote de desfazer, que é apagado.
+
+### Como desfazer
+
+- Cada restauração cria um pacote `desfazer-*.zip` com o estado de antes. Ele aparece na lista com o tipo `Desfazer`.
+- Retenção (decisão do usuário em 27/11/2026): o app **nunca** apaga um `desfazer-*.zip` sozinho, salvo o desfazer de uma restauração que voltou atrás. Para liberar espaço, o usuário apaga os antigos pelo Explorer.
+- Para desfazer, escolha esse pacote, abra a prévia e confirme. O desfazer também cria o seu próprio desfazer antes de gravar, então a volta pode ser refeita.
+- Ida e volta testada: exportar, alterar, restaurar e desfazer volta ao estado exato, inclusive apagando o que não existia antes.
+
+### Arquivo atual inválido (decisões do usuário em 27/11/2026)
+
+- **Exportar** continua bloqueado: 422 `Pacote recusado: conteúdo inválido em <nome do arquivo>` (só o nome, também na prévia).
+- **Restaurar** é permitido: o desfazer guarda o arquivo inválido com os bytes exatos e o lista em `invalidos` do manifesto. A prévia mostra esses nomes em `invalidos`, e restaurar o desfazer devolve os bytes brutos (a conferência de bytes continua).
+- Brecha fechada: um arquivo em `invalidos` só passa sem validar o conteúdo se o SHA-256 do zip inteiro estiver em `desfazer_conhecidos` (desfazer criado por este app). Desfazer de fora com `invalidos` não vazio: 422 `manifesto ausente ou inválido`. Exportação com `invalidos` não vazio, item de `invalidos` fora de `arquivos` ou fora da allowlist: também 422.
+
+### Validação do zip (prévia, restauração e conferência do desfazer)
+
+Qualquer falha é 422 `Pacote recusado: <motivo>`, sem gravar nada. Motivos: `manifesto ausente ou inválido`; `arquivo fora da lista permitida`; `arquivo não confere com o manifesto`; `caminho inválido no pacote`; `pacote grande demais (limite <N> MB)`; `pacote de uma versão mais nova do app`; `conteúdo inválido em <nome do arquivo>` (só o nome, nunca o caminho).
+
+- Zip sem cifra, sem pasta, sem link, sem caminho absoluto, sem `..`, sem letra de unidade, sem `\`, sem caractere de controle, sem nome reservado do Windows, sem duplicado (sem diferenciar maiúsculas).
+- Manifesto de esquema estrito; entradas iguais ao manifesto; cada caminho igual a um item da allowlist. **O destino vem da allowlist, nunca do nome dentro do zip.**
+- O zip é lido uma vez só (até 300 MB + 1 byte): o SHA-256 do zip e a validação usam os mesmos bytes, então trocar o arquivo no meio não engana a conferência.
+- Tamanho e SHA-256 de cada arquivo conferem, lidos em streaming: a leitura para em `tamanho + 1` e nos limites de 60 MB por arquivo e 300 MB no total (sem limite de razão de compressão: JSON repetitivo comprime mais de 100 vezes).
+- O tipo do manifesto bate com o nome (`pacote-local-` = exportação, `desfazer-` = desfazer); senão, `manifesto ausente ou inválido`.
+- `.json` precisa ser JSON válido; `.xlsx` passa pelo validador de arquivo seguro e não pode ter macro (`vbaProject`); as duas planilhas de entrada passam pelo validador de upload. `config/contas_automacao.json` e `config/cliente.json` têm os valores revalidados (e-mail, usuário, link, contrato e CNPJ). `historico_chamados.json` precisa ter a lista `chamados`.
+- Pacote de versão mais nova que o app é recusado. Versão igual ou mais antiga entra.
+- Manifesto: a chave `invalidos` é obrigatória (lista de caminhos já presentes em `arquivos`; vazia em exportação). Pacotes da primeira versão, sem essa chave, são recusados com `manifesto ausente ou inválido`.
+
+### Hosts dos links na prévia (decisão do usuário em 27/11/2026)
+
+- A prévia devolve `links_alterados: [{rotulo, antes, depois}]` (vazia quando nada muda), só para contas, cliente, representantes e instruções do Assistente que seriam criados ou substituídos.
+- Links de `config/contas_automacao.json` (rótulos de `LINKS`): `antes` e `depois` são só o domínio (`urlsplit(...).hostname`, com `\` lido como `/`, como o Chrome faz; sem esquema, porta, caminho, query, usuário ou token); vazio ou inválido = `null`. Contas (rótulos de `CONTAS`), campos do cliente (`Contrato`, `CNPJ de faturamento`, `Séries dos notebooks do próprio cliente`), `Representantes regionais`, `Representantes regionais (padrão)` e `Instruções do Assistente`: só o rótulo, com `antes` e `depois` `null`. Nada disso vai para log.
+- Tela (textos aprovados pelo usuário em 27/11/2026): lista abaixo do aviso aprovado; link `<rótulo>: <antes ou (vazio)> → <depois ou (vazio)>`; demais `<rótulo>: alterado`. Com `invalidos`: `Voltam exatamente como estavam, mesmo com conteúdo inválido: <nomes>.`
+
+### Só neste computador
+
+- Todas as rotas (lista, pasta, exportar, prévia e restaurar) só aceitam pedido direto de `127.0.0.1` ou `::1`. Com acesso pela rede ou pelo Tailscale ligado, a resposta é 403 `Disponível só neste computador.` Todas exigem o cookie de sessão (401 sem ele).
+
+### O que entra e o que fica de fora
+
+Entra (allowlist fixa em `domains/pacote_local.py`, `ALLOWLIST`):
+
+- **Configurações** (`config/`): `cliente.json`, `contas_automacao.json` (contas e links das automações, sem senha), `contato_origem.json`, `representantes_regionais.json`.
+- **Planilhas atuais:** `EquipamentosDetalhes_atual.xlsx`, `InvAllComputersSummary_atual.xlsx`, `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx`, `data/planilhas_entrada/_modelos/transferencia.xlsx` (modelo importado, vence o modelo padrão) e `modelos/EquipamentosDetalhes-exportacao.xlsx` (se existir).
+- **Dados do estado** (`data/state/`): unidades, apelidos modificados, usuários manuais e a pendência de usuário (`usuarios_pendencias.json`, par dos manuais), usuários do Entra, nomes manuais, hostnames removidos, histórico de alterações, histórico de comparações (o que o Resumo usa), histórico de transferências, cobertura e cobertura arquivada, backups regionais (decisões), configurações do Assistente (instruções, notas, busca na web), representantes e modelo de cabo padrão, solicitante do UX, observações de OS, vínculos de chamados e OS, códigos de PowerShell, lembretes, observações do Sebrae, chamados do Sebrae já encerrados (sem texto nem nome) e `historico_chamados.json` (relatório de chamados e OS).
+
+Fica de fora (tupla `FORA`, com motivo):
+
+- `.env` e chaves de IA: segredo.
+- `data/state/sebrae_credenciais.json`: senha do chamado.
+- Sessão do site (`%LOCALAPPDATA%`) e perfil do Chrome de automação: login, cookies e MFA do usuário.
+- `data/state/config_backups/`: cópias antigas de contas, com segredo possível.
+- `config/pacote_local.json`: aponta a pasta do próprio pacote.
+- `.transactions/` e `.atomic-transactions`: gravação em andamento.
+- Marcas de ações irreversíveis (envios, finalizações, agendamentos): chamados Sebrae em andamento, finalizações, agendamentos, fechamentos, o estado do Dashboard e do SharePoint (`sebrae_*`, `dashboard_agendamento.json`, `inventory_update_idempotency.json`), `ux_chamados_historico.json`, `ux_tickets_historico.json`, `os_marcas_finalizacao.json`, `outlook_email_modelos.json`. Restaurar uma versão antiga repetiria um envio ou uma finalização.
+- Travas (`automacao_chrome.lock`, `.cancelar`, `**/.*.lock`) e caixas de entrada (`entrada_automatica`, `entrada_chamados`, `entrada_usuarios_entra`): pertencem ao processo que está rodando.
+- `data/state/sebrae_anexos/`, `assistente_conversas.json`, `_backups` das importações, relatórios mensais e anotações do histórico (pastas grandes ou compartilhadas).
+
+Nota: a tupla `FORA` existe para documentar. A inclusão no pacote é decidida só pela `ALLOWLIST`; um arquivo novo fica de fora até entrar nela.
+
+### Seletores e ids
+
+- Seção: `#cfg-local-secao-pacote`; título `#cfg-local-titulo-pacote`.
+- Pasta: `#cfg-local-pacote-form-pasta`, `#cfg-local-pacote-pasta`, `#cfg-local-pacote-salvar-pasta`, `#cfg-local-pacote-pasta-ajuda`, `#cfg-local-pacote-pasta-erro` (`role="alert"`), `#cfg-local-pacote-pasta-atual`.
+- Exportar: `#cfg-local-pacote-exportar`; mensagem: `#cfg-local-pacote-mensagem` (`role` `status` ou `alert`); `#cfg-local-pacote-recarregar`.
+- Lista: `#cfg-local-pacote-vazio`, `#cfg-local-pacote-lista`, linhas `data-arquivo="<nome>"`, botão `[data-pacote-restaurar="<nome>"]`.
+- Prévia: `#cfg-local-pacote-previa`, `#cfg-local-pacote-previa-titulo`, `#cfg-local-pacote-previa-resumo`, `#cfg-local-pacote-previa-totais` (`li[data-acao]`), `#cfg-local-pacote-previa-itens`, `#cfg-local-pacote-mostrar-todos`, `#cfg-local-pacote-previa-links`, `#cfg-local-pacote-confirmar`, `#cfg-local-pacote-cancelar`.
+- Quadro: `#cfg-local-pacote-detalhes`.
+
+### Testes que provam
+
+- `tests/test_pacote_local.py` (Python, dados sintéticos em pasta temporária): allowlist igual às constantes de `core/config.py` (toda constante `*_FILE`/`*_DIR` sob `STATE_DIR` ou `config/` está na allowlist ou em `FORA`; só `.json` e `.xlsx`; sem sobreposição); exporta só a allowlist; `.env`, `config_backups`, `sebrae_credenciais.json` e `config/pacote_local.json` nunca entram; nunca sobrescreve pacote; hash errado, `..`, caminho absoluto, arquivo que sobra, entrada fora da allowlist, symlink, sem manifesto, versão mais nova, limite de tamanho e conteúdo inválido dão 422; 404 para nome fora do padrão; sem `confirmado` nada acontece; token velho dá 409; automação e importação dão 409; desfazer criado antes de gravar, e falha do desfazer aborta; falha depois de gravar volta os arquivos; ida e volta com desfazer; arquivo ausente no pacote é mantido; pastas UNC, OneDrive, inexistente e `static/` são recusadas; salvar pasta válida volta ao padrão; prompt do Assistente diz que ele não mexe no pacote; pedido fora de 127.0.0.1 dá 403; rota sem cookie dá 401.
+- `tests/e2e/pacote-local.spec.cjs` (Playwright, API simulada): sem pacotes (texto de vazio, aviso e quadro); lista em tabela no desktop e em cartões a 375 px sem rolagem horizontal; exportar mostra o arquivo e atualiza a lista; prévia, confirmação com o corpo exato e conclusão; prévia sem mudança de links não mostra o aviso e `Apagar` só aparece se maior que zero; 409 mostra alerta e mantém a prévia; pacote igual esconde `Confirmar`; 500 mostra a falha com recuperação; 422 na prévia mostra `Pacote recusado`; pasta inválida mostra o erro do servidor; `Cancelar` não envia restauração; temas claro e escuro sem erro de console nem rolagem horizontal.
+
+### Limites conhecidos
+
+- O conteúdo do pacote fica em memória durante a validação (até 300 MB). Se os pacotes crescerem, trocar por releitura do zip.
+- Restaurar não devolve marcas de ações irreversíveis: o que ficou de fora continua como está hoje. Depois de restaurar, confira o Sebrae e a OS antes de agir.
+- Os tipos da tela vêm de `frontend/src/api-tipos.gerado.d.ts` (`PacoteLocal*`); regenere com `python scripts/gerar_tipos_api.py` ao mudar o contrato.
 
 ## Testes
 
