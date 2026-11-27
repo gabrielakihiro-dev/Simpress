@@ -28,6 +28,7 @@ from xml.etree import ElementTree
 
 from domains.sebrae_chamados import extrair_numeros
 from domains.sebrae_dashboard import ABA, DashboardInvalido, EDITAVEIS_PELO_SITE, MANUAIS, _validar_pacote, ler_coluna_c
+from domains.sebrae_finalizacao import encerramento_valido
 from domains.sebrae_novos import STATUS_FINALIZADO
 from domains.sebrae_vinculos import _os_chave
 
@@ -1002,15 +1003,21 @@ def _montar(
 ENCERRAMENTO_GRAVADO = "gravado"
 ENCERRAMENTO_NAO_ENCONTRADO = "nao_encontrado"
 ENCERRAMENTO_AMBIGUO = "ambiguo"
+ENCERRAMENTO_MANTIDO = "mantido"
 
 
-def registrar_encerramentos(conteudo: bytes, encerramentos: Mapping[str, str]) -> Tuple[Resultado, Dict[str, str]]:
+def registrar_encerramentos(
+    conteudo: bytes, encerramentos: Mapping[str, str], *, manter_finalizados: bool = False,
+) -> Tuple[Resultado, Dict[str, str]]:
     """Writes DT ENCERRAMENTO (column R) and status D = FINALIZADO of tickets closed in SoftExpert; the row is found by the UTIC in column C.
 
     ``encerramentos``: ``{UTIC: "dd/MM/aaaa HH:mm"}``, the date the user typed (rule of 24/11/2026; it replaced the SoftExpert
     time chosen on 31/10/2026). Unlike ``atualizar`` this reaches rows of any status (the
     ticket has just been finalized) but only columns D and R, and only when exactly one row holds the UTIC. Gives the new workbook (the same
-    bytes when nothing changed) and, per UTIC, ``gravado`` / ``nao_encontrado`` / ``ambiguo``.
+    bytes when nothing changed) and, per UTIC, ``gravado`` / ``nao_encontrado`` / ``ambiguo`` / ``mantido``.
+
+    ``manter_finalizados`` (re-application on every "Atualizar", decision of the user on 26/11/2026): a row that already holds
+    D = FINALIZADO and a valid R (``dd/MM/aaaa HH:mm``) is left untouched (``mantido``), even when its R differs from the recorded one.
     """
     anteriores = ler_coluna_c(conteudo)  # also checks the headers of the sheet
     pacote = _ler_pacote(conteudo)
@@ -1033,6 +1040,11 @@ def registrar_encerramentos(conteudo: bytes, encerramentos: Mapping[str, str]) -
             estados[utic] = ENCERRAMENTO_NAO_ENCONTRADO
         elif len(donas) > 1:
             estados[utic] = ENCERRAMENTO_AMBIGUO
+        elif manter_finalizados and (
+            _valor_legivel("D", donas[0].celulas.get("D", ""), pacote.compartilhadas).upper() == STATUS_FINALIZADO
+            and encerramento_valido(_valor_legivel("R", donas[0].celulas.get("R", ""), pacote.compartilhadas))
+        ):
+            estados[utic] = ENCERRAMENTO_MANTIDO  # o R digitado à mão no Dashboard vale
         else:
             # R vazia ou antiga: vale o R informado ao finalizar. D junto com R: a linha finalizada no SoftExpert não pode continuar "EM ABERTO".
             substituicoes[donas[0].numero] = _reescrever_linha(donas[0], {"D": STATUS_FINALIZADO, "R": quando}, estilos, "", True)
@@ -1289,7 +1301,7 @@ def reaplicar(
 
 
 __all__ = [
-    "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "ENCERRAMENTO_AMBIGUO", "ENCERRAMENTO_GRAVADO",
+    "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "ENCERRAMENTO_AMBIGUO", "ENCERRAMENTO_GRAVADO", "ENCERRAMENTO_MANTIDO",
     "ENCERRAMENTO_NAO_ENCONTRADO", "GravacaoInvalida", "LinhaGravada", "Resultado", "ResultadoMerge",
     "atualizar", "chamados_para_editar", "chave_coluna_c", "ler_listas", "mesmos_valores", "reaplicar", "registrar_encerramentos",
 ]
