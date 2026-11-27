@@ -158,3 +158,120 @@ test("com o bundle: trocar de ferramenta mostra só a nova, o Voltar volta à an
   await voltar.click();
   await conferirFechado(page, FERRAMENTAS[2]);
 });
+
+// ---- Planilhas: contrato visível da sub-aba (dados sintéticos simulados em /api/historico-comparacoes) ----
+const PLANILHAS = 'section[data-cockpit-tool-panel="planilhas"]';
+const EVENTO_PLANILHAS = {
+  id: "evt-sintetico-1", tipo: "importacao", horario: "2026-11-20T12:00:00-03:00",
+  arquivos_enviados: { endpoint: "endpoint_sintetico.xlsx", detalhes: "detalhes_sintetico.xlsx" },
+  comparacao: { total_detalhes: 12, total_endpoint: 10 },
+};
+
+// modo: "ok" | "vazio" | "erro"; devolve o contador de requisições da lista.
+async function simularHistorico(page, modo) {
+  const contagem = { lista: 0 };
+  await page.route(/\/api\/historico-comparacoes(\/[^/?]+)?(\?.*)?$/, rota => {
+    const detalhe = new URL(rota.request().url()).pathname.split("/")[3];
+    if (detalhe) return rota.fulfill({ json: { evento: EVENTO_PLANILHAS } });
+    contagem.lista += 1;
+    if (modo === "erro") return rota.fulfill({ status: 500, json: { detail: "Falha sintética do servidor." } });
+    return rota.fulfill({ json: { eventos: modo === "vazio" ? [] : [EVENTO_PLANILHAS] } });
+  });
+  return contagem;
+}
+
+async function abrirPlanilhas(page) {
+  await abrirPagina(page);
+  await page.evaluate(() => window.abrirPainelCockpit("planilhas"));
+  await expect(page.locator(PLANILHAS)).toBeVisible();
+}
+
+const LINHAS = `${PLANILHAS} #cockpit-sheets-list-body tr`;
+const DETALHE_TITULO = "#cockpit-sheets-detail-title";
+
+test("Planilhas: carrega KPIs, status, duas linhas com data-label e detalhe da primeira", async ({ page }) => {
+  const vistos = vigiar(page);
+  await simularHistorico(page, "ok");
+  await abrirPlanilhas(page);
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText(/^Última atualização em .+/);
+  const kpis = page.locator("#cockpit-sheets-kpis .ck-kpi");
+  await expect(kpis).toHaveCount(4);
+  await expect(kpis.locator(".ck-kpi__rotulo")).toHaveText([
+    "Última atualização", "Equipamentos na Simpress", "Equipamentos no Endpoint", "Atualizações no histórico",
+  ]);
+  await expect(kpis.nth(1).locator(".ck-kpi__valor")).toHaveText("12");
+  await expect(kpis.nth(2).locator(".ck-kpi__valor")).toHaveText("10");
+  await expect(kpis.nth(3).locator(".ck-kpi__valor")).toHaveText("1");
+  const linhas = page.locator(LINHAS);
+  await expect(linhas).toHaveCount(2);
+  await expect(linhas.nth(0).locator("td").first()).toHaveText("No Endpoint");
+  await expect(linhas.nth(1).locator("td").first()).toHaveText("na Simpress");
+  for (const i of [0, 1]) {
+    await expect(linhas.nth(i).locator("td")).toHaveCount(5);
+    expect(await linhas.nth(i).locator("td").evaluateAll(tds => tds.map(td => td.dataset.label)))
+      .toEqual(["Planilha", "Arquivo atual", "Linhas", "Atualizado", "Situação"]);
+    await expect(linhas.nth(i)).toHaveAttribute("tabindex", "0");
+  }
+  await expect(linhas.nth(0)).toHaveAttribute("aria-selected", "true");
+  await expect(linhas.nth(1)).toHaveAttribute("aria-selected", "false");
+  await expect(page.locator(DETALHE_TITULO)).toHaveText("No Endpoint");
+  await expect(page.locator("#cockpit-sheets-detail-sub")).toHaveText(/endpoint_sintetico/);
+  await expect(page.locator("#cockpit-sheets-detail-badge [data-status]")).toHaveText("Atualizada");
+  await expect(page.locator("#cockpit-sheets-detail-badge [data-status]")).toHaveAttribute("data-status", /.+/);
+  expect(vistos.pagina).toEqual([]);
+});
+
+test("Planilhas: selecionar a 2ª linha por clique troca aria-selected e atualiza o detalhe", async ({ page }) => {
+  await simularHistorico(page, "ok");
+  await abrirPlanilhas(page);
+  await expect(page.locator(LINHAS)).toHaveCount(2);
+  await page.locator(LINHAS).nth(1).click();
+  await expect(page.locator(LINHAS).nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(LINHAS).nth(0)).toHaveAttribute("aria-selected", "false");
+  await expect(page.locator(DETALHE_TITULO)).toHaveText("na Simpress");
+  await expect(page.locator("#cockpit-sheets-detail-sub")).toHaveText(/detalhes_sintetico/);
+});
+
+for (const tecla of ["Enter", " "]) {
+  test(`Planilhas: selecionar a 2ª linha por teclado (${tecla === " " ? "Espaço" : tecla}) com foco na linha`, async ({ page }) => {
+    await simularHistorico(page, "ok");
+    await abrirPlanilhas(page);
+    await expect(page.locator(LINHAS)).toHaveCount(2);
+    await page.locator(LINHAS).nth(1).focus();
+    await page.keyboard.press(tecla);
+    await expect(page.locator(LINHAS).nth(1)).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(LINHAS).nth(0)).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator(DETALHE_TITULO)).toHaveText("na Simpress");
+  });
+}
+
+test("Planilhas: histórico vazio mostra a mensagem no status e na tabela", async ({ page }) => {
+  await simularHistorico(page, "vazio");
+  await abrirPlanilhas(page);
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText("Nenhuma atualização no histórico local.");
+  const vazio = page.locator("#cockpit-sheets-list-body td.ck-lista__vazio");
+  await expect(vazio).toHaveText("Nenhuma atualização no histórico local.");
+  await expect(vazio).toHaveAttribute("colspan", "5");
+  await expect(page.locator(DETALHE_TITULO)).toHaveText("—");
+});
+
+test("Planilhas: erro 500 do servidor mostra a mensagem no status e na tabela", async ({ page }) => {
+  await simularHistorico(page, "erro");
+  await abrirPlanilhas(page);
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText("Falha sintética do servidor.");
+  const vazio = page.locator("#cockpit-sheets-list-body td.ck-lista__vazio");
+  await expect(vazio).toHaveText("Falha sintética do servidor.");
+  await expect(vazio).toHaveAttribute("colspan", "5");
+});
+
+test("Planilhas: o botão Atualizar recarrega o histórico", async ({ page }) => {
+  const contagem = await simularHistorico(page, "ok");
+  await abrirPlanilhas(page);
+  await expect(page.locator(LINHAS)).toHaveCount(2);
+  const antes = contagem.lista;
+  expect(antes).toBeGreaterThan(0);
+  await page.locator("#cockpit-sheets-refresh").click();
+  await expect.poll(() => contagem.lista).toBe(antes + 1);
+  await expect(page.locator("#cockpit-sheets-status")).toHaveText(/^Última atualização em .+/);
+  await expect(page.locator(LINHAS)).toHaveCount(2);
+});
