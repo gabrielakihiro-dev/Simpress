@@ -503,6 +503,24 @@ class EscritaAntesDoCliqueTests(unittest.TestCase):
                 self.assertEqual(localizar.call_count, len(leituras))
                 self.assertEqual(pagina.goto.call_count, len(leituras))  # recarrega antes de cada leitura
 
+    def test_cartao_na_lista_so_diz_finalizado_com_duas_ausencias_seguidas(self):
+        # Depois do Finalizar: cartão que some e volta não é "finalizado"; presente só na 1ª leitura é lista atrasada.
+        presente = (mock.MagicMock(), mock.MagicMock())
+        casos = (
+            ([None, None], False), ([None, presente], True), ([presente, None, None], False),
+            ([presente, presente], True), ([presente, None, presente], True),
+        )
+        for leituras, esperado in casos:
+            with self.subTest(leituras=[x is None for x in leituras]):
+                pagina = mock.MagicMock()
+                with (
+                    mock.patch.object(S, "_aguardar_lista"),
+                    mock.patch.object(S, "_localizar_chamado", side_effect=leituras) as localizar,
+                ):
+                    self.assertIs(S._cartao_na_lista(pagina, "UTIC-2026-1"), esperado)
+                self.assertEqual(localizar.call_count, len(leituras))  # consumiu todas as leituras, sem leitura extra
+                self.assertEqual(pagina.goto.call_count, len(leituras))  # recarrega antes de cada leitura
+
     def _finalizar_que_falha(self, erro):
         def falhar(_page, _numero, _texto, _pdf, _email, _confirmar, escritas):
             escritas.append("finalizar")

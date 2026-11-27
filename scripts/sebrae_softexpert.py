@@ -1671,11 +1671,19 @@ def _clicar_finalizar(page: "Page", janela: "Page", numero: str, escritas: List[
                 )
             if janela.is_closed():
                 return True
+            if janela is page and _visivel(page.locator(SEL_LISTA)) and not _formulario_visivel(page):
+                return True  # mesma aba: a própria aplicação voltou para a lista; para de procurar o "Sim"
             if not confirmado[0]:
                 _confirmar_modal_finalizar(janela, confirmado)
             return False
 
-        _esperar(page, andou, ESPERA_FINALIZAR_MS)
+        if not _esperar(page, andou, ESPERA_FINALIZAR_MS):
+            modo = "mesma aba" if janela is page else "janela"
+            sim = "clicado" if confirmado[0] else "não clicado"
+            _log(
+                f"{numero}: espera do Finalizar chegou ao limite de {ESPERA_FINALIZAR_MS // 1000} s "
+                f"sem a janela fechar ({modo}; Sim do modal {sim}); conferindo a central de tarefas."
+            )
     finally:
         if not janela.is_closed():
             janela.remove_listener("dialog", tratar)
@@ -1773,14 +1781,22 @@ def cartao_na_central(page: "Page", numero: str) -> bool:
 
 
 def _cartao_na_lista(page: "Page", numero: str) -> bool:
-    """Recarrega a central de tarefas (até 2 vezes, para a lista alcançar o servidor) e vê se o cartão ainda existe."""
-    for tentativa in range(2):
+    """Recarrega a central de tarefas (até 3 leituras) e vê se o cartão ainda existe.
+
+    False ("finalizado") só com 2 leituras SEGUIDAS sem o cartão; o cartão que some e volta não conta (True, "incerto").
+    Presente só na 1ª leitura é a lista que ainda não alcançou o servidor."""
+    ausencias = 0
+    for tentativa in range(3):
+        if tentativa:
+            page.wait_for_timeout(ESPERA_RELEITURA_MS)
         page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
         _aguardar_lista(page)
         if _localizar_chamado(page, numero) is None:
-            return False
-        if tentativa == 0:
-            page.wait_for_timeout(ESPERA_RELEITURA_MS)
+            ausencias += 1
+            if ausencias == 2:
+                return False
+        elif tentativa:  # presente depois da 1ª leitura (a lista atrasa só na 1ª): continua na central
+            return True
     return True
 
 

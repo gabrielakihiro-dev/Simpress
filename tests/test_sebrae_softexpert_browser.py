@@ -410,6 +410,10 @@ class Bancada:
         self.pesquisas: list[str] = []
         self.pesquisas_globais: list[str] = []
         self.busca_sem_spinner = False
+        self.ocultos: dict[str, int] = {}  # número -> quantos GET da lista ainda o escondem (some_uma_leitura)
+        self.atrasados: dict[str, int] = {}  # número -> quantos GET da lista ainda o mostram (atrasa_uma_leitura)
+        self.leituras_lista: list[list[str]] = []  # cada GET da lista: números visíveis (lista ou filtro)
+        self.leituras_antes_do_finalizar = 0  # len(leituras_lista) no /api/finalizar
 
     def por_numero(self, numero: str) -> dict:
         return next(c for c in self.chamados if c["numero"] == numero)
@@ -435,11 +439,25 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
             if caminho == "/softexpert/workspace":
                 if not bancada.logado:
                     return self.responder(PAGINA_LOGIN % {"chave": "logado"})
-                itens = [{"numero": c["numero"], "titulo": c["titulo"]} for c in bancada.chamados if not c.get("somente_filtro")]
+                # Oculto some da lista E da busca do filtro, senão _localizar_chamado o acharia pela pesquisa.
+                ocultos = {n for n, restam in bancada.ocultos.items() if restam > 0}
+                for n in ocultos:
+                    bancada.ocultos[n] -= 1
+                for n, restam in list(bancada.atrasados.items()):  # finalizado: some depois de N GET
+                    if restam:
+                        bancada.atrasados[n] -= 1
+                    else:
+                        del bancada.atrasados[n]
+                        bancada.chamados.remove(bancada.por_numero(n))
+                visiveis = [c for c in bancada.chamados if c["numero"] not in ocultos]
+                bancada.leituras_lista.append([c["numero"] for c in visiveis])
+                itens = [
+                    {"numero": c["numero"], "titulo": c["titulo"]} for c in visiveis if not c.get("somente_filtro")
+                ]
                 dados = {
                     "modo": bancada.modo_lista, "abertura": bancada.abertura,
                     "tamanho": bancada.tamanho, "itens": itens, "layout": bancada.layout,
-                    "itensBusca": [{"numero": c["numero"], "titulo": c["titulo"]} for c in bancada.chamados],
+                    "itensBusca": [{"numero": c["numero"], "titulo": c["titulo"]} for c in visiveis],
                     "buscaSemSpinner": bancada.busca_sem_spinner,
                 }
                 return self.responder(PAGINA_LISTA % {"estilo": ESTILO, "dados": json.dumps(dados)})
@@ -494,7 +512,12 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                 tamanho = int(self.headers.get("Content-Length") or 0)
                 bancada.finalizados.append(json.loads(self.rfile.read(tamanho).decode("utf-8")))
                 bancada.eventos.append(f"finalizar:{consulta['numero']}")
-                if not bancada.por_numero(consulta["numero"]).get("finalizar_falha"):
+                bancada.leituras_antes_do_finalizar = len(bancada.leituras_lista)
+                if bancada.por_numero(consulta["numero"]).get("some_uma_leitura"):
+                    bancada.ocultos[consulta["numero"]] = 1  # 1 GET: _cartao_na_lista faz um goto por leitura
+                if bancada.por_numero(consulta["numero"]).get("atrasa_uma_leitura"):
+                    bancada.atrasados[consulta["numero"]] = 1
+                elif not bancada.por_numero(consulta["numero"]).get("finalizar_falha"):
                     bancada.chamados.remove(bancada.por_numero(consulta["numero"]))
             elif caminho == "/api/sso":
                 chave = consulta.get("chave", "")
@@ -1330,7 +1353,8 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(resultado["status"], "ok", resultado)
         self.assertEqual(self.bancada.abertos, ["UTIC-2026-1566"])
         self.assertEqual(len(self.bancada.finalizados), 1)
-        self.assertEqual(self.bancada.pesquisas, ["UTIC-2026-1566", "UTIC-2026-1566"])
+        # 1 pesquisa para abrir + 2 leituras seguidas sem o cartão depois do Finalizar (27/11/2026)
+        self.assertEqual(self.bancada.pesquisas, ["UTIC-2026-1566"] * 3)
         self.assertEqual(self.bancada.pesquisas_globais, [])
         self.assertSemEscrita()
 
@@ -1468,6 +1492,58 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
             resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
         self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)
         self.assertEqual(self.abas_do_registro(), [])
+        self.assertTrue(any("espera do Finalizar chegou ao limite" in m for m in self.mensagens), self.mensagens)
+        self.assertFalse([m for m in self.mensagens if "Impressora 1 não imprime" in m or "Maria solicitante" in m])
+        self.assertSemEscrita()
+
+    def test_cartao_que_some_por_uma_leitura_e_volta_nao_vira_finalizado(self):
+        # Logo depois do Finalizar o cartão some numa leitura e volta na seguinte (reprodução do item 3).
+        self.bancada.chamados = [chamado(1, finalizacao=True, finalizar_falha=True, some_uma_leitura=True), chamado(2)]
+        page = self.abrir_lista()
+        with patch.object(se, "ESPERA_FINALIZAR_MS", 3_000):  # a janela nunca fecha: só encurta a espera
+            resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)
+        self.assertTrue(se.cartao_na_central(page, "UTIC-2026-0001"))
+        # Ausente só na 1ª leitura depois do Finalizar, presente na 2ª (rotina) e na 3ª (cartao_na_central acima).
+        self.assertEqual(self.presencas_depois_do_finalizar("UTIC-2026-0001"), [False, True, True])
+        self.assertEqual(len(self.bancada.finalizados), 1)
+        self.assertSemEscrita()
+
+    def presencas_depois_do_finalizar(self, numero: str) -> list[bool]:
+        return [numero in lidos for lidos in self.bancada.leituras_lista[self.bancada.leituras_antes_do_finalizar:]]
+
+    def test_lista_atrasada_que_mostra_o_cartao_so_na_primeira_leitura_e_finalizado(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, atrasa_uma_leitura=True), chamado(2)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], se.STATUS_OK, resultado)
+        self.assertEqual(self.presencas_depois_do_finalizar("UTIC-2026-0001"), [True, False, False])
+        self.assertEqual(len(self.bancada.finalizados), 1)
+        self.assertSemEscrita()
+
+    def test_mesma_aba_para_de_esperar_quando_a_lista_volta(self):
+        self.bancada.abertura = "mesma_aba"
+        self.bancada.chamados = [chamado(1, finalizacao=True), chamado(2)]
+        page = self.abrir_lista()
+        inicio = time.monotonic()  # ESPERA_FINALIZAR_MS no valor real (30 s)
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        if os.environ.get("SIMPRESS_TESTE_VERBOSO") == "1":
+            print(f"mesma aba: finalizar_chamado em {time.monotonic() - inicio:.1f} s", flush=True)
+        self.assertEqual(resultado["status"], se.STATUS_OK, resultado)
+        self.assertFalse([m for m in self.mensagens if "espera do Finalizar chegou ao limite" in m], self.mensagens)
+        self.assertEqual(len(self.bancada.finalizados), 1)
+        self.assertSemEscrita()
+
+    def test_mesma_aba_respeita_o_prazo_quando_a_lista_nao_volta(self):
+        self.bancada.abertura = "mesma_aba"
+        self.bancada.chamados = [chamado(1, finalizacao=True, finalizar_falha=True), chamado(2)]
+        page = self.abrir_lista()
+        with patch.object(se, "ESPERA_FINALIZAR_MS", 3_000):  # o formulário fica na tela: só encurta a espera
+            resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], se.STATUS_INCERTO, resultado)
+        limite = [m for m in self.mensagens if "espera do Finalizar chegou ao limite" in m and "mesma aba" in m]
+        self.assertTrue(limite, self.mensagens)
+        self.assertEqual(len(self.bancada.finalizados), 1)
         self.assertSemEscrita()
 
     def test_cartao_na_central_so_le_a_lista(self):
