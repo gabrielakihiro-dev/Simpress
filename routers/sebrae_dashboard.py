@@ -339,9 +339,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             return {"iniciado": False, "motivo": "Não foi possível iniciar o envio ao SharePoint."}
         return {"iniciado": True, "motivo": ""}
 
-    def _gravar_atualizacao(chamados: Sequence[ChamadoManual], edicoes: Sequence[ChamadoManual], **opcoes: Any):
+    def _gravar_atualizacao(
+        chamados: Sequence[ChamadoManual], edicoes: Sequence[ChamadoManual], *, aceita_vazio: bool = False,
+        exigir_encerramento: bool = False, confirmados: Optional[Mapping[str, str]] = None,
+    ):
         return atualizacao.gravar_atualizacao(
-            services, [c.model_dump() for c in chamados], [e.model_dump() for e in edicoes], _nomes_pessoas, **opcoes,
+            services, [c.model_dump() for c in chamados], [e.model_dump() for e in edicoes], _nomes_pessoas,
+            aceita_vazio=aceita_vazio, exigir_encerramento=exigir_encerramento, confirmados=confirmados,
         )
 
     def _fechar_inativo(motivo: str, pulados: Sequence[Mapping[str, str]] = ()) -> Dict[str, Any]:
