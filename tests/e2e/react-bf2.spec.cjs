@@ -408,14 +408,14 @@ test("importação: o DOM inicial dos modais é o do partial e a seção Entra f
   // atalhos para os sistemas de origem (antes checados no HTML montado por test_inventory_history_and_tickets.cjs)
   const sistemas = modal.locator(".ckp-sistemas a.ckp-sistema");
   await expect(sistemas).toHaveCount(2);
-  await expect(sistemas.nth(0)).toHaveAttribute("href", "/api/config/local/endpoint/computadores");
+  // Endpoint: /api/* exige o X-Simpress-Sessao, então o link não aponta para a API; o clique pede a URL (comum/links-endpoint.ts).
+  await expect(sistemas.nth(0)).toHaveAttribute("href", "#");
+  await expect(sistemas.nth(0)).toHaveAttribute("data-endpoint-tela", "computadores");
   await expect(sistemas.nth(0)).toHaveAttribute("aria-label", "Abrir inventário de computadores do Endpoint Central");
   await expect(sistemas.nth(1)).toHaveAttribute("href", "https://ux.simpress.com.br/MeusEquipamentos/Index");
   await expect(sistemas.nth(1)).toHaveAttribute("aria-label", "Abrir Meus Equipamentos da Simpress");
-  for (const indice of [0, 1]) {
-    await expect(sistemas.nth(indice)).toHaveAttribute("target", "_blank");
-    await expect(sistemas.nth(indice)).toHaveAttribute("rel", "noopener noreferrer");
-  }
+  await expect(sistemas.nth(1)).toHaveAttribute("target", "_blank");
+  await expect(sistemas.nth(1)).toHaveAttribute("rel", "noopener noreferrer");
   await expect(page.locator("#modal-importar-modelo #descricao-importar-modelo")).toHaveText("");
   await expect(page.locator("#modal-importar-modelo #titulo-importar-modelo")).toHaveText("Importar arquivos");
   expect(semFalhaDePonte(ambiente)).toEqual([]);

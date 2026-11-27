@@ -2,6 +2,7 @@
 // e lê o mesmo store (estado.ts). Os nós mantêm data-on-*/data-args: o despachante de ações (frontend/src/ui/action-dispatcher.ts) chama as ações
 // pela ponte; só a miniatura da captura (que não existia como data-on-*) usa onClick do React.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { urlDeBlobDaApi } from "../../comum/baixar-api";
 import { abrirCapturaAutomacao } from "./captura";
 import { assinar, ler, mudar } from "./estado";
 import {
@@ -275,18 +276,33 @@ export function Rotinas() {
 
 function Captura({ execucao, captura }: { execucao: Execucao; captura: { nome: string; url: string } }) {
   const [falhou, setFalhou] = useState(false);
+  const [endereco, setEndereco] = useState("");
   const descricao = descricaoDaCaptura(execucao);
+  // Um <img src>/<a href> em /api/... não leva o X-Simpress-Sessao: a captura vem como blob: (miniatura, link e
+  // ampliação usam o mesmo), revogado ao sair da tela. shortcut: sem loading="lazy", todas as capturas da lista
+  // baixam ao abrir o histórico; se a lista crescer, carregar só as visíveis (IntersectionObserver).
+  useEffect(() => {
+    const controle = new AbortController();
+    let criado = "";
+    urlDeBlobDaApi(captura.url, controle.signal).then(
+      url => { criado = url; if (controle.signal.aborted) URL.revokeObjectURL(url); else setEndereco(url); },
+      () => { if (!controle.signal.aborted) setFalhou(true); },
+    );
+    return () => { controle.abort(); if (criado) URL.revokeObjectURL(criado); };
+  }, [captura.url]);
   return (
     <span className="automation-capture">
       <button
-        type="button" className="automation-capture-thumb" aria-haspopup="dialog" aria-label={`Ampliar captura ${captura.nome}`} disabled={falhou}
-        onClick={evento => abrirCapturaAutomacao(captura, descricao, execucao.mensagem, evento.currentTarget)}
+        type="button" className="automation-capture-thumb" aria-haspopup="dialog" aria-label={`Ampliar captura ${captura.nome}`} disabled={falhou || !endereco}
+        onClick={evento => abrirCapturaAutomacao({ ...captura, url: endereco }, descricao, execucao.mensagem, evento.currentTarget)}
       >
         {falhou
           ? <span className="automation-capture-missing">Captura indisponível</span>
-          : <img src={captura.url} alt={descricao} loading="lazy" decoding="async" onError={() => setFalhou(true)} />}
+          : endereco ? <img src={endereco} alt={descricao} decoding="async" onError={() => setFalhou(true)} /> : null}
       </button>
-      <a className="automation-history-link" href={captura.url} target="_blank" rel="noopener noreferrer">{captura.nome}</a>
+      {/* Sem noopener: o Chrome pode recusar abrir blob: (PNG da mesma origem) numa aba sem opener. Recarregar essa aba
+          depois que a linha some do histórico não volta: o blob já foi revogado. */}
+      <a className="automation-history-link" href={endereco || undefined} target="_blank">{captura.nome}</a>
     </span>
   );
 }

@@ -77,8 +77,9 @@ class ConfiguracaoBase(unittest.TestCase):
 class LinksDoEndpointTests(ConfiguracaoBase):
     def destino(self, tela: str) -> str:
         resposta = self.client.get(f"/api/config/local/endpoint/{tela}", follow_redirects=False)
-        self.assertEqual(resposta.status_code, 302)
-        return resposta.headers["location"]
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(set(resposta.json()), {"url"})
+        return resposta.json()["url"]
 
     def test_links_seguem_o_host_configurado_e_mantem_o_fragmento(self):
         self.contas.write_text(json.dumps({"endpoint_url": "https://novo.exemplo.invalid/webclient#/uems/inventory/computers"}), encoding="utf-8")

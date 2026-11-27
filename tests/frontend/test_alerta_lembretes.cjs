@@ -125,12 +125,13 @@ no("p", "notification-center-summary");
 const tituloSino = no("h2", "notification-center-title");
 let resposta = {};
 let fetchAtual = async () => ({ ok: true, json: async () => resposta });
+// tabela-os.ts e paineis.ts pedem por apiFetch (api.ts), que usa o fetch global.
+globalThis.fetch = (...args) => fetchAtual(...args);
 panels.install({
   document: doc,
   MutationObserver: class { observe() {} },
   CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
   console: { warn() {} },
-  fetch: (...args) => fetchAtual(...args),
 });
 
 async function atualizar(corpo) {

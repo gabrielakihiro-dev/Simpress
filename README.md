@@ -242,7 +242,7 @@ O inicializador cria ou atualiza o ambiente `.venv` quando necessário, executa 
 .\.venv\Scripts\python.exe main.py
 ```
 
-O navegador abre sozinho com a sessão local (`/bootstrap`). Digitar o endereço à mão dá 401 em `/api/*`, porque a sessão local muda a cada início do servidor.
+O navegador abre sozinho com a sessão local (`/bootstrap`); por um instante a barra mostra `/#sessao=…`, que a página guarda e apaga. Digitar o endereço à mão dá 401 em `/api/*`, porque a sessão local muda a cada início do servidor. Limpar os "dados do site" no navegador também apaga a sessão: abra de novo pelo `iniciar_servidor.bat`.
 
 - Aplicação (porta padrão): <http://127.0.0.1:8000>
 - Documentação interativa da API: desligada por padrão. Para desenvolvimento, defina `$env:SIMPRESS_ENABLE_DOCS = "1"` antes de iniciar e abra <http://127.0.0.1:8000/docs>.
@@ -489,7 +489,7 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 | O painel de status continua desatualizado | Clique em **Atualizar status** para repetir a verificação; para carregar dados de inventário substituídos manualmente, reinicie o servidor. |
 | Uma ação mostrou “Falha interna do servidor” | Consulte `data/logs/simpress.log` (ou `simpress.log.1` a `.5`, os anteriores). O registro mostra a rota e o ponto do código da falha, sem o conteúdo das planilhas. |
 | A interface informa que um arquivo está em uso ou ocupado | Feche a planilha no Excel ou aguarde a sincronização do OneDrive e tente de novo. A resposta 409 não altera nenhum arquivo. |
-| Uma chamada a `/api/` retorna 401 | Falta o cookie da sessão local neste navegador. Abra a aplicação pelo `iniciar_servidor.bat`, que passa por `/bootstrap` e cria o cookie. Depois de reiniciar o servidor, abra de novo pelo inicializador: o segredo da sessão muda a cada início. |
+| Uma chamada a `/api/` retorna 401 | Falta a sessão local neste navegador (cookie e cabeçalho `X-Simpress-Sessao`), por exemplo depois de limpar os dados do site. Abra a aplicação pelo `iniciar_servidor.bat`, que passa por `/bootstrap` e cria os dois. Depois de reiniciar o servidor, abra de novo pelo inicializador: o segredo da sessão muda a cada início. |
 | Uma chamada a `/api/` feita de outra página ou porta retorna 403 | É esperado: a API aceita só chamadas da própria interface ou de endereços digitados no navegador. Use a interface em `http://127.0.0.1:<porta>`. |
 | O inicializador não oferece a atualização | Leia o motivo mostrado no terminal: a atualização só é oferecida quando existe uma tag `vX.Y.Z` mais nova publicada no `origin/main` (veja [Versionamento](docs/guias/versionamento.md)), no branch `main`, sem alterações locais rastreadas (`git status`), com rede e sem `SIMPRESS_VERIFICAR_ATUALIZACAO=0`. |
 | O visual continua antigo após `git pull` | Confirme a branch com `git switch main` e atualize com `git pull --ff-only origin main`. Encerre o servidor anterior e execute `iniciar_servidor.bat` da pasta atualizada. Recarregue com `Ctrl+F5` uma vez. As páginas passam a usar URLs de CSS e JavaScript vinculadas ao conteúdo dos arquivos para evitar versões antigas no cache. |
@@ -600,7 +600,7 @@ domains/entra_users.py              Nomes do Microsoft Entra (domains/entra_inbo
 domains/dashboard_agendamento.py    Agendamento "Repetir a cada" (30 min, 1h, 1h30, 2h) do Dashboard do Sebrae
 domains/local_setup.py              Importação validada dos modelos locais, com backup
 security/local_requests.py          Acesso só local, cabeçalhos de segurança e limites de envio
-security/sessao_local.py            Sessão local por início do servidor (cookie exigido em /api/*)
+security/sessao_local.py            Sessão local por início do servidor (cookie e X-Simpress-Sessao exigidos em /api/*)
 security/limite_taxa.py             Limite por minuto nas rotas que gastam créditos ou abrem o Chrome
 security/network.py                 Política de conexão da aplicação local
 routers/transfers.py                Validação e geração da planilha de transferência
@@ -707,7 +707,7 @@ As entradas `static/index.html` e `static/app.css` conservam os caminhos atuais 
 
 ## Dados e privacidade
 
-O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação no próprio computador. A documentação `/docs` só fica disponível com `SIMPRESS_ENABLE_DOCS=1`, e o log de acesso do servidor fica desligado para não registrar buscas por série ou hostname. Mensagens de exceção não entram no log, porque podem conter caminhos com o nome do usuário do Windows; as séries citadas no log aparecem como uma referência curta (`ref-...`). As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site. Toda chamada a `/api/` exige o cookie `simpress_sessao_<porta>` (`HttpOnly`, `SameSite=Strict`), criado ao abrir `/bootstrap?t=<segredo>`; o segredo muda a cada início do servidor e fica gravado em `%LOCALAPPDATA%\Simpress\sessao_<porta>.txt`. O navegador também o guarda no cookie e no histórico (o link `/bootstrap`). Sem o cookie, a resposta é 401.
+O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação no próprio computador. A documentação `/docs` só fica disponível com `SIMPRESS_ENABLE_DOCS=1`, e o log de acesso do servidor fica desligado para não registrar buscas por série ou hostname. Mensagens de exceção não entram no log, porque podem conter caminhos com o nome do usuário do Windows; as séries citadas no log aparecem como uma referência curta (`ref-...`). As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site. Toda chamada a `/api/` exige o cookie `simpress_sessao_<porta>` (`HttpOnly`, `SameSite=Strict`) e o cabeçalho `X-Simpress-Sessao`, os dois criados ao abrir `/bootstrap?t=<segredo>`; o segredo muda a cada início do servidor e fica gravado em `%LOCALAPPDATA%\Simpress\sessao_<porta>.txt`. Cookie e cabeçalho são derivados do segredo (HMAC) e nenhum dos dois abre o `/bootstrap`; o valor do cabeçalho chega à página em `/#sessao=…` e fica no armazenamento local da origem (isolado por porta). O navegador guarda o link `/bootstrap` no histórico. Sem os dois, a resposta é 401; com `SIMPRESS_ENABLE_DOCS=1`, o "Try it out" do `/docs` também dá 401.
 
 Planilhas operacionais, backups, logs, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo de transferência (`(MODELO) - TRANSFERENCIA SIMPRESS.xlsx`) deixou de ser versionado e é importado pela tela. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
 

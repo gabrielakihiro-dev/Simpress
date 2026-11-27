@@ -665,6 +665,40 @@ test("aviso de recuperação concluída tem Fechar aviso: some, continua fechado
   assert.ok(fechar());
 });
 
+test("os botões de baixar cópia do aviso pedem /snapshot do envio_id do aviso por fetch e ficam desabilitados durante o download", async () => {
+  const envio = "e".repeat(32);
+  const alvo = `/api/sebrae/dashboard/envio/${envio}/snapshot`;
+  const guardado = { fetch: globalThis.fetch, criar: URL.createObjectURL, revogar: URL.revokeObjectURL };
+  const urls = [];
+  let liberar;
+  globalThis.fetch = url => { urls.push(String(url)); return new Promise(ok => { liberar = () => ok(new Response("xlsx", { status: 200 })); }); };
+  URL.createObjectURL = () => "blob:sintetico";
+  URL.revokeObjectURL = () => {};
+  try {
+    const base = { envio_id: envio, sha256: "d".repeat(64), snapshot_disponivel: true, falhou: false };
+    const estados = [ // um aviso para cada botão: envio incerto e envio declarado não enviado
+      { ...base, status: "incerto", incerto: true, limpeza_pendente: true },
+      { ...base, status: "falhou", limpeza_pendente: false, recuperacao: { acao: "declarar_nao_enviado" } },
+    ];
+    for (const sharepoint of estados) {
+      const carga = structuredClone(CARGA_CARTOES);
+      carga.sharepoint = sharepoint;
+      const { el } = await renderizarCartoes(carga, armazenamentoFalso());
+      const botoes = el["sebrae-sharepoint-aviso"].querySelectorAll("button").filter(b => /^Baixar (cópia local deste envio para conferir|ESTA cópia para revisar)$/.test(b.textContent));
+      assert.equal(botoes.length, 1, sharepoint.status);
+      const botao = botoes[0];
+      urls.length = 0;
+      botao.click();
+      assert.deepEqual(urls, [alvo]);
+      assert.equal(botao.disabled, true, "desabilitado durante o download");
+      liberar();
+      await new Promise(r => setImmediate(r));
+      await new Promise(r => setImmediate(r));
+      assert.equal(botao.disabled, false);
+    }
+  } finally { Object.assign(globalThis, { fetch: guardado.fetch }); URL.createObjectURL = guardado.criar; URL.revokeObjectURL = guardado.revogar; }
+});
+
 test("Fechar aviso não aparece quando o envio foi declarado não enviado (reenviar continua)", async () => {
   const carga = structuredClone(CARGA_CARTOES);
   carga.sharepoint = { envio_id: "c".repeat(32), sha256: "d".repeat(64), status: "falhou", snapshot_disponivel: true, falhou: false, limpeza_pendente: false, recuperacao: { acao: "declarar_nao_enviado" } };

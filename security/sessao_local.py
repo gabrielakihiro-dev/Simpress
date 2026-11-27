@@ -2,24 +2,28 @@
 
 Another Windows user (or a process without access to this user's profile) can still reach
 127.0.0.1, so the server proves the caller by a random secret written only under the user's
-%LOCALAPPDATA%. `/bootstrap?t=<secret>` turns it into an HttpOnly, SameSite=Strict cookie.
+%LOCALAPPDATA%. `/bootstrap?t=<secret>` is the only place the secret itself is accepted.
 
-The bootstrap token equals the cookie value on purpose: the browser history that keeps the URL
-lives in the same user profile as the secret file, so a one-time code would add no protection
-against the target threat and would break reopening a running instance from the launcher.
+/api/* needs the cookie AND the `X-Simpress-Sessao` header (approved by the user on 26/11/2026),
+both HMAC-SHA256 of the secret with different labels, so neither one opens `/bootstrap`:
+- the HttpOnly, SameSite=Strict cookie is not port-isolated (RFC 6265): a server on another
+  127.0.0.1 port receives it, but it alone is not enough;
+- the header value goes to the page in the `/#sessao=<hex>` fragment of the bootstrap redirect and
+  lives in localStorage, which is per origin (port included), so another port never sees it.
 
-The file and the cookie name carry the port, because cookies on 127.0.0.1 ignore the port and
-two Simpress servers (e.g. a worktree on 8001) would otherwise overwrite each other's session.
+The file and the cookie name carry the port, because two Simpress servers (e.g. a worktree on 8001)
+would otherwise overwrite each other's session.
 
-shortcut: the cookie is not port-isolated (RFC 6265), so it leaks if the user opens a link to another
-user's server on another 127.0.0.1 port; migrate to an `X-Simpress-Sessao` header kept in per-origin
-storage when that risk stops being acceptable (accepted by the user on 08/11/2026).
+Still open: the phone mode (`iniciar_servidor_celular.bat`) is plain HTTP on the LAN, so anyone who
+can sniff that network sees the cookie and the header.
 """
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import os
+import re
 import secrets
 from pathlib import Path
 from typing import Optional
@@ -28,6 +32,10 @@ from starlette.requests import cookie_parser
 from starlette.types import Scope
 
 SEGREDO = secrets.token_urlsafe(32)
+NOME_CABECALHO = "x-simpress-sessao"
+_ROTULO_COOKIE = b"simpress-sessao/cookie/v1"
+_ROTULO_CABECALHO = b"simpress-sessao/cabecalho/v1"
+_FORMATO = re.compile(rb"[0-9a-f]{64}")
 
 
 def nome_cookie(port: int) -> str:
@@ -55,9 +63,21 @@ def ler_segredo(port: int) -> Optional[str]:
         return None
 
 
-def cabecalho_cookie(port: int, valor: Optional[str] = None) -> str:
-    """`Cookie` header value for internal clients; `valor` defaults to this process's secret."""
-    return f"{nome_cookie(port)}={SEGREDO if valor is None else valor}"
+def _derivar(rotulo: bytes, segredo: Optional[str] = None) -> str:
+    return hmac.new((SEGREDO if segredo is None else segredo).encode("ascii"), rotulo, hashlib.sha256).hexdigest()
+
+
+def cookie_derivado(segredo: Optional[str] = None) -> str:
+    return _derivar(_ROTULO_COOKIE, segredo)
+
+
+def cabecalho_derivado(segredo: Optional[str] = None) -> str:
+    return _derivar(_ROTULO_CABECALHO, segredo)
+
+
+def cabecalhos_sessao(port: int, segredo: Optional[str] = None) -> dict[str, str]:
+    """Headers for internal clients; `segredo` defaults to this process's secret."""
+    return {"Cookie": f"{nome_cookie(port)}={cookie_derivado(segredo)}", "X-Simpress-Sessao": cabecalho_derivado(segredo)}
 
 
 def valido(valor: Optional[str]) -> bool:
@@ -74,3 +94,14 @@ def cookie_do_scope(scope: Scope, port: int) -> Optional[str]:
             if encontrado:
                 return encontrado
     return None
+
+
+def sessao_valida(scope: Scope, port: int) -> bool:
+    """/api/* gate: the derived cookie and exactly one derived X-Simpress-Sessao header."""
+    cabecalhos = [valor for chave, valor in scope.get("headers", []) if chave.lower() == NOME_CABECALHO.encode("ascii")]
+    cabecalho = cabecalhos[0] if len(cabecalhos) == 1 else b""
+    cookie = (cookie_do_scope(scope, port) or "").encode("utf-8", "replace")
+    # fullmatch: `$` would accept a trailing newline. Both digests always run (`&`, not `and`).
+    cookie_ok = hmac.compare_digest(cookie if _FORMATO.fullmatch(cookie) else b"", cookie_derivado().encode("ascii"))
+    cabecalho_ok = hmac.compare_digest(cabecalho if _FORMATO.fullmatch(cabecalho) else b"", cabecalho_derivado().encode("ascii"))
+    return cookie_ok & cabecalho_ok

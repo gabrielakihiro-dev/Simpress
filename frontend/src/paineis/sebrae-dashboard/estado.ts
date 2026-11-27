@@ -2,6 +2,7 @@
 // Dashboard (chamados novos e alterações nos antigos em aberto). Porte fiel do antigo frontend/src/legado/features/sebrae-dashboard.js:
 // mesmos IDs, ARIA, textos, toasts e corpos de POST. Depende só do contexto recebido (app, dom, modelo). A tela segue
 // montada à mão no DOM (sem JSX), porque o resto da Automação procura esses elementos pelo ID.
+import { baixarDaApi } from "../../comum/baixar-api.ts";
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
@@ -2076,9 +2077,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         host.appendChild(dom.createTextElement("p", "", "Este envio não tem cópia local verificável. A recuperação permanece bloqueada; preserve os arquivos para conferência."));
         return;
       }
-      const copia = dom.createTextElement("a", "ck-btn ck-btn--fantasma ck-btn--sm", "Baixar cópia local deste envio para conferir");
-      copia.href = `/api/sebrae/dashboard/envio/${encodeURIComponent(aviso.envio_id)}/snapshot`;
-      host.appendChild(copia);
+      host.appendChild(botaoBaixarCopia("Baixar cópia local deste envio para conferir", aviso.envio_id));
       if (!aviso.incerto) {
         const limpar = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm", "Tentar limpar cópias já enviadas");
         limpar.type = "button";
@@ -2129,9 +2128,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       if (aviso.recuperacao.acao === "concluir_legado") host.replaceChildren(dom.createTextElement("p", "", `Conclusão manual do legado ${aviso.envio_id} registrada após conferência e pasta vazia. Nenhum arquivo foi movido ou excluído pelo sistema; nenhum upload foi disparado.`));
       if (naoEnviado) {
         host.appendChild(dom.createTextElement("p", "ck-campo__ajuda", `Esta cópia: ${aviso.envio_id}; SHA-256: ${aviso.sha256 || "indisponível"}. A fila pendente será preservada.`));
-        const copia = dom.createTextElement("a", "ck-btn ck-btn--fantasma ck-btn--sm", "Baixar ESTA cópia para revisar");
-        copia.href = `/api/sebrae/dashboard/envio/${encodeURIComponent(aviso.envio_id)}/snapshot`;
-        host.appendChild(copia);
+        host.appendChild(botaoBaixarCopia("Baixar ESTA cópia para revisar", aviso.envio_id));
         const reenviar = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm", "Revisar e reenviar ESTA cópia");
         reenviar.type = "button";
         reenviar.id = "btn-sebrae-reenviar-snapshot";
@@ -2854,6 +2851,19 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       botao.disabled = false;
       botao.removeAttribute("aria-busy");
     }
+  }
+
+  // Um <a href> não leva o X-Simpress-Sessao: a cópia vem por fetch e a falha vira toast, não uma página de erro.
+  function botaoBaixarCopia(texto: string, envioId: string) {
+    const botao = dom.createTextElement("button", "ck-btn ck-btn--fantasma ck-btn--sm", texto);
+    botao.type = "button";
+    botao.addEventListener("click", async () => {
+      botao.disabled = true; // evita baixar duas vezes enquanto a cópia vem
+      try {
+        await baixarDaApi(`/api/sebrae/dashboard/envio/${encodeURIComponent(envioId)}/snapshot`, "Dashboard Operacional_SEBRAE.xlsx", "Não foi possível baixar a cópia deste envio.");
+      } catch (falha) { app.showToast((falha as ErroApi).message, "error"); } finally { botao.disabled = false; }
+    });
+    return botao;
   }
 
   function baixarArquivo(nome: string, base64: string) {

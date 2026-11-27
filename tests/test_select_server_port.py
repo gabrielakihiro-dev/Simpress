@@ -38,6 +38,20 @@ class SelectServerPortTests(unittest.TestCase):
         self.assertEqual(calls[-1].args[0], "PORT:8001")
 
 
+class DerivationParityTests(unittest.TestCase):
+    def test_derivation_matches_sessao_local(self):
+        from security import sessao_local
+
+        for segredo in ("segredo-sintetico", sessao_local.SEGREDO):
+            self.assertEqual(selector._derive(segredo, b"simpress-sessao/cookie/v1"), sessao_local.cookie_derivado(segredo))
+            self.assertEqual(selector._derive(segredo, b"simpress-sessao/cabecalho/v1"), sessao_local.cabecalho_derivado(segredo))
+        self.assertEqual(
+            sessao_local.cabecalhos_sessao(8123, "segredo-sintetico"),
+            {"Cookie": f"simpress_sessao_8123={selector._derive('segredo-sintetico', b'simpress-sessao/cookie/v1')}",
+             "X-Simpress-Sessao": selector._derive("segredo-sintetico", b"simpress-sessao/cabecalho/v1")},
+        )
+
+
 class ProbeAgainstRealServerTests(unittest.TestCase):
     """Real uvicorn servers on a free port; synthetic session secret in a temp LOCALAPPDATA."""
 
@@ -111,6 +125,7 @@ class ProbeAgainstRealServerTests(unittest.TestCase):
 
     def test_slow_or_failing_version_check_after_identity_is_still_running(self):
         from fastapi import FastAPI
+        from security import sessao_local
         from fastapi.responses import JSONResponse, RedirectResponse
         import time
 
@@ -123,7 +138,7 @@ class ProbeAgainstRealServerTests(unittest.TestCase):
             @fake.get("/bootstrap")
             def bootstrap(t: str = ""):
                 resposta = RedirectResponse("/", status_code=303)
-                resposta.set_cookie(cookie_name, t)
+                resposta.set_cookie(cookie_name, sessao_local.cookie_derivado(t))
                 return resposta
 
             @fake.get("/api/automacao/estado")
@@ -137,6 +152,68 @@ class ProbeAgainstRealServerTests(unittest.TestCase):
             self._write_secret(port, secret)
             with self.subTest(mode=mode):
                 self.assertEqual(selector._probe_simpress(port), {"outdated": False})
+
+    def test_previous_version_with_raw_secret_cookie_is_outdated(self):
+        from fastapi import FastAPI
+        from fastapi.responses import RedirectResponse
+
+        fake = FastAPI()
+        port = self._free_port()
+
+        @fake.get("/bootstrap")
+        def bootstrap(t: str = ""):
+            resposta = RedirectResponse("/", status_code=303)
+            resposta.set_cookie(f"simpress_sessao_{port}", t)
+            return resposta
+
+        self._serve_on(fake, port)
+        self._write_secret(port, "segredo-sintetico")
+        # Older Simpress (cookie == raw secret) on the same data/state: reported as OUTDATED, never as another program.
+        self.assertEqual(selector._probe_simpress(port), {"outdated": True})
+
+    def test_bootstrap_with_a_cookie_that_is_neither_raw_nor_derived_is_not_accepted(self):
+        from fastapi import FastAPI
+        from fastapi.responses import RedirectResponse
+
+        fake = FastAPI()
+        port = self._free_port()
+
+        @fake.get("/bootstrap")
+        def bootstrap(t: str = ""):
+            resposta = RedirectResponse("/", status_code=303)
+            resposta.set_cookie(f"simpress_sessao_{port}", "valor-qualquer")
+            resposta.set_cookie(f"outro_simpress_sessao_{port}", t)
+            return resposta
+
+        self._serve_on(fake, port)
+        self._write_secret(port, "segredo-sintetico")
+        self.assertIsNone(selector._probe_simpress(port))
+
+    def test_version_check_sends_derived_cookie_and_header(self):
+        from fastapi import FastAPI, Request
+        from fastapi.responses import JSONResponse, RedirectResponse
+        from security import sessao_local
+
+        fake = FastAPI()
+        secret = "segredo-sintetico"
+        port = self._free_port()
+        recebidos = []
+
+        @fake.get("/bootstrap")
+        def bootstrap(t: str = ""):
+            resposta = RedirectResponse("/", status_code=303)
+            resposta.set_cookie(f"simpress_sessao_{port}", sessao_local.cookie_derivado(t))
+            return resposta
+
+        @fake.get("/api/automacao/estado")
+        def estado(request: Request):
+            recebidos.append((request.cookies.get(f"simpress_sessao_{port}"), request.headers.get("x-simpress-sessao")))
+            return JSONResponse({})
+
+        self._serve_on(fake, port)
+        self._write_secret(port, secret)
+        self.assertEqual(selector._probe_simpress(port), {"outdated": False})
+        self.assertEqual(recebidos, [(sessao_local.cookie_derivado(secret), sessao_local.cabecalho_derivado(secret))])
 
     def test_impostor_with_same_title_openapi_is_not_accepted(self):
         from fastapi import FastAPI
