@@ -739,23 +739,29 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
       const request = autocompleteRequestGate.begin();
       try {
         // Falha da busca de chamados e OS é silenciosa: os equipamentos aparecem do mesmo jeito.
-        const [results, extras] = await Promise.all([
-          context.apiFetch<RespostaBusca>(`/api/buscar-expandida?q=${encodeURIComponent(term)}&limit=15`, {
-            signal: request.signal,
-            errorMessage: "Não foi possível consultar os equipamentos.",
-          }),
-          context.apiFetch<BuscaChamadosOsResposta>(`/api/buscar/chamados-os?q=${encodeURIComponent(term)}`, {
-            signal: request.signal,
-            errorMessage: "Não foi possível consultar chamados e OS.",
-          }).catch((): BuscaChamadosOsResposta => SEM_CHAMADOS_OS),
-        ]);
-        if (!autocompleteRequestGate.isCurrent(request.id)) return;
-        if (transferUtils.isCurrentQuery(
+        const pedidoExtras = context.apiFetch<BuscaChamadosOsResposta>(`/api/buscar/chamados-os?q=${encodeURIComponent(term)}`, {
+          signal: request.signal,
+          errorMessage: "Não foi possível consultar chamados e OS.",
+        }).then((extras): BuscaChamadosOsResposta => ({ chamados: extras?.chamados ?? [], os: extras?.os ?? [] }))
+          .catch((): BuscaChamadosOsResposta => SEM_CHAMADOS_OS);
+        const results = await context.apiFetch<RespostaBusca>(`/api/buscar-expandida?q=${encodeURIComponent(term)}&limit=15`, {
+          signal: request.signal,
+          errorMessage: "Não foi possível consultar os equipamentos.",
+        });
+        const atual = () => autocompleteRequestGate.isCurrent(request.id) && transferUtils.isCurrentQuery(
           autocompleteRequestGate, request.id, elemento("input-serial").value, term
-        )) {
-          renderAutocomplete(results.items, results.total, results.has_more, results.sugestao, {
-            chamados: extras?.chamados ?? [], os: extras?.os ?? [],
-          });
+        );
+        if (!atual()) return;
+        // Com equipamentos, desenha já; sem eles, espera a rota nova para não piscar "nenhum equipamento" antes dos chamados/OS.
+        const comEquipamentos = results.items.length > 0;
+        if (comEquipamentos) renderAutocomplete(results.items, results.total, results.has_more, results.sugestao);
+        const extras = await pedidoExtras;
+        if (!atual()) return;
+        if (!comEquipamentos || extras.chamados.length + extras.os.length > 0) {
+          // Equipamentos vêm primeiro no índice: o destaque de antes continua valendo ao anexar os grupos.
+          const destaque = highlightedAutocompleteIndex;
+          renderAutocomplete(results.items, results.total, results.has_more, results.sugestao, extras);
+          if (destaque >= 0) { highlightedAutocompleteIndex = destaque; updateAutocompleteHighlight(); }
         }
       } catch (err: unknown) {
         if (!(err instanceof Error && err.name === "AbortError") && autocompleteRequestGate.isCurrent(request.id)) {
@@ -796,10 +802,8 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
       app.ativarAbaTransferencia?.("home");
       if (isBoxOpen && highlightedAutocompleteIndex >= 0) {
         selecionarPorIndice(highlightedAutocompleteIndex);
-      } else if (isBoxOpen && totalAutocomplete() === 1) {
-        selecionarPorIndice(0);
-      } else if (isBoxOpen && autocompleteItemsList.length === 0) {
-        // Só chamados e OS, sem destaque: abre o primeiro (a pesquisa completa é só de equipamentos).
+      } else if (isBoxOpen && (totalAutocomplete() === 1 || autocompleteItemsList.length <= 1)) {
+        // Um só equipamento (mesmo com chamados/OS ao lado) ou, sem equipamentos, o primeiro chamado/OS: a pesquisa completa é só de equipamentos.
         selecionarPorIndice(0);
       } else if (isBoxOpen) {
         app.abrirPesquisaCompleta();
@@ -817,7 +821,6 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     const { chamados, os } = autocompleteExtras;
     return index - equipamentos < chamados.length
       ? selecionarChamado(chamados[index - equipamentos].numero)
-      
       : selecionarOs(os[index - equipamentos - chamados.length]);
   }
 
@@ -833,8 +836,13 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     const busca = elemento<HTMLInputElement>("cockpit-tickets-search");
     busca.value = os;
     busca.dispatchEvent(new Event("input", { bubbles: true }));
-    await new Promise(resolver => setTimeout(resolver, 200)); // o filtro da F6 espera 150 ms
-    const linha = [...document.querySelectorAll<HTMLElement>("#cockpit-tickets-os tbody tr[data-os]")].find(item => item.dataset.os === os && !item.hidden);
+    // O filtro da F6 espera 150 ms: espera a linha da OS aparecer visível (até ~1 s).
+    const procurar = () => [...document.querySelectorAll<HTMLElement>("#cockpit-tickets-os tbody tr[data-os]")].find(item => item.dataset.os === os && !item.hidden);
+    let linha = procurar();
+    for (let tentativa = 0; !linha && tentativa < 10; tentativa += 1) {
+      await new Promise(resolver => setTimeout(resolver, 100));
+      linha = procurar();
+    }
     if (!linha) return;
     linha.scrollIntoView?.({ block: "center", behavior: "auto" });
     app.destacarLinhaCockpit?.(linha);
@@ -897,16 +905,17 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     const currentQuery = (elemento("input-serial").value || "").trim();
 
     const temExtras = extras.chamados.length + extras.os.length > 0;
-    if ((!items || items.length === 0) && !temExtras) {
+    const semEquipamentos = !items || items.length === 0;
+    if (semEquipamentos) {
       list.replaceChildren();
-      list.classList.add("hidden");
+      list.classList.toggle("hidden", !temExtras);
       emptyState.classList.remove("hidden");
       moreResults.classList.add("hidden");
       emptyState.innerHTML = `
           <div class="ck-ac__vazio">
             <svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
-            <p class="ck-ac__vazio-titulo" role="status" aria-live="polite">Nenhum equipamento localizado</p>
-            <p class="ck-ac__vazio-texto">Nenhum registro com o termo <strong class="ck-ac__vazio-termo">"${escapeHtml(currentQuery)}"</strong> foi encontrado no inventário do SEBRAE/PR.</p>
+            ${temExtras ? "" : `<p class="ck-ac__vazio-titulo" role="status" aria-live="polite">Nenhum equipamento localizado</p>`}
+            ${temExtras ? "" : `<p class="ck-ac__vazio-texto">Nenhum registro com o termo <strong class="ck-ac__vazio-termo">"${escapeHtml(currentQuery)}"</strong> foi encontrado no inventário do SEBRAE/PR.</p>`}
             ${suggestion ? `<p class="ck-ac__vazio-sugestao">Você quis dizer <button type="button" class="ck-ac__vazio-sugestao-botao" data-on-click="aplicarSugestaoBusca" data-args='["$this"]' data-sugestao="${escapeHtml(suggestion)}">${escapeHtml(suggestion)}</button>?</p>` : ""}
             <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="ck-btn ck-btn--primario ck-btn--sm">
               <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
@@ -925,7 +934,8 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
       box.classList.remove("hidden");
       ajustarAlturaAutocomplete();
       lucide.createIcons({ root: box });
-      return;
+      // Sem equipamentos mas com chamados/OS: o estado vazio (cadastro e sugestão) fica junto dos grupos.
+      if (!temExtras) return;
     }
 
     autocompleteItemsList = items || [];
@@ -933,7 +943,7 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     highlightedAutocompleteIndex = -1;
     list.innerHTML = "";
     list.classList.remove("hidden");
-    emptyState.classList.add("hidden");
+    emptyState.classList.toggle("hidden", !semEquipamentos);
     countEl.innerHTML = hasMore
       ? `<strong>Equipamentos</strong> · ${items.length} de ${total}`
       : `<strong>Equipamentos</strong> · ${total}`;

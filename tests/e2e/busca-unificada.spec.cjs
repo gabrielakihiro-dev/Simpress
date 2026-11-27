@@ -24,10 +24,10 @@ async function preparar(page, { chamadosOs = { chamados: [], os: [] }, equipamen
   return pedidosExtra;
 }
 
-const CHAMADOS = { chamados: [{ numero: "UTIC-2026-15", aba: "novos", campo: "numero" }, { numero: "UTIC-2026-16", aba: "finalizados", campo: "numero" }], os: [] };
+const CHAMADOS = { chamados: [{ numero: "UTIC-2026-1378", aba: "novos", campo: "numero" }, { numero: "UTIC-2026-1379", aba: "finalizados", campo: "numero" }], os: [] };
 
 for (const viewport of [{ width: 1366, height: 800 }, { width: 320, height: 700 }]) {
-  test(`UTIC mostra o grupo Chamados, sem estado vazio, e abre o F5 (${viewport.width}px)`, async ({ page }) => {
+  test(`UTIC mostra o grupo Chamados, sem o aviso de nenhum equipamento, e abre o F5 (${viewport.width}px)`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await preparar(page, { chamadosOs: CHAMADOS });
     const entrada = page.locator("#input-serial");
@@ -35,9 +35,9 @@ for (const viewport of [{ width: 1366, height: 800 }, { width: 320, height: 700 
     const opcoes = page.locator("#autocomplete-list [role=option]");
     await expect(opcoes).toHaveCount(2);
     await expect(page.getByRole("group", { name: "Chamados" })).toBeVisible();
-    await expect(opcoes.first()).toContainText("UTIC-2026-15");
+    await expect(opcoes.first()).toContainText("UTIC-2026-1378");
     await expect(opcoes.first()).toContainText("Novos");
-    await expect(page.locator("#autocomplete-empty-state")).toBeHidden();
+    await expect(page.locator("#autocomplete-empty-state")).not.toContainText("Nenhum equipamento localizado");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
     await page.keyboard.press("ArrowDown");
@@ -46,7 +46,11 @@ for (const viewport of [{ width: 1366, height: 800 }, { width: 320, height: 700 
     await page.keyboard.press("ArrowUp");
     await page.keyboard.press("Enter");
     await expect(page.locator("#autocomplete-box")).toBeHidden();
-    await expect(page.locator('[data-cockpit-tool-panel="sebrae-chamados"]')).toBeVisible();
+    const painel = page.locator('[data-cockpit-tool-panel="sebrae-chamados"]');
+    await expect(painel).toBeVisible();
+    // O UTIC-2026-1378 existe no fixture do F5: o cartão é achado (sem aviso) e destacado.
+    await expect(painel.locator('article[data-numero="UTIC-2026-1378"]').first()).toBeVisible();
+    await expect(page.locator("#toast-container")).not.toContainText("não está na lista do F5");
   });
 }
 
@@ -100,7 +104,7 @@ test("só equipamentos: nenhum cabeçalho de grupo", async ({ page }) => {
   await page.locator("#input-serial").fill("BRJ");
   await expect(page.locator("#autocomplete-list [role=option]")).toHaveCount(1);
   await expect(page.locator("#autocomplete-list [role=group]")).toHaveCount(0);
-  await expect(page.locator("#autocomplete-list .ck-ac__cab")).toHaveCount(0);
+  await expect(page.locator("#autocomplete-list .ck-ac__grupo-cab")).toHaveCount(0);
 });
 
 test("falha da rota de chamados e OS é silenciosa: equipamentos aparecem", async ({ page }) => {
@@ -148,4 +152,20 @@ test("linha achada pelo número não mostra o rótulo", async ({ page }) => {
   await page.locator("#input-serial").fill("UTIC-2026-1");
   await expect(page.locator("#autocomplete-list [role=option]")).toHaveCount(2);
   await expect(page.locator("#autocomplete-list .ck-ac__campo")).toHaveCount(0);
+});
+
+test("Enter com um equipamento e uma OS ao lado abre o equipamento", async ({ page }) => {
+  await preparar(page, { equipamentos: [EQUIPAMENTO], chamadosOs: { chamados: [], os: [{ ...OS_SINTETICA, campo: "serie" }] } });
+  await page.locator("#input-serial").fill("BRJ0001");
+  await expect(page.locator("#autocomplete-list [role=option]")).toHaveCount(2);
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#card-serial")).toHaveText("BRJ0001");
+});
+
+test("série fora do cadastro com OS mostra o grupo OS e o botão de cadastro", async ({ page }) => {
+  await preparar(page, { chamadosOs: { chamados: [], os: [{ ...OS_SINTETICA, serie: "FORA0001", campo: "serie" }] } });
+  await page.locator("#input-serial").fill("FORA0001");
+  await expect(page.getByRole("group", { name: "OS", exact: true })).toBeVisible();
+  await expect(page.locator("#autocomplete-empty-state").getByRole("button", { name: /Cadastrar "FORA0001"/ })).toBeVisible();
+  await expect(page.locator("#autocomplete-empty-state")).not.toContainText("Nenhum equipamento localizado");
 });
