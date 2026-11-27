@@ -92,7 +92,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
   - os módulos `domains/ux_*` repetem o padrão.
 - Impacto: uma falha real na importação do Dashboard ou numa consulta ao Endpoint some sem rastro, e o diagnóstico depende de reproduzir o erro.
 - Solução: `logger.debug` (ou `warning`, quando muda o resultado) com o tipo da exceção, sem mensagem nem dado pessoal, como `core/logging_setup.py` já faz. Nos fallbacks do Playwright, um `debug` basta.
-- Resolvido em parte em 26/11/2026 (PARCIAL): logados, só com o tipo da exceção, os pontos de `domains/endpoint_lookup.py`, `domains/ux_chamados.py` e 3 de `routers/sebrae_dashboard.py`. Continuam silenciosos `routers/sebrae_dashboard.py:225` (era `:384` antes da extração do achado 3), `domains/ux_ticket.py:202, 218, 416`, `domains/ux_ticket_browser.py:104, 127` e `domains/ux_chamados_browser.py:306, 434`.
+- Resolvido em parte em 26/11/2026 (PARCIAL): logados, só com o tipo da exceção, os pontos de `domains/endpoint_lookup.py`, `domains/ux_chamados.py` e 3 de `routers/sebrae_dashboard.py`. Também em 26/11/2026: `domains/ux_ticket.py` (2 fechamentos de aba em `debug`; o envio que fica "incerto" em `warning`), `domains/ux_ticket_browser.py` (2 em `debug`) e `domains/ux_chamados_browser.py` (2 em `debug`). Continua silencioso só `routers/sebrae_dashboard.py:225` (era `:384` antes da 1ª etapa do achado 3), que fica para depois da extração desse router para `domains/`.
 
 **3. Fábricas de router gigantes.** Média, confirmado.
 - Evidência: `create_sebrae_dashboard_router` com 998 linhas, `create_inventory_history_router` com 798 e `create_operations_router` com 549 (seção 4).
