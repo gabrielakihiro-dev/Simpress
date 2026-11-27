@@ -39,7 +39,12 @@ function avisoDeErro(error: unknown, fallback: string): Aviso {
 const lerSaude = () => apiFetch<SaudeLocal>("/api/saude-local", { errorMessage: "Não foi possível ler a saúde local." });
 
 export async function abrirSaudeLocal(): Promise<void> {
-  if (abrindo || ler().ocupado) return;
+  if (abrindo) return;
+  // Com uma ação em andamento, só reabre: não relê nem zera o resultado que ela vai gravar.
+  if (ler().ocupado) {
+    app().abrirModalAcessivel(MODAL_ID, "#titulo-saude-local", "fecharSaudeLocal");
+    return;
+  }
   abrindo = true;
   try {
     try {
@@ -61,15 +66,23 @@ export function fecharSaudeLocal(): void {
   requestAnimationFrame(() => document.getElementById(BOTAO_ID)?.focus());
 }
 
-async function comTrava(tarefa: () => Promise<void>): Promise<void> {
+// Depois da tarefa o foco vai para `foco` (ou o título): os botões ficam desligados durante ela e o foco não pode cair no body.
+async function comTrava(tarefa: () => Promise<void>, foco?: () => string): Promise<void> {
   if (ler().ocupado) return;
+  const titulo = () => document.getElementById("titulo-saude-local");
+  const ativo = document.activeElement;
+  if (ativo && ativo !== document.body && document.getElementById("saude-local-corpo")?.contains(ativo)) titulo()?.focus();
   mudar({ ocupado: true });
   document.getElementById(MODAL_ID)?.setAttribute("aria-busy", "true");
   try {
     await tarefa();
   } finally {
-    mudar({ ocupado: false });
+    flushSync(() => mudar({ ocupado: false }));
     document.getElementById(MODAL_ID)?.removeAttribute("aria-busy");
+    // Só mexe no foco se o diálogo ainda está aberto.
+    if (!document.getElementById(MODAL_ID)?.classList.contains("hidden")) {
+      (document.querySelector<HTMLElement>(foco?.() || "#saude-local-previa") || titulo())?.focus();
+    }
   }
 }
 
@@ -80,7 +93,7 @@ export function atualizarSaudeLocal(): Promise<void> {
     } catch {
       mudar({ saude: null, cargaErro: true, carga: "Não foi possível ler a saúde local." });
     }
-  });
+  }, () => "#saude-local-atualizar");
 }
 
 export function previaLimpezaSaudeLocal(): Promise<void> {
@@ -93,13 +106,13 @@ export function previaLimpezaSaudeLocal(): Promise<void> {
     } catch (error) {
       mudar({ previa: null, resultado: null, avisoLimpeza: avisoDeErro(error, "Não foi possível gerar a prévia da limpeza.") });
     }
-  });
+  }, () => "#saude-local-previa");
 }
 
 function textoConfirmacao({ totais }: Limpeza): string {
   const partes: string[] = [];
   if (totais.remover_arquivos) partes.push(`${plural(totais.remover_arquivos, "arquivo", "arquivos")} (${formatarBytes(totais.remover_bytes)}) ${totais.remover_arquivos === 1 ? "será removido" : "serão removidos"}`);
-  if (totais.quarentena_arquivos) partes.push(`${totais.quarentena_arquivos} (${formatarBytes(totais.quarentena_bytes)}) irá para a quarentena`);
+  if (totais.quarentena_arquivos) partes.push(`${plural(totais.quarentena_arquivos, "arquivo", "arquivos")} (${formatarBytes(totais.quarentena_bytes)}) ${totais.quarentena_arquivos === 1 ? "irá" : "irão"} para a quarentena`);
   return `${partes.join(" e ")}. A regra é conferida de novo na hora; o resultado pode ser menor que a prévia.`;
 }
 
@@ -114,12 +127,13 @@ export async function limparSaudeLocal(): Promise<void> {
         method: "POST", headers: CABECALHO_JSON, body: JSON.stringify({ confirmado: true }), errorMessage: "Não foi possível concluir a limpeza.",
       });
       mudar({ resultado, previa: null, avisoLimpeza: null });
-      // Os números por área mudaram; se a releitura falhar, o resultado da limpeza continua na tela.
-      lerSaude().then(saude => mudar({ saude })).catch(() => undefined);
     } catch (error) {
-      mudar({ previa: null, resultado: null, avisoLimpeza: avisoDeErro(error, "Não foi possível concluir a limpeza.") });
+      // A prévia fica (pode estar velha; confirmar confere a regra de novo) e o aviso explica o que houve.
+      mudar({ resultado: null, avisoLimpeza: avisoDeErro(error, "Não foi possível concluir a limpeza.") });
     }
-  });
+    // Com sucesso ou erro, parte dos temporários pode ter saído: as áreas se atualizam; se a releitura falhar, o resto da tela fica como está.
+    await lerSaude().then(saude => mudar({ saude })).catch(() => undefined);
+  }, () => (ler().resultado ? "#saude-local-resultado" : "#saude-local-previa"));
 }
 
 // O cookie de sessão só vai pelo fetch: baixa o JSON como blob e entrega por um link temporário.
@@ -138,6 +152,6 @@ export function baixarDiagnosticoSaudeLocal(): Promise<void> {
     } catch {
       mudar({ avisoDiagnostico: { titulo: "Não foi possível gerar o pacote de diagnóstico.", detalhe: "Tente de novo; se continuar, reinicie o servidor local.", tipo: "erro" } });
     }
-  });
+  }, () => "#saude-local-baixar");
 }
 

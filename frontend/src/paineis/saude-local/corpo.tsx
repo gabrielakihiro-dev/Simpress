@@ -62,6 +62,10 @@ function Disco({ disco }: { disco: { livre_bytes: number; total_bytes: number } 
   );
 }
 
+const BotaoAtualizar = ({ ocupado }: { ocupado: boolean }) => (
+  <button type="button" id="saude-local-atualizar" className="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="atualizarSaudeLocal" disabled={ocupado}>Atualizar</button>
+);
+
 function UsoPorArea({ areas }: { areas: Area[] }) {
   const maior = Math.max(1, ...areas.map(area => area.bytes));
   const colunas: ColunaNl<Area>[] = [
@@ -125,14 +129,14 @@ function Limpeza() {
       selo={previa && !vazio ? <Selo>Prévia — nada foi alterado</Selo> : undefined}
       acoes={
         <>
-          <button type="button" className="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="previaLimpezaSaudeLocal" disabled={ocupado}>{previa ? "Ver prévia de novo" : "Ver prévia"}</button>
+          <button type="button" id="saude-local-previa" className="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="previaLimpezaSaudeLocal" disabled={ocupado}>{previa ? "Ver prévia de novo" : "Ver prévia"}</button>
           {previa && !vazio ? <button type="button" className="ck-btn ck-btn--perigo ck-btn--sm" data-on-click="limparSaudeLocal" disabled={ocupado}>Limpar temporários</button> : null}
         </>
       }>
       <AvisoCaixa aviso={avisoLimpeza} />
       <div aria-live="polite" aria-atomic="true">
         {resultado ? (
-          <div className="sl-aviso" data-tipo="ok">
+          <div className="sl-aviso" data-tipo="ok" id="saude-local-resultado" tabIndex={-1}>
             <strong>Limpeza concluída.</strong>
             <span>{resultado.totais.remover_arquivos} removidos ({formatarBytes(resultado.totais.remover_bytes)}) · {resultado.totais.quarentena_arquivos} na quarentena ({formatarBytes(resultado.totais.quarentena_bytes)}) · {resultado.totais.preservados} preservados.</span>
           </div>
@@ -169,7 +173,7 @@ function Diagnostico() {
   const { avisoDiagnostico, ocupado } = useSyncExternalStore(assinar, ler);
   return (
     <Secao id="diagnostico" titulo="Pacote de diagnóstico"
-      acoes={<button type="button" className="ck-btn ck-btn--primario ck-btn--sm" data-on-click="baixarDiagnosticoSaudeLocal" disabled={ocupado}>Baixar pacote de diagnóstico</button>}>
+      acoes={<button type="button" id="saude-local-baixar" className="ck-btn ck-btn--primario ck-btn--sm" data-on-click="baixarDiagnosticoSaudeLocal" disabled={ocupado}>Baixar pacote de diagnóstico</button>}>
       <p className="ckp-secao__desc">Um arquivo JSON para enviar ao suporte. É gerado na hora e baixado pelo navegador; não fica guardado no servidor.</p>
       <AvisoCaixa aviso={avisoDiagnostico} />
       <ListasDoPacote tituloSim="Vai no pacote" tituloNao="Nunca vai"
@@ -181,7 +185,7 @@ function Diagnostico() {
 
 export function CorpoSaudeLocal() {
   const { carga, cargaErro, saude, ocupado } = useSyncExternalStore(assinar, ler);
-  const disco = saude?.disco;
+  const disco = saude?.disco && saude.disco.total_bytes > 0 ? saude.disco : null;
   const pouco = disco ? disco.livre_bytes / disco.total_bytes < 0.1 : false;
   return (
     <div className="sl-corpo">
@@ -195,10 +199,10 @@ export function CorpoSaudeLocal() {
       {saude ? (
         <>
           <Secao id="disco" titulo="Espaço em disco" selo={disco ? <Selo tom={pouco ? "alerta" : "ok"}>{pouco ? "Pouco espaço" : "Folga"}</Selo> : undefined}>
-            <Disco disco={saude.disco} />
+            <Disco disco={disco} />
           </Secao>
           <Secao id="areas" titulo="Uso por área"
-            acoes={<button type="button" className="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="atualizarSaudeLocal" disabled={ocupado}>Atualizar</button>}>
+            acoes={<BotaoAtualizar ocupado={ocupado} />}>
             <UsoPorArea areas={saude.areas} />
             <p className="ckp-meta">Só mede tamanho e quantidade; o conteúdo dos arquivos não é lido. Área que não existe aparece como “Nenhum arquivo”.</p>
           </Secao>
@@ -211,6 +215,12 @@ export function CorpoSaudeLocal() {
             </p>
           </Secao>
           <Limpeza />
+          <Diagnostico />
+        </>
+      ) : cargaErro ? (
+        // Sem a primeira leitura, o diálogo ainda oferece reler e baixar o diagnóstico (que não depende dela).
+        <>
+          <div className="sl-secao__cab"><span className="ck-espaco" /><BotaoAtualizar ocupado={ocupado} /></div>
           <Diagnostico />
         </>
       ) : null}
