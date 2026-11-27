@@ -1,5 +1,6 @@
 """Exercise the real frontend routes and build inputs without operational data."""
 
+import ast
 import hashlib
 import re
 import unittest
@@ -76,3 +77,25 @@ class ProjectLayoutTests(unittest.TestCase):
                     self.assertTrue((document.parent / target).exists())
                 checked += 1
         self.assertGreater(checked, 20)
+
+    def test_layers_do_not_import_routers_or_private_domain_names(self):
+        """domains/ and core/ never import routers/; routers/ never import a name starting with _ from domains/ (module._x access is not checked)."""
+        checked = 0
+        for folder in ("domains", "core", "routers"):
+            for path in (BASE_DIR / folder).rglob("*.py"):
+                for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                    if isinstance(node, ast.Import):
+                        modules = [(alias.name, None) for alias in node.names]
+                    elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                        modules = [(node.module, alias.name) for alias in node.names]
+                    else:
+                        continue
+                    for module, name in modules:
+                        checked += 1
+                        with self.subTest(file=path.relative_to(BASE_DIR).as_posix(), module=module, name=name):
+                            root = module.split(".")[0]
+                            if folder != "routers":
+                                self.assertNotEqual(root, "routers")
+                            elif root == "domains" and name:
+                                self.assertFalse(name.startswith("_"))
+        self.assertGreater(checked, 100)

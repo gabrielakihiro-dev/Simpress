@@ -99,7 +99,7 @@ if errorlevel 10 goto already_running
 if errorlevel 1 goto port_selection_failed
 
 echo   Site:         http://127.0.0.1:%SIMPRESS_PORT%  (o navegador abre sozinho com a sessao local)
-echo   Documentacao: http://127.0.0.1:%SIMPRESS_PORT%/docs
+if "%SIMPRESS_ENABLE_DOCS%"=="1" echo   Documentacao: http://127.0.0.1:%SIMPRESS_PORT%/docs
 echo.
 
 "%PYTHON%" "%MAIN%"

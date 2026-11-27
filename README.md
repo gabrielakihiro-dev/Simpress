@@ -633,7 +633,7 @@ frontend/partials/                   Partes do static/index.html, montadas pelo 
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
 frontend/src/                        React + TypeScript (fonte de static/dist/, gerado pelo Vite)
 frontend/src/aplicacao/              Funcionalidades da interface (app.ts monta o contexto e publica as ações)
-motor_ia/                            Pipeline experimental isolado, com testes próprios fora do npm run verify
+motor_ia/                            Pipeline experimental isolado, fora do `npm run verify` e da CI; remoção só a pedido do usuário
 scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 scripts/build/lucide-subset.cjs            Recorte dos ícones Lucide usados pela interface
 scripts/bootstrap_environment.py     Criação do ambiente virtual e instalação das dependências fixadas

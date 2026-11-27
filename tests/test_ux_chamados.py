@@ -125,6 +125,15 @@ class UxChamadosTests(unittest.TestCase):
         self.assertEqual(self.portal.envios, 0)
         self.assertFalse((self.state / "ux_chamados_historico.json").exists())
 
+    def test_send_failure_logs_only_exception_type(self):
+        sessao = self.preparar()
+        with mock.patch.object(self.portal, "enviar", side_effect=TimeoutError("SEGREDO-123")):
+            with self.assertLogs(ux_chamados.logger, level="WARNING") as capturado:
+                self.assertEqual(self.executar(sessao, enviar=True, confirmado=True)["status"], "incerto")
+        saida = "\n".join(capturado.output)
+        self.assertIn("TimeoutError", saida)
+        self.assertNotIn("SEGREDO-123", saida)
+
     def test_timeout_cannot_retry_until_explicit_review(self):
         sessao = self.preparar()
         self.portal.falhar_envio = True
