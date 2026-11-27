@@ -3,6 +3,10 @@
 Shared by the CLI (``scripts/cleanup_local_temps.py``) and the "Saúde local" routes
 (``domains/saude_local.py``). Call ``time.time``, ``json.dump`` and the integrity helpers
 through their modules: the tests patch them there.
+
+Since 26/11/2026 the dry run takes no lock (a busy temporary may show as a candidate; the apply re-checks
+under the lock), and a FileTransactionError while quarantining preserves the temporary and goes on
+(it used to stop --apply); an interrupted quarantine may leave .temp-quarantine/snapshot-*/relatorio.json.
 """
 
 from __future__ import annotations
@@ -208,10 +212,9 @@ def cleanup_local_temps(
             "bytes": metadata.st_size,
         }
 
-        # The prévia only reads and hashes: it takes no lock, so it creates no .lock file.
-        guard = contextlib.nullcontext() if dry_run else integrity.lock_paths([target], timeout=0.0)
         try:
-            with guard:
+            # The prévia only reads and hashes: it takes no lock, so it creates no .lock file.
+            with contextlib.nullcontext() if dry_run else integrity.lock_paths([target], timeout=0.0):
                 reference_files = _committed_reference_files(target, input_dir)
                 if not reference_files:
                     result["sem_destino_preservados"] += 1

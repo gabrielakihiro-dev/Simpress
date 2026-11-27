@@ -217,12 +217,18 @@ def estado_json(base: Path) -> Dict[str, Any]:
 
 
 def transacoes(base: Path) -> Dict[str, Any]:
-    """Counts entries in .transactions; never recovers nor opens them."""
+    """Counts entries in .transactions; never recovers nor opens them.
+
+    Unlistable folder (PermissionError, other OSError): "pendente" with 0, because the count is unknown and
+    saying "limpo" could hide an interrupted write; the contract enums stay unchanged and the GET still answers.
+    """
     pasta = base / ".transactions"
     try:
         quantidade = sum(1 for _ in pasta.iterdir()) if pasta.is_dir() else 0
     except FileNotFoundError:
         quantidade = 0
+    except OSError:
+        return {"situacao": "pendente", "quantidade": 0}
     return {"situacao": "pendente" if quantidade else "limpo", "quantidade": quantidade}
 
 

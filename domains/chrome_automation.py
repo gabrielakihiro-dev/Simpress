@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import zipfile
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
@@ -167,16 +168,31 @@ def _read_json(path: Path) -> Optional[Dict[str, Any]]:
     return data if isinstance(data, dict) else None
 
 
+# Same window as TRAVA_GRAVACAO_S in scripts/automacao_rotinas_chrome.py: the script may still be writing the lock.
+LOCK_WRITE_SECONDS = 10
+
+
 def live_lock_owner(lock_file: Path, is_alive: Callable[[int], bool] = pid_alive) -> Optional[Dict[str, Any]]:
-    """The lock JSON while its pid is alive, else None. Only reads: no runner, no record written."""
-    data = _read_json(lock_file)
-    if not data:
-        return None
+    """The lock JSON while its pid is alive, else None. Only reads: no runner, no record written.
+
+    Same rule as ``ler_trava`` in the script: an unreadable or incomplete lock (no integer pid) counts as
+    busy ({"pid": -1}) while it is younger than LOCK_WRITE_SECONDS, and as an orphan (free) after that.
+    """
     try:
-        pid = int(data.get("pid") or 0)
-    except (TypeError, ValueError):
+        data: Any = json.loads(lock_file.read_text(encoding="utf-8"))
+    except FileNotFoundError:
         return None
-    return data if is_alive(pid) else None
+    except (OSError, UnicodeError, ValueError):
+        data = None
+    if isinstance(data, dict) and isinstance(data.get("pid"), int):
+        return data if is_alive(data["pid"]) else None
+    try:
+        recent = time.time() - lock_file.stat().st_mtime < LOCK_WRITE_SECONDS
+    except FileNotFoundError:
+        return None
+    except OSError:  # cannot even stat it: assume it is being written (the script would stop here too)
+        recent = True
+    return {"pid": -1, "rotina": "", "inicio": ""} if recent else None
 
 
 def _write_json(path: Path, data: Dict[str, Any]) -> None:

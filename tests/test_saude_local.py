@@ -286,6 +286,25 @@ class LimpezaTests(SaudeLocalBase):
         self.assertEqual(len(previa.json()["itens"]), 3)
         self.assertEqual(_snapshot(self.root), antes)  # no .lock, no folder, no mtime change
 
+    def test_transacoes_ilegivel_nao_derruba_o_get_e_nao_diz_limpo(self) -> None:
+        (self.root / ".transactions").mkdir()
+        original = Path.iterdir
+
+        def iterdir(caminho: Path) -> Any:
+            if caminho.name == ".transactions":
+                raise PermissionError(13, "negado", str(caminho))
+            return original(caminho)
+
+        with patch.object(Path, "iterdir", iterdir):
+            saude = self.client.get("/api/saude-local")
+            diagnostico = self.client.get("/api/saude-local/diagnostico")
+            limpeza = self.client.post("/api/saude-local/limpeza", json={"confirmado": True})
+        self.assertEqual(saude.status_code, 200, saude.text)
+        self.assertEqual(saude.json()["transacoes"], {"situacao": "pendente", "quantidade": 0})
+        self.assertEqual(diagnostico.json()["transacoes"], {"situacao": "pendente", "quantidade": 0})
+        self.assertEqual(limpeza.status_code, 503)
+        self.assertTrue(self.tmp_igual.exists())
+
     def _capturar(self, acao: Callable[[], Any]) -> Tuple[Any, List[str]]:
         captura = _CapturaLogs()
         raiz_log = logging.getLogger()

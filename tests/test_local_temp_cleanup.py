@@ -225,5 +225,21 @@ class LocalTemporaryCleanupTests(unittest.TestCase):
         self.assertEqual(result["examinados"], 0)
         self.assertTrue(outside_temporary.exists())
 
+    def test_dry_run_takes_no_lock_and_does_not_count_a_busy_target_as_blocked(self):
+        from core import integrity
+
+        self.target.write_bytes(b"committed history")
+        duplicate = self._temporary("a1b2c3d4", b"committed history", age_hours=30)
+        before = sorted(p.name for p in self.history_dir.iterdir())
+        busy = integrity.FileBusyError("busy")  # the target is locked by another writer
+        with patch("core.integrity.lock_paths", side_effect=busy) as lock_paths:
+            preview = cleanup_local_temps(self.root, dry_run=True)
+            lock_paths.assert_not_called()
+            self.assertEqual(sorted(p.name for p in self.history_dir.iterdir()), before)  # no .lock created
+            applied = cleanup_local_temps(self.root)
+        self.assertEqual((preview["iguais_prontos"], preview["bloqueados_preservados"]), (1, 0))
+        self.assertEqual((applied["removidos"], applied["bloqueados_preservados"]), (0, 1))
+        self.assertTrue(duplicate.exists())
+
 if __name__ == "__main__":
     unittest.main()
