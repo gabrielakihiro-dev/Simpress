@@ -3,6 +3,7 @@
 // ficam como Registro, como em cobertura/tipos.ts. Estado, visão, contexto e modelo têm tipo próprio.
 import type { ApiFetchOptions } from "../../api";
 import type { LojaLeitura } from "./leitura-loja";
+import type { LojaAvisos, LojaRascunho } from "./lojas";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Os antigos em aberto (`abertos[]`) trazem `os_nova` e, no lugar dele, `os_sem_relacao` (nunca os dois com valor). */
@@ -157,6 +158,9 @@ export interface ContextoSebraeDashboard {
   sugestaoOs?: SugestaoOsPainel;
   /** Loja dos chips da última leitura dos antigos; o montar cria a que o React lê (sem ela a fábrica usa uma própria). */
   lojaLeitura?: LojaLeitura;
+  /** Lojas dos avisos dos novos e do rascunho (avisos-rascunho.tsx); mesma regra da lojaLeitura. */
+  lojaAvisos?: LojaAvisos;
+  lojaRascunho?: LojaRascunho;
 }
 
 export interface EstadoSebrae {
