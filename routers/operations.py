@@ -1,7 +1,6 @@
 """Operational views over saved comparison history and service tickets."""
 
 import json
-import re
 from datetime import datetime, timezone
 import logging
 from io import BytesIO
@@ -21,33 +20,31 @@ from domains.equipment_dossier import build_os_section, current_orders, empty_os
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.history_annotations import (
     MAX_ANNOTATION_LENGTH,
-    reuse_annotation_revision,
     annotation_view,
-    same_annotation_revision,
     sync_history_annotation,
-    build_history_annotation_record,
-    history_annotation_record_path,
     load_history_annotations,
 )
 from domains.ticket_import import (
     MAX_TICKET_WORKBOOK_BYTES,  # Re-exported: the upload limit is part of this route's contract.
-    TICKET_TIMELINE_ANNOTATION_REASON,
     TicketImportError,
     TicketImportServices,
     TicketWorkbookSource,
     ticket_annotation_row_hash,
 )
-from domains.inventory_comparison import normalize_reference_value
 from domains.os_marcas_finalizacao import NOME_ARQUIVO as NOME_ARQUIVO_MARCAS, FontesMarcas, alterar_marca, ler_marcas
 from domains.os_observacoes import ler_observacoes, salvar_observacao
-from domains.sebrae_vinculos import vinculos_da_finalizacao
+from domains import sebrae_vinculos
+from domains.sebrae_vinculos import (
+    derived_links,
+    finalization_links_by_key,
+    ticket_os_link_key,
+    vinculos_da_finalizacao,
+)
 from domains.ticket_reconciliation import serial_key, reconcile_ticket_workbooks
+from domains import ticket_reporting
 from domains.ticket_reporting import (
-    TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TICKET_SNAPSHOT_FIELDS,
-    TicketTimelineIndex,
     annotate_ticket_os_signals,
-    build_ticket_timeline,
     build_ticket_timeline_index,
     build_ticket_workbook,
     compare_ticket_snapshots,
@@ -233,49 +230,11 @@ def create_operations_router(
 
     report_cache: Dict[str, Any] = {}
 
-    def ticket_os_link_key(fonte: str, serie: str, ordem_servico: str) -> str:
-        ordem_key = re.sub(r"\s+", "", str(ordem_servico or "")).upper()
-        return json.dumps(
-            [fonte, normalize_reference_value(serie), ordem_key],
-            ensure_ascii=False, separators=(",", ":"),
-        )
-
     def read_ticket_os_links(path: Path) -> Dict[str, Any]:
-        if not path.exists():
-            return {"version": 1, "vinculos": {}}
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            raise HTTPException(status_code=503, detail="Os vínculos manuais de OS não puderam ser lidos.") from None
-        if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("vinculos"), dict):
-            raise HTTPException(status_code=503, detail="Os vínculos manuais de OS estão inválidos.")
-        links = data["vinculos"]
-        for key, link in links.items():
-            if not isinstance(key, str) or not isinstance(link, dict):
-                raise HTTPException(status_code=503, detail="Os vínculos manuais de OS estão inválidos.")
-            try:
-                fonte = link["fonte"]
-                serie = link["serie"]
-                ordem = link["os"]
-                ano = int(link["ano"])
-                numero = link["numero"]
-                expected_key = ticket_os_link_key(fonte, serie, ordem)
-                valid = (
-                    fonte in {"simpress", "oracle"}
-                    and bool(str(serie).strip()) and bool(str(ordem).strip())
-                    and 2000 <= ano <= 9999
-                    and isinstance(numero, str) and re.fullmatch(r"\d{1,24}", numero)
-                    and key == expected_key
-                )
-            except (KeyError, TypeError, ValueError):
-                valid = False
-                numero = ""
-                ano = 0
-            if not valid:
-                raise HTTPException(status_code=503, detail="Os vínculos manuais de OS estão inválidos.")
-            link["ano"] = ano
-            link["chamado"] = f"UTIC-{ano}-{numero}"
-        return data
+            return sebrae_vinculos.read_ticket_os_links(path)
+        except DomainError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail) from None
 
     def ticket_os_links_path() -> Path:
         return ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
@@ -296,12 +255,7 @@ def create_operations_router(
         except Exception as error:  # noqa: BLE001 - DomainBusyError included; log only the type, never ticket data
             logger.warning("Vínculos de OS derivados das marcas de finalização indisponíveis (%s).", type(error).__name__)
             return {}
-        found: Dict[str, Dict[str, Any]] = {}
-        for item in links:
-            key = ticket_os_link_key(item["fonte"], item["serie"], item["os"])
-            if key not in manual:
-                found.setdefault(key, item)
-        return found
+        return finalization_links_by_key(links, manual)
 
     def derived_ticket_os_links(manual: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Dashboard-derived links; a manual link on the same key always wins, and a failure never breaks the GET.
@@ -309,11 +263,10 @@ def create_operations_router(
         if dashboard_vinculos is None:
             return []
         try:
-            derived = {ticket_os_link_key(item["fonte"], item["serie"], item["os"]): item for item in dashboard_vinculos(load_ticket_report())}
+            return derived_links(dashboard_vinculos(load_ticket_report()), manual)
         except Exception as error:  # noqa: BLE001 - log only the type, never ticket data
             logger.warning("Vínculos de OS derivados do Dashboard indisponíveis (%s).", type(error).__name__)
             return []
-        return [item for key, item in derived.items() if key not in manual]
 
     def validate_staged_ticket_os_links(staged: Path) -> None:
         read_ticket_os_links(staged)
@@ -394,14 +347,7 @@ def create_operations_router(
         return {"marca": marca}
 
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
-        entry = report_cache.get("exibidos")
-        if entry and entry[0] is report:
-            return list(entry[1])
-        snapshots = [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
-        current = report_cache.get("relatorio")
-        if current and current[1] is report:
-            report_cache["exibidos"] = (report, snapshots)
-        return list(snapshots)
+        return ticket_reporting.displayed_ticket_snapshots(report, report_cache)
 
     services = ticket_import_services or TicketImportServices(
         ticket_report_path=ticket_report_path,
@@ -421,72 +367,29 @@ def create_operations_router(
         publish_annotation=lambda *args, **kwargs: sync_history_annotation(*args, **kwargs),
         now=lambda: datetime.now(),
     )
-    annotation_directory = services.annotation_directory
-    annotation_outbox_directory = services.annotation_outbox_directory
 
     def latest_ticket_annotations(strict: bool = False) -> Dict[tuple[str, str], Dict[str, Any]]:
         return ticket_import.latest_ticket_annotations(services, strict)
 
-    def _ticket_timeline_with_annotations(
-        snapshots: Sequence[Dict[str, Any]], serial: str,
-        records: Optional[Dict[tuple[str, str], Dict[str, Any]]] = None,
-        index: Optional[TicketTimelineIndex] = None,
-    ) -> List[Dict[str, Any]]:
-        records = records if records is not None else latest_ticket_annotations()
-        events = build_ticket_timeline(snapshots, serial, index=index)
-        for event in events:
-            event["anotacao_id"] = event["item_id"]
-            record = records.get((event["snapshot_id"], event["item_id"]))
-            event.update(annotation_view(record) if record else {"anotacao": "", "anotacao_revisoes": []})
-        return events
-
-    def sync_ticket_annotation(record: Dict[str, Any]) -> bool:
-        return ticket_import.sync_ticket_annotation(services, record)
+    def _ticket_timeline_with_annotations(snapshots: Sequence[Dict[str, Any]], serial: str) -> List[Dict[str, Any]]:
+        return ticket_import.ticket_timeline_with_annotations(services, snapshots, serial)
 
     def _persist_ticket_annotation(
         *, event_id: str, item_id: str, serial: str, event_time: str, row_hash: str, annotation: str,
         revision_id: Optional[str] = None, base_revisions: Optional[List[str]] = None,
     ) -> bool:
-        values = {
-            "event_id": event_id,
-            "event_time": event_time,
-            "item_id": item_id,
-            "serie": serial,
-            "computador": "",
-            "motivo": TICKET_TIMELINE_ANNOTATION_REASON,
-            "anotacao": annotation,
-            "categoria": TICKET_TIMELINE_ANNOTATION_CATEGORY,
-            "linha_hash": row_hash,
-        }
         try:
-            record = build_history_annotation_record(
-                **values, revision_id=revision_id, base_revisions=base_revisions,
+            return ticket_import.persist_ticket_annotation(
+                services, transaction_root=transaction_root(),
+                transaction_factory=lambda root, targets: AtomicFileTransaction(root, targets),
+                event_id=event_id, item_id=item_id, serial=serial, event_time=event_time, row_hash=row_hash,
+                annotation=annotation, revision_id=revision_id, base_revisions=base_revisions,
             )
-        except ValueError as error:
-            raise HTTPException(422, detail=str(error)) from None
-        pending_path = history_annotation_record_path(annotation_outbox_directory(), event_id, item_id, record["revisao_id"])
-        try:
-            with AtomicFileTransaction(transaction_root(), [pending_path]) as transaction:
-                try:
-                    record = reuse_annotation_revision(annotation_directory(), record)
-                except ValueError as error:
-                    raise HTTPException(409, detail=str(error)) from None
-                if pending_path.exists():
-                    existing = json.loads(pending_path.read_text(encoding="utf-8"))
-                    if not same_annotation_revision(existing, record):
-                        raise HTTPException(409, detail="A revisão já foi usada com outro conteúdo.")
-                    record = existing
-                transaction.stage_bytes(
-                    pending_path,
-                    json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
-                    lambda path: json.loads(path.read_text(encoding="utf-8")),
-                )
-                transaction.commit()
+        except DomainError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail) from None
         except (OSError, FileBusyError, FileTransactionError):
             logger.exception("Não foi possível enfileirar a anotação do chamado %s.", redact_reference(serial))
             raise HTTPException(status_code=503, detail="Não foi possível salvar a anotação localmente.") from None
-
-        return sync_ticket_annotation(record)
 
     @router.get("/api/operacoes/chamados")
     def get_ticket_report():
@@ -660,23 +563,11 @@ def create_operations_router(
         filters: Dict[str, Any],
         select_tickets: Callable[[Sequence[Dict[str, Any]]], List[Dict[str, Any]]],
     ) -> StreamingResponse:
-        report = load_ticket_report()
-        snapshots = displayed_ticket_snapshots(report)
-        selected_id = snapshot_id or (snapshots[-1].get("id", "") if snapshots else "")
-        snapshot = next((item for item in snapshots if item.get("id") == selected_id), None)
-        if snapshot is None:
-            raise HTTPException(status_code=404, detail="A versão selecionada não existe no histórico de chamados.")
-        tickets = select_tickets(snapshot.get("chamados", []))
-        selected_index = next((index for index, item in enumerate(snapshots) if item.get("id") == selected_id), len(snapshots) - 1)
-        timeline_snapshots = snapshots[:selected_index + 1]
-        annotation_records = latest_ticket_annotations()
-        timeline_index = build_ticket_timeline_index(timeline_snapshots)
-        timelines = {
-            str(ticket.get("serie") or ""): _ticket_timeline_with_annotations(
-                timeline_snapshots, str(ticket.get("serie") or ""), annotation_records, timeline_index
-            )
-            for ticket in tickets
-        }
+        snapshots = displayed_ticket_snapshots(load_ticket_report())
+        try:
+            snapshot, tickets, timelines = ticket_import.ticket_export_selection(services, snapshots, snapshot_id, select_tickets)
+        except DomainError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail) from None
         output = build_ticket_workbook(snapshot, tickets, filters, timelines=timelines)
         date_label = str(snapshot.get("atualizado_em") or datetime.now().astimezone().isoformat())[:10].replace("-", "")
         return StreamingResponse(
