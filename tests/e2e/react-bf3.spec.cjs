@@ -925,6 +925,7 @@ test.describe("comportamento (só no desktop)", () => {
       "OS Em dia · Exportação de OS Oracle Abrir",
       "Modelo de exportação Em dia · Planilha-modelo usada nas exportações Atualizar",
       "Regionais Em dia · 5 regionais cadastradas Editar",
+      "Saúde local Disco, arquivos de estado e temporários Abrir",
     ], interno);
     await expect(page.locator("li.ck-pront__item[data-status='ok']")).toHaveCount(4);
     await expect(page.locator("#ckp-progresso-texto")).toHaveText("4 de 4");
@@ -1005,7 +1006,7 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator(PAINEL_PRONTIDAO)).toHaveAttribute("data-state", "ready");
     await expect(resumoCurto(page)).toHaveText("Tudo disponível");
     await expect(page.locator("li.ck-pront__vazio")).toHaveCount(0);
-    await expect(page.locator("li.ck-pront__item")).toHaveCount(4);
+    await expect(page.locator("li.ck-pront__item")).toHaveCount(5);
   });
 
   test("Prontidão: servidor desconectado e volta ao normal", async ({ page }) => {
