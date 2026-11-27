@@ -294,6 +294,18 @@ _ENVIO_TECNICO_RE = re.compile(
 _NEGACAO_RE = re.compile(r"\b(nao|nem|dispensa\w*|sem\s+necessidade)\b(\s+[^\s.,;:!?]+){0,3}\s*$")
 
 
+def displayed_ticket_snapshots(report: Dict[str, Any], cache: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Normalized snapshots of ``report``; ``cache`` (the router's, which also holds ``"relatorio"``) keeps them only while ``report`` is the cached report."""
+    entry = cache.get("exibidos")
+    if entry and entry[0] is report:
+        return list(entry[1])
+    snapshots = [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
+    current = cache.get("relatorio")
+    if current and current[1] is report:
+        cache["exibidos"] = (report, snapshots)
+    return list(snapshots)
+
+
 def _pede_envio_tecnico(descricao: Any) -> bool:
     text = _normalized_text(descricao)
     return any(not _NEGACAO_RE.search(text[:match.start()]) for match in _ENVIO_TECNICO_RE.finditer(text))
