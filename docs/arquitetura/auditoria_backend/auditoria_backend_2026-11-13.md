@@ -127,6 +127,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Impacto: o código pode deixar de funcionar sem que ninguém perceba.
 - Solução: incluir os testes no verify ou criar um `README.md` na pasta dizendo que é experimental e não mantido.
 - Destino decidido em 26/11/2026: `motor_ia/` fica como experimental isolado, fora do `npm run verify` e da CI; remoção só a pedido do usuário.
+- Atualização em 27/11/2026: pasta `motor_ia/` removida a pedido do usuário.
 
 **8. Documento de locks cita módulo que não existe.** Baixa, confirmado.
 - Evidência: `docs/arquitetura/auditoria_backend/hierarquia_de_locks.md:13` cita `_equipment_search_index_lock` em `persistence/postgres.py`, removido com o piloto de banco.
