@@ -89,7 +89,9 @@ def validar_valor(tipo: str, valor: str) -> Optional[str]:
             partes = urlparse(valor)
         except ValueError:
             partes = None
-        if partes is None or len(valor) > 2000 or partes.scheme != "https" or not partes.netloc or re.search(r"\s", valor):
+        # ``\`` vira ``/`` no Chrome e ``@`` no endereço esconde o site real (``https://a.com\@b.com`` abre a.com).
+        if (partes is None or len(valor) > 2000 or partes.scheme != "https" or not partes.netloc
+                or re.search(r"\s", valor) or "\\" in valor or "@" in partes.netloc):
             return "informe um link que comece com https://."
     return None
 

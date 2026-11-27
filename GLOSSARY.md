@@ -121,6 +121,14 @@ _Regra_: [docs/operacao/automacao-chrome.md, "Consulta ao vivo do Endpoint na Ho
 Conexão remota ao computador de um equipamento, aberta no Endpoint por ação explícita do usuário.
 _Regra_: [docs/operacao/automacao-chrome.md, "Consulta ao vivo do Endpoint na Home (03/11/2026)"](./docs/operacao/automacao-chrome.md)
 
+**Dossiê do equipamento**:
+Janela da Home (`Ver dossiê`) só de leitura, com as OS e a linha do tempo de uma série (apelido, transferências, OS, chamados do Sebrae e Cobertura).
+_Regra_: [docs/cockpit-prompts/03-home-split-view.md, "Linha do tempo (27/11/2026)"](./docs/cockpit-prompts/03-home-split-view.md)
+
+**Linha do tempo**:
+Lista do dossiê dos eventos de um equipamento, do mais recente ao mais antigo, com filtro por tipo e limite de 200.
+_Regra_: [docs/cockpit-prompts/03-home-split-view.md, "Linha do tempo (27/11/2026)"](./docs/cockpit-prompts/03-home-split-view.md)
+
 **Assistente**:
 Chat do Cockpit (F9) que responde sobre os dados do Simpress usando ferramentas.
 _Regra_: [docs/cockpit-prompts/15-assistente.md, "Assistente (OpenRouter)"](./docs/cockpit-prompts/15-assistente.md)
@@ -165,6 +173,17 @@ _Regra_: [docs/operacao/alertas-os-divergencias.md, "Interface"](./docs/operacao
 Contagem de lembretes pendentes atrasados e de hoje, mostrada no sino; só números, sem texto dos lembretes.
 _Evitar_: `alarme` ou `aviso nativo` (o sino não dispara alarme)
 _Regra_: [docs/operacao/alertas-os-divergencias.md, "7. Lembretes agendados"](./docs/operacao/alertas-os-divergencias.md)
+
+### Dados locais
+
+**Pacote local**:
+Arquivo `.zip` deste computador que junta configurações, históricos e planilhas atuais, para guardar ou levar para outra máquina (aprovado em 26/11/2026). Não inclui chaves, senhas nem registros de ações irreversíveis.
+_Evitar_: `backup` (colide com Backups (F3) e com as cópias `_backups` das importações)
+_Regra_: [docs/cockpit-prompts/19-configuracao-local.md, "Pacote local (aprovado em 26/11/2026)"](./docs/cockpit-prompts/19-configuracao-local.md)
+
+**Pacote de desfazer**:
+Pacote local que a própria restauração cria antes de gravar, com o estado de antes; restaurá-lo volta esse estado.
+_Regra_: [docs/cockpit-prompts/19-configuracao-local.md, "Pacote local (aprovado em 26/11/2026)"](./docs/cockpit-prompts/19-configuracao-local.md)
 
 ## Relações
 

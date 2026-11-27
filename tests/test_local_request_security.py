@@ -595,6 +595,19 @@ class LocalRequestSecurityTests(unittest.TestCase):
         self.assertIn("Nomes_Entra_PR.xlsx", response.headers["content-disposition"])
 
     @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
+    def test_pacote_local_routes_need_cookie_and_header(self):
+        # Rotas do Pacote local (#400) não ganham isenção: o cookie sozinho ou o cabeçalho sozinho dão 401.
+        client = TestClient(main.app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}", client=("127.0.0.1", 1234))
+        self.addCleanup(client.close)
+        sessao = sessao_local.cabecalhos_sessao(main.SERVER_PORT)
+        for metodo, caminho in (("GET", "/api/pacote-local"), ("POST", "/api/pacote-local/exportar"),
+                                ("GET", "/api/pacote-local/x.zip/previa"), ("POST", "/api/pacote-local/x.zip/restaurar")):
+            for parcial in ({"Cookie": sessao["Cookie"]}, {"X-Simpress-Sessao": sessao["X-Simpress-Sessao"]}, {}):
+                with self.subTest(metodo=metodo, caminho=caminho, cabecalhos=sorted(parcial)):
+                    self.assertEqual(client.request(metodo, caminho, headers=parcial).status_code, 401)
+        self.assertNotEqual(client.get("/api/pacote-local", headers=sessao).status_code, 401)
+
+    @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
     def test_internal_clients_authenticate_with_cookie_and_header(self):
         import os
         import tempfile

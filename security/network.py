@@ -50,11 +50,12 @@ def ip_da_rede() -> str | None:
         return None
 
 
-def is_direct_loopback_request(scope: Mapping[str, Any]) -> bool:
+def is_direct_loopback_request(scope: Mapping[str, Any], estrito: bool = False) -> bool:
     """Trust only the ASGI peer; local profiles do not support forwarded headers.
 
     Accept IPv4 127/8, IPv6 ::1, and IPv4-mapped IPv6 whose IPv4 is loopback.
     Reject missing/malformed peers, hostnames, scoped addresses, and proxy headers.
+    ``estrito`` ignores the LAN and Tailscale opt-ins (actions only for this computer).
     Uvicorn must also run with proxy_headers=False to preserve the socket peer.
     """
     client = scope.get("client")
@@ -70,10 +71,10 @@ def is_direct_loopback_request(scope: Mapping[str, Any]) -> bool:
         return False
     if isinstance(peer, ipaddress.IPv6Address) and peer.ipv4_mapped is not None:
         peer = peer.ipv4_mapped
-    if not peer.is_loopback and not (
+    if not peer.is_loopback and (estrito or not (
         (acesso_rede_ativo() and peer.is_private and not peer.is_link_local)
         or (acesso_tailscale_ativo() and peer in TAILSCALE_REDE)
-    ):
+    )):
         return False
     return not any(
         name.lower() in {b"forwarded", b"x-real-ip"}
