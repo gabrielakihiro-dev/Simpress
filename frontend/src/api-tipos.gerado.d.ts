@@ -523,10 +523,6 @@ export type ExecucaoAutomacao = {
   "log"?: string;
 };
 
-export type ExportarPayload = {
-  "chamados": ChamadoManual[];
-};
-
 export type FichaPayload = {
   "ficha": Record<string, unknown>;
 };
@@ -815,6 +811,12 @@ export type PendenciaUsuarioPayload = {
   "decisao": string;
 };
 
+export type PontoSemAcesso = {
+  "horario": string;
+  "data": string;
+  "total": number;
+};
+
 export type PowerShellPayload = {
   "hostname": string;
   "modo": "sistema" | "usuario";
@@ -965,6 +967,11 @@ export type SaudeLocal = {
   "transacoes": Transacoes;
 };
 
+export type SemAcesso7Dias = {
+  "pontos": PontoSemAcesso[];
+  "historico_desde": string | null;
+};
+
 export type SolicitantePayload = {
   "nome": string;
   "email": string;
@@ -976,6 +983,22 @@ export type SolicitanteTicketPayload = {
   "nome": string;
   "email": string;
   "telefone": string;
+};
+
+export type TempoMedioOs = {
+  "media_dias": number | null;
+  "encerradas": number;
+  "encerradas_sem_data": number;
+  "media_dias_anterior": number | null;
+  "encerradas_anterior": number;
+};
+
+export type TendenciasRelatorioMensal = {
+  "dias": number;
+  "inicio": string;
+  "data_corte": string;
+  "tempo_medio_os": TempoMedioOs;
+  "sem_acesso_7_dias": SemAcesso7Dias;
 };
 
 export type TicketExportPayload = {
@@ -1864,6 +1887,11 @@ export interface Rotas {
     corpo: never;
     resposta: Record<string, unknown>;
   };
+  "GET /api/relatorio-mensal/tendencias": {
+    consulta: { "dias": number; };
+    corpo: never;
+    resposta: TendenciasRelatorioMensal;
+  };
   "GET /api/saude-local": {
     consulta: never;
     corpo: never;
@@ -1987,11 +2015,6 @@ export interface Rotas {
   "POST /api/sebrae/dashboard/pendente/reenviar": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
-  };
-  "POST /api/sebrae/exportar": {
-    consulta: never;
-    corpo: ExportarPayload;
     resposta: unknown;
   };
   "POST /api/sebrae/finalizacao/desfazer-outro-tecnico": {

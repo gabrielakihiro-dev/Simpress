@@ -3,6 +3,7 @@ import { paineisDados } from "../paineis-dados/paineis.ts";
 import { blocoCarregarMais, cabecalhoBloco, campoHistorico, gradeCampos, seloContagem } from "../historico-apelidos/elementos-historico.ts";
 import { chaveFiltroHistorico, fatiaHistorico, TAMANHO_PAGINA_HISTORICO } from "../historico-apelidos/paginacao-historico.ts";
 import { montarMovimento } from "../relatorio-mensal/grafico-semanal.ts";
+import { avisoTendencias, montarCabecalhoTendencias, montarCorpoTendencias } from "../relatorio-mensal/tendencias.ts";
 import { anunciarComparacoes, rotuloOpcaoComparacao, rotuloStatusComparacao } from "../resultado-comparacao/rotulos-comparacao.ts";
 import { capitalizar, mesPorExtenso, nomeDoMes } from "../relatorio-mensal/mes-extenso.ts";
 import type { ContextoFerramentasCockpit, ElementoCockpit, Funcao, Qualquer, Registro } from "./tipos";
@@ -1298,7 +1299,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   // (Home, OS, Resumo, Chamados), nada é gravado. A estrutura das abas e dos painéis é estática no partial; o JS só preenche e alterna.
   const MONTHLY_PAGE = 20;
   const MONTHLY_TOP_UNITS = 8;
-  const REL_ABAS = ["visao", "os", "sebrae", "base"];
+  const REL_ABAS = ["visao", "os", "sebrae", "base", "tendencias"];
   // `aba` só nasce aqui: o reset de loadMonthlyReport não a toca, então a aba escolhida sobrevive à troca de mês e à recarga quieta.
   const monthlyView: Registro = { aba: "visao", report: null, sebrae: null, sebraeErro: "", filtro: "todas", limiteOs: MONTHLY_PAGE, limiteSebrae: MONTHLY_PAGE, unidadesTodas: false, foraAberto: false, fonteGrafico: "ambas" };
   const monthlySituationTone: Record<string, string> = { "Aberta no mês": "info", "Concluída no mês": "success", "Pendente no fim do mês": "warning" };
@@ -1390,6 +1391,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     if (!REL_ABAS.includes(nome)) return;
     monthlyView.aba = nome;
     aplicarAbaRelatorio();
+    if (nome === "tendencias") abrirTendencias();
     animarPainelRelatorio();
     if (focar) byId(`rel-aba-${nome}`)?.focus();
   }
@@ -1942,8 +1944,50 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
     }
   }
 
+  // Tendências (30/90 dias até hoje) não dependem do mês: carregam na primeira abertura da aba e ao trocar o período; ficam em memória.
+  const tendView: Registro = { periodo: 30, dados: null, corpo: null, pedido: 0, carregando: false, velha: false };
+
+  async function carregarTendencias() {
+    const atual = ++tendView.pedido;
+    const periodo = tendView.periodo;
+    tendView.velha = false;
+    tendView.carregando = true;
+    // Recarga silenciosa: com dado bom do mesmo período, os cartões ficam até a resposta nova chegar.
+    if (!tendView.dados) tendView.corpo.replaceChildren(avisoTendencias("Carregando tendências…", "status"));
+    try {
+      const dados = await apiFetch(`/api/relatorio-mensal/tendencias?dias=${periodo}`, { errorMessage: "Falha ao carregar as tendências." });
+      if (atual !== tendView.pedido) return;
+      tendView.dados = dados;
+      tendView.carregando = false;
+      tendView.corpo.replaceChildren(montarCorpoTendencias(dados, monthlyCartao));
+      globalThis.SimpressBento?.animarDentro?.(tendView.corpo);
+    } catch (error: Qualquer) {
+      if (atual !== tendView.pedido) return;
+      tendView.carregando = false;
+      tendView.dados = null;
+      tendView.corpo.replaceChildren(avisoTendencias(error?.message || "Falha ao carregar as tendências.", "alert"));
+    }
+  }
+
+  function abrirTendencias() {
+    const painel = byId("rel-painel-tendencias");
+    if (!painel) return;
+    if (!tendView.corpo) {
+      tendView.corpo = element("div", "nf8-tend__corpo");
+      painel.append(montarCabecalhoTendencias(
+        tendView.periodo,
+        dias => { tendView.periodo = dias; tendView.dados = null; void carregarTendencias(); },
+        () => { if (!tendView.dados && !tendView.carregando) void carregarTendencias(); }, // nova tentativa depois de erro
+      ), tendView.corpo);
+    }
+    // Abrir a aba busca enquanto não houver dado bom (primeira vez, erro) ou se o dado ficou velho.
+    if (!tendView.carregando && (!tendView.dados || tendView.velha)) void carregarTendencias();
+  }
+
   // Importar OS (F6) ou nova comparação com o F8 aberto: recarrega o mês exibido sem perder filtros.
   function refreshMonthlyAfterChange() {
+    tendView.velha = true; // OS/inventário mudaram: as tendências recarregam na próxima abertura da aba (já, se ela está à vista)
+    if (activeTool === "relatorio" && monthlyView.aba === "tendencias" && tendView.corpo) abrirTendencias();
     if (activeTool !== "relatorio") { relatorioDesatualizado = true; return; }
     const month = byId("cockpit-monthly-month")?.value;
     if (month) void loadMonthlyReport(month, { quiet: true });
@@ -2309,6 +2353,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
         renderMonthlyPeriods(input.value);
         await loadMonthlyReport(input.value);
       } else if (relatorioDesatualizado) await loadMonthlyReport(input.value, { quiet: true });
+      if (monthlyView.aba === "tendencias" && tendView.corpo) abrirTendencias(); // reabrir o F8 já na aba
     }
     if (tool === "planilhas") await loadSheets();
     if (tool === "cobertura") await app.carregarCobertura?.();

@@ -918,6 +918,17 @@ class Handler(BaseHTTPRequestHandler):
                 "os": {"oracle": {"abertas": 1, "concluidas": 0, "pendentes": 1},
                        "simpress": {"abertas": 1, "concluidas": 0, "pendentes": 1}, "linhas": [], "dados_insuficientes": []},
             })
+        elif path == "/api/relatorio-mensal/tendencias":
+            dias = 90 if parse_qs(url.query).get("dias", ["30"])[0] == "90" else 30
+            totais = [47, 46, 48, 44, 45, 43, 44, 42, 41]
+            self.send({
+                "dias": dias, "inicio": "2026-08-28" if dias == 90 else "2026-10-27", "data_corte": "2026-11-25",
+                "tempo_medio_os": {"media_dias": 12.4, "encerradas": 38, "encerradas_sem_data": 2,
+                                   "media_dias_anterior": 14.1 if dias == 30 else None, "encerradas_anterior": 30 if dias == 30 else 0},
+                "sem_acesso_7_dias": {"pontos": [{"horario": f"2026-11-{16 + i:02d}T09:00:00", "data": f"2026-11-{16 + i:02d}", "total": total}
+                                                 for i, total in enumerate(totais)],
+                                      "historico_desde": "2026-11-16" if dias == 90 else "2026-10-20"},
+            })
         elif path == "/api/stats":
             self.send({"total_equipamentos": 1, "total_unidades": 0, "exportacao_disponivel": False})
         elif path == "/api/painel":
@@ -1407,17 +1418,10 @@ class Handler(BaseHTTPRequestHandler):
                        "base": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00"},
                        "linhas": linhas, "conteudo_base64": "UEsDBA==", "fechar": fechar, "enviar": enviar})
             return
-        if path in ("/api/sebrae/dashboard", "/api/sebrae/exportar"):
+        if path == "/api/sebrae/dashboard":
             size = int(self.headers.get("Content-Length", "0"))
-            body = self.rfile.read(size)
-            if path == "/api/sebrae/dashboard":
-                self.send(sebrae_novos_payload())
-            else:
-                chamados = json.loads(body or b"{}").get("chamados") or []
-                linhas = [f"{c['A']}\t\t{c['numero']}\t{c['D']}" for c in chamados]
-                self.send({"quantidade": len(chamados), "bloco_a_p": "\n".join(linhas),
-                           "bloco_r_s": "\n".join(f"{c['R']}\t{c['S']}" for c in chamados),
-                           "mensagem": "Planilha Exportada com Sucesso!"})
+            self.rfile.read(size)
+            self.send(sebrae_novos_payload())
             return
         if path in ("/api/equipamentos/usuarios-logados", "/api/equipamento/atualizar-usuario"):
             size = int(self.headers.get("Content-Length", "0"))
