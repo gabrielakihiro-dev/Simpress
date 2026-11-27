@@ -40,6 +40,7 @@ from domains.effective_alias import (
     hostname_backup_vence_manual,
     with_details_serials,
 )
+from domains.history_comparisons import ANNOTATABLE_COMPARISON_CATEGORIES
 from domains.local_setup import unpack_simpress_zip
 from domains.user_holds import hold_change_rows, holds_file, plan_holds, read_holds
 from domains.user_changes import (
@@ -119,18 +120,6 @@ class InventoryUpdateServices:
     # Manual aliases file; with alias_history_file, a manual alias beaten by a backup hostname is deleted.
     modified_aliases_file: Optional[Callable[[], Path]] = None
 
-
-_ANNOTATABLE_COMPARISON_CATEGORIES = (
-    "apelidos_sem_atualizacao",
-    "sem_acesso_7_dias",
-    "ausentes_no_endpoint",
-    "ausentes_em_detalhes",
-    "divergencias_local",
-    "correspondencias_ambiguas",
-    "registros_ambiguos",
-    "series_sem_mapeamento",
-    "mudancas_usuarios",
-)
 
 # Keep the most recent confirmed writes. Once an entry is evicted, a retry is
 # treated as a new operation; the bounded receipt file cannot grow indefinitely.
@@ -252,7 +241,7 @@ def _copy_matching_history_annotations(
 
     new_fingerprints = set()
     # "sem_acesso_60_dias" is not stored and its days change every update, so its notes are never copied here.
-    for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+    for category in ANNOTATABLE_COMPARISON_CATEGORIES:
         items = new_comparison.get(category)
         if not isinstance(items, list):
             continue
@@ -271,7 +260,7 @@ def _copy_matching_history_annotations(
             continue
         event_id = str(previous_event.get("id") or previous_comparison.get("evento_id") or "")
         event_matches: Dict[str, list[Any]] = {}
-        for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+        for category in ANNOTATABLE_COMPARISON_CATEGORIES:
             items = previous_comparison.get(category)
             if not isinstance(items, list):
                 continue
@@ -356,7 +345,7 @@ def _copy_matching_history_annotations(
     new_event_id = str(new_event.get("id") or "")
     if not new_event_id:
         return copied
-    for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+    for category in ANNOTATABLE_COMPARISON_CATEGORIES:
         items = new_comparison.get(category)
         if not isinstance(items, list):
             continue
