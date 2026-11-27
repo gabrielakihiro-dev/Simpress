@@ -138,17 +138,35 @@ type ParametrosCaminho<R extends string> = R extends `${string}{${infer P}}${inf
 
 export type OpcoesRota<R extends keyof Rotas> = Omit<ApiFetchOptions, "method" | "body" | "headers" | "responseType">
   & ([ParametrosCaminho<R>] extends [never] ? { caminho?: never } : { caminho: Record<ParametrosCaminho<R>, string | number> })
-  & ([Rotas[R]["corpo"]] extends [never] ? { corpo?: never } : { corpo: Rotas[R]["corpo"] });
+  & ([Rotas[R]["corpo"]] extends [never] ? { corpo?: never } : { corpo: Rotas[R]["corpo"] })
+  & ([Rotas[R]["consulta"]] extends [never] ? { consulta?: never }
+    : {} extends Rotas[R]["consulta"] ? { consulta?: Rotas[R]["consulta"] } : { consulta: Rotas[R]["consulta"] });
 
-/** apiFetch tipado pela rota de api-tipos.gerado.d.ts: método e URL saem da chave, o corpo vai como JSON e a resposta
- * tem o tipo que o servidor declara. Ex.: apiRota("PATCH /api/lembretes/{lembrete_id}", { caminho: { lembrete_id: id }, corpo: { concluido: true } }).
+type ValorConsulta = string | number | boolean | null | undefined;
+
+// Monta "?a=1&b=x&b=y" na ordem das chaves: lista vira chave repetida; null e undefined ficam fora; "" vai como "a=".
+// shortcut: lista vazia num parâmetro obrigatório sai sem a chave (422 do servidor); nenhum chamador manda lista vazia hoje.
+function montarConsulta(consulta?: Record<string, ValorConsulta | readonly ValorConsulta[]>): string {
+  const params = new URLSearchParams();
+  for (const [nome, valor] of Object.entries(consulta ?? {})) {
+    for (const item of Array.isArray(valor) ? valor : [valor]) if (item !== undefined && item !== null) params.append(nome, String(item));
+  }
+  const texto = params.toString();
+  return texto ? `?${texto}` : "";
+}
+
+/** apiFetch tipado pela rota de api-tipos.gerado.d.ts: método e URL saem da chave, o corpo vai como JSON, a consulta
+ * (?a=b) sai de `consulta` e a resposta tem o tipo que o servidor declara.
+ * Ex.: apiRota("PATCH /api/lembretes/{lembrete_id}", { caminho: { lembrete_id: id }, corpo: { concluido: true } }).
  * Com responseType "response" devolve a Response 2xx crua, para quem trata corpo vazio ou ilegível (Cobertura). */
 export function apiRota<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R> & { responseType: "response" }): Promise<Response>;
 export function apiRota<R extends keyof Rotas>(rota: R, opcoes: OpcoesRota<R>): Promise<Rotas[R]["resposta"]>;
 export function apiRota(rota: keyof Rotas, opcoes: object): Promise<unknown> {
-  const { caminho, corpo, responseType, ...resto } = opcoes as ApiFetchOptions & { caminho?: Record<string, string | number>; corpo?: unknown };
+  const { caminho, corpo, consulta, responseType, ...resto } = opcoes as ApiFetchOptions & {
+    caminho?: Record<string, string | number>; corpo?: unknown; consulta?: Record<string, ValorConsulta | readonly ValorConsulta[]>;
+  };
   const [method, molde = ""] = rota.split(" ");
-  const url = molde.replace(/\{(\w+)\}/g, (_trecho, nome: string) => encodeURIComponent(String(caminho?.[nome])));
+  const url = molde.replace(/\{(\w+)\}/g, (_trecho, nome: string) => encodeURIComponent(String(caminho?.[nome]))) + montarConsulta(consulta);
   const json = corpo === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) };
   const init = { ...resto, method, ...json };
   return responseType === "response" ? apiFetch(url, { ...init, responseType }) : apiFetch(url, init);
