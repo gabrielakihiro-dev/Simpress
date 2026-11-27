@@ -1,7 +1,7 @@
 // Automação (F5): desde o Dia 3 (G7, React) a aba vive em frontend/src/paineis/chrome-automation/ e o comportamento de
 // tela é testado no navegador (tests/e2e/chrome-automation.spec.cjs e tests/e2e/react-g7.spec.cjs, rotas /api/automacao/*
 // simuladas). Aqui ficam as regras puras (regras-puro.ts, carregado direto pelo require do Node), a ponte do código antigo
-// (frontend/src/aplicacao/pontes.ts), o registro, o HTML montado (seis pontos de montagem), o TSX dos cartões e o
+// (frontend/src/aplicacao/pontes.ts), o registro, o HTML montado (sete pontos de montagem), o TSX dos cartões e o
 // CSS da barra de ações. Dados sintéticos.
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -157,6 +157,11 @@ test("regras: livre, ocupado e cancelando descrevem a aba, o chip e o aviso de l
   assert.equal(login.esperandoLogin, true);
   assert.equal(login.avisoLogin, "Faça o login no Chrome de automação (Oracle). A rotina continua sozinha depois do login.");
   assert.equal(descreverEstado({ estado: "livre", aguardando_login: true }).esperandoLogin, false, "aviso de login só com rotina em andamento");
+  const dash = descreverEstado({ estado: "em_andamento", rotina: "enviar", aguardando_dashboard: true });
+  assert.equal(dash.esperandoDashboard, true);
+  assert.equal(dash.esperandoLogin, false);
+  assert.equal(descreverEstado({ estado: "livre", aguardando_dashboard: true }).esperandoDashboard, false, "aviso do Dashboard só com rotina em andamento");
+  assert.equal(descreverEstado({ estado: "em_andamento", rotina: "os" }).esperandoDashboard, false);
   const ultima = descreverEstado({ estado: "livre", ultima: { id: "1", rotina: "inventarios", status: "falha", fim: "2026-11-12T09:30:00" } });
   assert.match(ultima.detalhe, /^Última execução: Inventários, Falha em \d{2}\/\d{2}, \d{2}:\d{2}\.$|^Última execução: Inventários, Falha em .+\.$/);
 });
@@ -355,6 +360,7 @@ test("regras-puro.ts não importa nada e nenhum arquivo do painel importa CSS", 
 // ---- Markup: o HTML é só o ponto de montagem; o TSX desenha os cartões com os mesmos IDs, rótulos e ARIA ----
 const HOSTS = [
   ["aviso", /<section id="automacao-aviso-login" class="ck-aviso ck-aviso--alerta automation-login-alert" role="alert" aria-labelledby="automacao-aviso-login-titulo" data-automacao-regiao="aviso" data-react-painel="chrome-automation" hidden><\/section>/],
+  ["aviso-dashboard", /<section id="automacao-aviso-dashboard" class="ck-aviso ck-aviso--alerta automation-login-alert" role="alert" aria-labelledby="automacao-aviso-dashboard-titulo" data-automacao-regiao="aviso-dashboard" data-react-painel="chrome-automation" hidden><\/section>/],
   ["chrome", /<section class="ck-cartao ck-chrome" aria-labelledby="automacao-titulo" data-automacao-regiao="chrome"><\/section>/],
   ["rotinas", /<section aria-labelledby="ck-rotinas-titulo" data-automacao-regiao="rotinas"><\/section>/],
   ["historico", /<section class="ck-cartao" id="automacao-historico-painel" aria-labelledby="automacao-historico-titulo" data-automacao-regiao="historico"><\/section>/],
@@ -362,10 +368,10 @@ const HOSTS = [
   ["dialogo", /<div class="ck-veu" id="ck-dialogo-log" data-automacao-regiao="dialogo" hidden><\/div>/],
 ];
 
-test("o HTML montado traz só os seis pontos de montagem do React; o conteúdo da aba sai do HTML", () => {
+test("o HTML montado traz só os sete pontos de montagem do React; o conteúdo da aba sai do HTML", () => {
   for (const [regiao, padrao] of HOSTS) assert.match(html, padrao, `host ${regiao}`);
-  assert.equal(html.split('data-react-painel="chrome-automation"').length - 1, 1, "main.tsx monta pelo primeiro host");
-  assert.equal(html.split("data-automacao-regiao=").length - 1, 6);
+  assert.equal(html.split('data-react-painel="chrome-automation"').length - 1, 2, "main.tsx monta pelo primeiro host; o aviso do Dashboard repete o atributo");
+  assert.equal(html.split("data-automacao-regiao=").length - 1, 7);
   const aba = html.match(/<section id="tab-panel-automacao"[\s\S]*?\n    <\/section>/)?.[0];
   assert.ok(aba);
   for (const id of [
@@ -401,9 +407,13 @@ test("o TSX desenha as quatro rotinas na ordem, com ícone, rótulo acessível, 
   assert.match(componentes, /icone: "i-users", nome: "Verificar usuários", idTitulo: "ck-verificacao-titulo"/);
   assert.match(componentes, /id="btn-automacao-login" data-automacao-rotina="login"/);
   assert.match(componentes, /id="btn-automacao-cancelar"/);
+  assert.match(componentes, /<h2 id="automacao-aviso-dashboard-titulo" className="ck-secao-titulo">Dashboard aberto no Excel<\/h2>/);
+  assert.ok(componentes.includes("O Dashboard está aberto no Excel, por você ou por outra pessoa. Feche-o: a rotina continua sozinha quando ele for liberado. Se não for você, use Cancelar execução."));
+  assert.match(componentes, /id="btn-automacao-cancelar-dashboard" data-on-click="cancelarRotinaAutomacao"[^>]*disabled=\{!e\.emAndamento \|\| e\.ocupado\}><Icone nome="i-stop" classe="ck-ico ck-ico--xs" \/>Cancelar execução<\/button>/);
+  assert.match(componentes, /esperandoDashboard\);\s*useLayoutEffect\(\(\) => \{ host\.hidden = !esperando/);
   assert.match(componentes, /data-on-click="cancelarRotinaAutomacao"/);
   const ids = [
-    "automacao-aviso-login-titulo", "automacao-aviso-login-texto", "automacao-titulo", "automacao-estado", "automacao-estado-titulo",
+    "automacao-aviso-login-titulo", "automacao-aviso-login-texto", "automacao-aviso-dashboard-titulo", "automacao-aviso-dashboard-texto", "btn-automacao-cancelar-dashboard", "automacao-titulo", "automacao-estado", "automacao-estado-titulo",
     "automacao-estado-detalhe", "automacao-ver-backups", "ck-rotinas-titulo", "automacao-historico-titulo", "automacao-historico-resumo",
     "automacao-historico-filtros", "automacao-historico-inicio", "automacao-historico-fim", "automacao-historico-rotina", "automacao-historico-status",
     "automacao-historico", "automacao-historico-limite", "automacao-historico-anterior", "automacao-historico-pagina", "automacao-historico-proxima",

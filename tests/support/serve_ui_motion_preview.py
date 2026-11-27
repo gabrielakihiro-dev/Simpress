@@ -466,6 +466,7 @@ SEBRAE_AUTOMATION_LINES = [
     "[09:00:02] [Dashboard Operacional_SEBRAE] Gravação em andamento.",
 ]
 automation_run = None
+automation_dashboard = False  # /__fixture_automacao?run=enviar&dashboard=1: a rotina enviar espera o Dashboard ser fechado no Excel
 automation_last_sebrae = False
 
 # Sincronizar chamados Sebrae: fictional summary; the PUT never persists anything outside this process.
@@ -744,7 +745,7 @@ def automation_state(offset=0):
         "inicio": automation_run["inicio"] if automation_run else "",
         "origem": "site" if automation_run else "", "pid": 4242 if automation_run else None,
         "cancelamento_pedido": False,
-        "aguardando_login": bool(automation_run), "login_origem": "Oracle" if automation_run else "",
+        "aguardando_login": bool(automation_run) and not automation_dashboard, "aguardando_dashboard": bool(automation_run) and automation_dashboard, "login_origem": "Oracle" if automation_run else "",
         "log": {"arquivo": "fixture_sebrae.site.log" if automation_run and automation_run["rotina"] == "sebrae" else "fixture.site.log" if automation_run else "", "offset": len(lines),
                 "linhas": lines[start:], "reiniciado": start != offset},
         "ultima": latest,
@@ -960,9 +961,10 @@ class Handler(BaseHTTPRequestHandler):
                 AUTOMATION_HISTORY.append(AUTOMATION_BASE_HISTORY[2])
             query = parse_qs(url.query)
             globals()["automation_run"] = None
+            globals()["automation_dashboard"] = query.get("dashboard", ["0"])[0] == "1"
             globals()["automation_last_sebrae"] = query.get("ultimo_sebrae", ["0"])[0] == "1"
             rotina_ativa = query.get("run", [""])[0]
-            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard"):
+            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar"):
                 globals()["automation_run"] = {
                     "rotina": rotina_ativa,
                     "inicio": "2026-10-24T09:00:00-03:00",
