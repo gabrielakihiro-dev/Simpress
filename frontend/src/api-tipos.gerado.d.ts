@@ -304,6 +304,72 @@ export type DivergenciaPayload = {
   "serie_recebida"?: string | null;
 };
 
+export type Dossie = {
+  "serie": string;
+  "modelo": string;
+  "os": DossieOs;
+  "linha_do_tempo": DossieLinhaDoTempo;
+};
+
+export type DossieEvento = {
+  "quando": string;
+  "so_data": boolean;
+  "tipo": "apelido_usuario" | "transferencia" | "os" | "sebrae" | "cobertura";
+  "titulo": string;
+  "detalhes": string[];
+};
+
+export type DossieEventoOs = {
+  "atualizado_em": string;
+  "tipo": string;
+  "mudancas": DossieMudanca[];
+};
+
+export type DossieHistoricoOs = {
+  "titulo": string;
+  "eventos": DossieEventoOs[];
+  "total": number;
+};
+
+export type DossieLinhaDoTempo = {
+  "eventos": DossieEvento[];
+  "total": number;
+  "limite": number;
+  "indisponiveis": string[];
+};
+
+export type DossieMudanca = {
+  "campo"?: unknown;
+  "anterior"?: unknown;
+  "atual"?: unknown;
+};
+
+export type DossieOrdem = {
+  "fonte": string;
+  "serie": string;
+  "os": string;
+  "status": string;
+  "fila": string;
+  "dias_aberta": number | null;
+  "utic": DossieUtic | null;
+};
+
+export type DossieOs = {
+  "estado": string;
+  "mensagem": string;
+  "total_importacoes": number;
+  "ultima_importacao_em": string;
+  "presente_na_ultima": boolean;
+  "ultima_vez_observada_em": string | null;
+  "ordens": DossieOrdem[];
+  "historico": DossieHistoricoOs;
+};
+
+export type DossieUtic = {
+  "chamado": string;
+  "origem": string;
+};
+
 export type EnviarEmailPayload = {
   "conta": string;
   "para"?: string;
@@ -412,10 +478,6 @@ export type ExecucaoAutomacao = {
   "lotes"?: LoteAutomacao[];
   "capturas"?: CapturaAutomacao[];
   "log"?: string;
-};
-
-export type ExportarPayload = {
-  "chamados": ChamadoManual[];
 };
 
 export type FichaPayload = {
@@ -1385,7 +1447,7 @@ export interface Rotas {
   "GET /api/equipamento/{serial}/dossie": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
+    resposta: Dossie;
   };
   "POST /api/equipamentos/usuarios-logados": {
     consulta: never;
@@ -1805,11 +1867,6 @@ export interface Rotas {
   "POST /api/sebrae/dashboard/pendente/reenviar": {
     consulta: never;
     corpo: never;
-    resposta: unknown;
-  };
-  "POST /api/sebrae/exportar": {
-    consulta: never;
-    corpo: ExportarPayload;
     resposta: unknown;
   };
   "POST /api/sebrae/finalizacao/desfazer-outro-tecnico": {

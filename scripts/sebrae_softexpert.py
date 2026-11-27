@@ -713,13 +713,6 @@ def _conferir_linha(linha: "Locator", numero: str) -> None:
         raise SoftExpertErro(f"{numero}: a identidade da atividade mudou; nenhum clique foi realizado.")
 
 
-def coletar_numeros(page: "Page") -> List[str]:
-    """Só os números ``UTIC-AAAA-N`` da lista completa, na ordem em que aparecem."""
-    numeros = [item.numero for item in listar_chamados(page)]
-    _log(f"Lista da central de tarefas: {len(numeros)} chamado(s).")
-    return numeros
-
-
 # ---------------------------------------------------------------------------------------------
 # Formulário do chamado
 # ---------------------------------------------------------------------------------------------
@@ -1219,32 +1212,6 @@ def extrair_chamado(context: "BrowserContext", page: "Page", numero: str) -> Cha
     except SoftExpertErro:
         _rotinas().registrar_erro(page, ORIGEM)
         raise
-
-
-def extrair_chamados(
-    context: "BrowserContext", page: "Page", numeros: List[str]
-) -> Dict[str, "ChamadoSoftExpert | SoftExpertErro"]:
-    """Lê vários chamados, um de cada vez; a falha de um não impede os seguintes.
-
-    Número que não confere ou ausente vira o próprio erro no resultado (o chamador o registra como
-    pendência). Sessão expirada espera o login e tenta o chamado mais uma vez; se cair de novo, sobe.
-    O cancelamento é conferido entre dois chamados.
-    """
-    resultado: Dict[str, "ChamadoSoftExpert | SoftExpertErro"] = {}
-    for numero in numeros:
-        _cancelamento(f"Cancelado antes de ler {numero}.")
-        try:
-            try:
-                resultado[numero] = extrair_chamado(context, page, numero)
-            except SessaoExpirada:
-                _log(f"{numero}: sessão expirada; aguardando novo login.")
-                page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
-                garantir_login(page, permitir_sso=True)
-                resultado[numero] = extrair_chamado(context, page, numero)
-        except (ChamadoNaoConfere, ChamadoNaoEncontrado) as erro:
-            _log(f"{numero}: {erro}")
-            resultado[numero] = erro
-    return resultado
 
 
 # ---------------------------------------------------------------------------------------------
