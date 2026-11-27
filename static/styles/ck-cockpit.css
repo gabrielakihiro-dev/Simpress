@@ -1620,6 +1620,9 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-sugestao__texto { min-width: 0; overflow-wrap: anywhere; }
 .sebrae-sugestao__usar { margin-left: auto; }
 @media (pointer: coarse) { .sebrae-sugestao__usar { min-height: 44px; min-width: 44px; } }
+/* Botão "Agora" ao lado do Encerramento (R): preenche data e hora do computador só no clique. */
+.sebrae-campo-agora { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; min-width: 0; }
+@media (pointer: coarse) { .sebrae-encerramento__agora { min-height: 44px; min-width: 44px; } }
 @media (prefers-reduced-motion: no-preference) {
   .sebrae-sugestao { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
 }
@@ -1835,7 +1838,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .sebrae-zona--finalizacao { padding: 0; }
   .sebrae-zona__cab--aviso { padding: 8px 12px; }
   .sebrae-chamado__manuais { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sebrae-chamado__manuais .ck-campo:has([data-sebrae-campo="R"]) { grid-column: 1 / -1; }
+  .sebrae-chamado__manuais .ck-campo:has([data-sebrae-campo="R"]), .sebrae-chamado__manuais .sebrae-campo-agora { grid-column: 1 / -1; }
   .sebrae-final__corpo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "pend" "texto" "anexo" "rodape"; padding: 12px; }
   .sebrae-chamado--finalizado .sebrae-final__corpo { grid-template-areas: "texto" "anexo" "rodape"; }
   .sebrae-final__rodape { flex-direction: column; align-items: stretch; }

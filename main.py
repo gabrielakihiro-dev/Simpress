@@ -2163,6 +2163,7 @@ app.include_router(create_pacote_local_router(PacoteLocalServices(
     ],
     transacao_pendente=lambda: get_transaction_recovery_block() is not None,
     estado_vazio=lambda: prepare_database_state({}, [], {}),
+    chamados_sebrae_abertos=lambda: sebrae_finalizacao.abertos_nao_finalizados(STATE_DIR),
 )))
 
 inventory_history_router, _inventory_history_exports = create_inventory_history_router(InventoryHistoryServices(

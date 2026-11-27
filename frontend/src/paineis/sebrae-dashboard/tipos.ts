@@ -40,6 +40,7 @@ export interface ModeloSebrae {
   avisoNomeDaDescricao: Funcao;
   formatarEncerramento: Funcao;
   encerramentoParaCampo: Funcao;
+  encerramentoAgora: Funcao;
   payloadEdicoes: Funcao;
   descricaoJaNoDashboard: Funcao;
   tituloAntigo: Funcao;

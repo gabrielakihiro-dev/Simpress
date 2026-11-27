@@ -15,7 +15,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   const {
     CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, DESCRICAO_API_SEBRAE, AVISO_CRUZAMENTO, ROTULOS_FALTA,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, CHAVE_RASCUNHO, NUMERO_RASCUNHO, PREFIXO_CAMPO,
-    ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, payloadEdicoes, descricaoJaNoDashboard,
+    ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, encerramentoAgora, payloadEdicoes, descricaoJaNoDashboard,
     tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, payloadAtualizacao, formatarTamanho, textoResultado, textoPulado,
     camposFaltando, blocoOutroTecnico, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
@@ -479,7 +479,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     lista.setAttribute("aria-label", "O que falta para finalizar");
     // Sem `data-req`: o CSS não sabe se um datetime-local está vazio; o clique em Finalizar confere o R (camposFaltando).
     const encerramento = dom.createTextElement("li", "sebrae-pend sebrae-pend--encerramento", "Encerramento (R): obrigatório");
-    encerramento.title = "Informe a data e a hora de encerramento; o sistema nunca usa a hora atual";
+    encerramento.title = "Informe a data e a hora de encerramento (ou clique em Agora); o sistema nunca preenche sozinho";
     lista.append(
       dom.createTextElement("li", "sebrae-pendencias__rotulo", "Para finalizar:"),
       pendenciaItem("A", ROTULOS_FALTA.A), pendenciaItem("D", "Status (D) em FINALIZADO"), pendenciaItem("J", ROTULOS_FALTA.J), pendenciaItem("DESC", "Descrição"),
@@ -1004,6 +1004,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   function campoManualComSugestao(item: Registro, letra: string, alvo = "novo") {
     const controle = controleManual(item.numero, letra, alvo);
     const rotulo = campo(ROTULOS_MANUAIS[letra as keyof typeof ROTULOS_MANUAIS], controle);
+    if (letra === "R") return comBotaoAgora(rotulo, controle);
     const sugestao = sugestaoManual(item, letra, alvo);
     if (!sugestao || controle.disabled || String(controle.value || "").trim() || String(valoresDe(alvo)[item.numero]?.[letra] || "").trim()) return rotulo;
     const nomeCampo = ROTULOS_MANUAIS[letra as keyof typeof ROTULOS_MANUAIS].replace(/\s*\*$/, "");
@@ -1032,6 +1033,27 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const envoltorio = document.createElement("div");
     envoltorio.className = "sebrae-campo-sugestao";
     envoltorio.append(rotulo, chip);
+    return envoltorio;
+  }
+
+  /**
+   * Botão "Agora" ao lado do Encerramento (R) (pedido do usuário, 27/11/2026): o clique põe a data e a hora do relógio deste
+   * computador no campo, que continua editável. O sistema nunca preenche sozinho (regra de 24/11/2026); nada é enviado sem o clique de envio.
+   */
+  function comBotaoAgora(rotulo: ElementoSebrae, controle: ElementoSebrae) {
+    if (controle.disabled) return rotulo; // R já gravado com data e hora: travado, sem botão
+    const agora = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm sebrae-encerramento__agora", "Agora");
+    agora.type = "button";
+    agora.title = "Preencher com a data e a hora deste computador";
+    agora.setAttribute("aria-label", "Preencher Encerramento (R) com a data e a hora de agora");
+    agora.addEventListener("click", () => {
+      controle.value = encerramentoAgora();
+      aoEditar({ currentTarget: controle }); // o mesmo caminho da edição manual: estado, rascunho, R obrigatório e botão Atualizar
+      controle.focus();
+    });
+    const envoltorio = document.createElement("div");
+    envoltorio.className = "sebrae-campo-agora";
+    envoltorio.append(rotulo, agora);
     return envoltorio;
   }
 

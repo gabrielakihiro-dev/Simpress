@@ -454,6 +454,28 @@ class EscritaAntesDoCliqueTests(unittest.TestCase):
             self._clicar_finalizar(self._botao("Finalizar", click=RuntimeError("Target closed")), escritas)
         self.assertEqual(escritas, ["finalizar"])
 
+    def test_modal_estranho_sobre_a_lista_na_mesma_aba_nao_vira_saida_cedo(self):
+        # Mesma aba, lista na tela e formulário fora: a guarda do modal vem antes da saída cedo (senão daria "ok").
+        escritas: list[str] = []
+        pagina = mock.MagicMock()
+        pagina.is_closed.return_value = False
+        estranho = S.SoftExpertErro("Apareceu uma confirmação inesperada depois do Finalizar; nada foi clicado.",
+                                    S.MOTIVO_CONFIRMACAO_INESPERADA)
+        with (
+            mock.patch.object(S, "_botao_unico", return_value=self._botao("Finalizar")),
+            mock.patch.object(S, "_log"),
+            mock.patch.object(R, "aguardar_estabilidade_pre_clique"),
+            mock.patch.object(S, "_esperar", side_effect=lambda _p, condicao, *_a, **_k: condicao()),
+            mock.patch.object(S, "_visivel", return_value=True),  # lista na tela
+            mock.patch.object(S, "_frames", return_value=[]),  # nenhum SEL_DIALOGO: só a ordem pode barrar
+            mock.patch.object(S, "_formulario_visivel", return_value=False),
+            mock.patch.object(S, "_confirmar_modal_finalizar", side_effect=estranho),
+        ):
+            with self.assertRaises(S.SoftExpertErro) as contexto:
+                S._clicar_finalizar(pagina, pagina, "UTIC-2026-1", escritas)
+        self.assertEqual(contexto.exception.motivo, S.MOTIVO_CONFIRMACAO_INESPERADA)
+        self.assertEqual(escritas, ["finalizar"])
+
     def test_recusa_antes_do_clique_nao_marca_escrita(self):
         for botao in (self._botao("Salvar"), self._botao("Finalizar", inner_text=RuntimeError("Timeout 5000ms"))):
             escritas: list[str] = []
@@ -501,6 +523,24 @@ class EscritaAntesDoCliqueTests(unittest.TestCase):
                 ):
                     self.assertIs(S.cartao_na_central(pagina, "UTIC-2026-1"), esperado)
                 self.assertEqual(localizar.call_count, len(leituras))
+                self.assertEqual(pagina.goto.call_count, len(leituras))  # recarrega antes de cada leitura
+
+    def test_cartao_na_lista_so_diz_finalizado_com_duas_ausencias_seguidas(self):
+        # Depois do Finalizar: cartão que some e volta não é "finalizado"; presente só na 1ª leitura é lista atrasada.
+        presente = (mock.MagicMock(), mock.MagicMock())
+        casos = (
+            ([None, None], False), ([None, presente], True), ([presente, None, None], False),
+            ([presente, presente], True), ([presente, None, presente], True),
+        )
+        for leituras, esperado in casos:
+            with self.subTest(leituras=[x is None for x in leituras]):
+                pagina = mock.MagicMock()
+                with (
+                    mock.patch.object(S, "_aguardar_lista"),
+                    mock.patch.object(S, "_localizar_chamado", side_effect=leituras) as localizar,
+                ):
+                    self.assertIs(S._cartao_na_lista(pagina, "UTIC-2026-1"), esperado)
+                self.assertEqual(localizar.call_count, len(leituras))  # consumiu todas as leituras, sem leitura extra
                 self.assertEqual(pagina.goto.call_count, len(leituras))  # recarrega antes de cada leitura
 
     def _finalizar_que_falha(self, erro):

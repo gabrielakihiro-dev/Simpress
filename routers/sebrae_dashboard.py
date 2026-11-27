@@ -298,14 +298,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def _exigir_finalizavel(numero: str) -> str:
         """Antigo EM ABERTO/sem status do Dashboard importado ou novo da última busca (ainda fora do Dashboard)."""
         numero = fin.validar_numero(numero)
-        caminhos = services.caminhos()
-        importado = sebrae_novos.ler_existentes(caminhos.existentes)
-        if importado is None:
+        abertos = sebrae_novos.chamados_em_aberto(services.caminhos())
+        if abertos is None:
             raise DomainValidationError("Importe o Dashboard antes.", status_code=422)
-        if numero in {str(a.get("numero")) for a in importado["abertos"]}:
-            return numero
-        novos = sebrae_novos.ler_novos(caminhos.novos, importado["numeros"])
-        if novos is not None and any(c.numero == numero for c in novos["chamados"]):
+        if numero in abertos:
             return numero
         raise DomainValidationError(f"{numero} não é um chamado antigo EM ABERTO nem um chamado novo da busca.", status_code=422)
 

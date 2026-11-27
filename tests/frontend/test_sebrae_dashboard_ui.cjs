@@ -2787,6 +2787,43 @@ test("chamado novo com D FINALIZADO sem R: R obrigatório, Atualizar bloqueado c
   assert.equal(el["sebrae-atualizar-status"].textContent, "");
 });
 
+test("encerramentoAgora usa o relógio local no formato do datetime-local, com zeros", () => {
+  assert.equal(sebraeDashboardModel.encerramentoAgora(new Date(2026, 10, 7, 9, 5, 59)), "2026-11-07T09:05");
+  assert.equal(sebraeDashboardModel.encerramentoAgora(new Date(2026, 0, 31, 23, 59)), "2026-01-31T23:59");
+});
+
+test("botão Agora do R: só o clique preenche data e hora do relógio, o campo segue editável e libera o Atualizar", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: new Date(2026, 10, 27, 14, 7, 30) });
+  const chamadas = [];
+  const { el, feature } = await renderizarCartoes(cargaCom([novoDe("UTIC-2026-1500", "API SEBRAE", softexpertVazio(false))]), null, chamadas);
+  await esvaziarFila();
+  const cartao = cartaoDe(el, "UTIC-2026-1500");
+  const r = cartao.querySelector('[data-sebrae-campo="R"]');
+  const agora = cartao.querySelector("button.sebrae-encerramento__agora");
+  assert.ok(agora, "o R tem o botão Agora");
+  assert.equal(agora.type, "button", "não submete formulário");
+  assert.equal(r.value, "", "sem clique o R continua vazio");
+  const d = cartao.querySelector('[data-sebrae-campo="D"]');
+  d.value = "FINALIZADO";
+  d.dispatchEvent({ type: "input", currentTarget: d });
+  assert.equal(el["btn-sebrae-atualizar"].disabled, true);
+  agora.dispatchEvent({ type: "click", currentTarget: agora });
+  assert.equal(r.value, "2026-11-27T14:07");
+  assert.equal(formatarEncerramento(r.value), "27/11/2026 14:07", "vira o formato da coluna R");
+  assert.equal(el["btn-sebrae-atualizar"].disabled, false, "o R preenchido libera o Atualizar, como se fosse digitado");
+  assert.ok(!r.disabled, "o usuário pode corrigir");
+  assert.ok(!agora.disabled, "o botão pode ser clicado de novo");
+  // data ou hora errada: o usuário corrige depois do clique e vale o corrigido
+  r.value = "2026-11-26T08:30";
+  r.dispatchEvent({ type: "input", currentTarget: r });
+  assert.equal(r.value, "2026-11-26T08:30");
+  assert.equal(el["btn-sebrae-atualizar"].disabled, false);
+  assert.equal(chamadas.some(c => c.metodo === "POST"), false, "o clique em Agora não envia nada");
+  await feature.atualizarDashboardSebrae();
+  const post = chamadas.find(c => c.metodo === "POST" && c.url.endsWith("/api/sebrae/dashboard/atualizar"));
+  assert.equal(JSON.parse(post.corpo).chamados.find(c => c.numero === "UTIC-2026-1500").R, "26/11/2026 08:30", "vai o R corrigido");
+});
+
 test("resultado antigo da finalização ao abrir a lista avisa, mas não pede GET /api/sebrae/novos de novo", async () => {
   const urls = [];
   const fechar = terminado => ({ em_andamento: false, resultado: { iniciado_em: terminado, terminado_em: terminado, resultados: [{ numero: "UTIC-2026-9", status: "ok" }] } });
