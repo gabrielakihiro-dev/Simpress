@@ -1,8 +1,9 @@
-"""Equipment dossier (Home F1): the OS section, read only, from the imported ticket report.
+"""Equipment dossier (Home F1), read only: the OS section and the timeline ("linha_do_tempo").
 
-Pure functions, plus the timeline ("linha_do_tempo"): one function per source, each gets the data already read.
-The history kept by the importer is per series, not per OS. Only whitelisted fields leave here:
-never the OS description, user, name, e-mail or phone, and never the timeline annotations (free text).
+Pure functions; each timeline source gets the data already read. The history kept by the importer is per series,
+not per OS. Only whitelisted fields leave here: never the OS description, e-mail, phone, transfer contact or notes,
+who received a coverage move, or the timeline annotations (free text). The only person data is the previous and new
+user and alias of the alias/user history, shown as the local history screen already shows them (approved 27/11/2026).
 Doc: ``docs/cockpit-prompts/03-home-split-view.md``, section "Dossiê do equipamento".
 """
 

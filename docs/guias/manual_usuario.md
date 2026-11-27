@@ -78,6 +78,13 @@ Para pesquisar: na **Home**, digite série, apelido/hostname, modelo, cidade ou 
 
 **Controle remoto:** na Home, com um equipamento selecionado, clique em **Controle remoto** (ao lado de *Consultar no Endpoint*). O Simpress abre o controle remoto no Endpoint com o motivo `acesso` e deixa a conexão aberta para você continuar. Se o computador estiver offline, aparece uma caixa de mensagem avisando. Você também pode pedir ao Assistente ("abra o controle remoto da série X"); ele mostra um cartão e só conecta depois que você confirmar. Exige o Chrome de automação aberto (porta 9333) com o login do Endpoint feito.
 
+**Dossiê do equipamento (Ver dossiê), 27/11/2026:** na Home, com um equipamento selecionado, clique em **Ver dossiê** (no painel **Ações**, em **Outros**). A janela só mostra informações, não altera nada. Ela tem duas partes:
+
+- **OS e chamados:** as OS deste equipamento nas importações mais recentes, com status, fila, dias abertos e o chamado UTIC vinculado (ou **Ver OS**, para abrir a OS na aba **OS**).
+- **Linha do tempo:** tudo o que aconteceu com o equipamento em uma lista só, do mais novo para o mais antigo: apelido e usuário alterados, transferências registradas, mudanças nas OS, chamados do Sebrae (vinculados, finalizados ou que saíram do Dashboard) e reservas e movimentações da Cobertura.
+
+Para ler a linha do tempo, use os botões de filtro (**Tudo** ou um tipo, como **Transferências** ou **OS**; o número ao lado mostra quantos eventos tem). A lista mostra no máximo 200 eventos; se houver mais, a tela avisa `Mostrando os 200 eventos mais recentes de <N>.`. Se alguma parte não puder ser lida, a tela avisa `Fonte indisponível` com o nome dela, e as outras partes continuam aparecendo. Para guardar ou levar no papel, clique em **Imprimir**: sai só o filtro que estiver marcado, em fundo branco, sem botões. Na impressão, usuário e apelido não aparecem (só o título, como `Apelido alterado`); senhas, nomes de pessoas e observações nunca aparecem em nenhuma das duas partes.
+
 **Histórico de apelidos (F7):** mostra tudo o que mudou nos equipamentos (apelido, usuário logado, endereço de instalação e avisos do Endpoint), do mais novo para o mais antigo. Atualizado em 11/11/2026.
 
 1. Abra **Ferramentas › Histórico de apelidos** (ou tecle `F7`). A lista é recarregada sozinha toda vez que a tela abre.

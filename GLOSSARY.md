@@ -121,6 +121,14 @@ _Regra_: [docs/operacao/automacao-chrome.md, "Consulta ao vivo do Endpoint na Ho
 Conexão remota ao computador de um equipamento, aberta no Endpoint por ação explícita do usuário.
 _Regra_: [docs/operacao/automacao-chrome.md, "Consulta ao vivo do Endpoint na Home (03/11/2026)"](./docs/operacao/automacao-chrome.md)
 
+**Dossiê do equipamento**:
+Janela da Home (`Ver dossiê`) só de leitura, com as OS e a linha do tempo de uma série (apelido, transferências, OS, chamados do Sebrae e Cobertura).
+_Regra_: [docs/cockpit-prompts/03-home-split-view.md, "Linha do tempo (27/11/2026)"](./docs/cockpit-prompts/03-home-split-view.md)
+
+**Linha do tempo**:
+Lista do dossiê dos eventos de um equipamento, do mais recente ao mais antigo, com filtro por tipo e limite de 200.
+_Regra_: [docs/cockpit-prompts/03-home-split-view.md, "Linha do tempo (27/11/2026)"](./docs/cockpit-prompts/03-home-split-view.md)
+
 **Assistente**:
 Chat do Cockpit (F9) que responde sobre os dados do Simpress usando ferramentas.
 _Regra_: [docs/cockpit-prompts/15-assistente.md, "Assistente (OpenRouter)"](./docs/cockpit-prompts/15-assistente.md)
