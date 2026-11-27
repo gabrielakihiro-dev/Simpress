@@ -1,4 +1,7 @@
 const test = require("node:test");
+// O DOM dos modais agora é React (frontend/src/paineis/importacao-planilhas/dialogos.tsx); aqui as asserções leem o estado
+// que ele desenha, e o DOM real é conferido em tests/e2e/react-bf2.spec.cjs. Os inputs de arquivo (não controlados) seguem no DOM falso.
+const { ler, definirExportarHistorico } = require("../../frontend/src/paineis/importacao-planilhas/estado.ts");
 const {
   assert,
   createAppHarness,
@@ -25,9 +28,6 @@ function uploadPreviewResult(overrides = {}) {
 function chooseUploadFiles(harness) {
   harness.element("upload-endpoint-file").files = [{ name: "endpoint-ficticio.xlsx" }];
   harness.element("upload-details-file").files = [{ name: "detalhes-ficticio.xlsx" }];
-  harness.element("btn-previsualizar-planilhas").innerHTML = "Pré-visualizar impacto";
-  harness.element("btn-confirmar-planilhas").innerHTML = "Confirmar substituição";
-  harness.element("btn-confirmar-planilhas").classList.add("hidden");
   harness.element("modal-atualizar-planilhas").classList.remove("hidden");
 }
 
@@ -48,8 +48,8 @@ test("successful inventory upload refreshes selection and presents comparison re
 
   await harness.run("previsualizarPlanilhas()");
   assert.equal(calls[0].url, "/api/planilhas/previsualizar");
-  assert.match(harness.element("upload-planilhas-preview").textContent, /Séries novas: 1; removidas: 2/);
-  assert.equal(harness.element("btn-confirmar-planilhas").classList.contains("hidden"), false);
+  assert.match(ler().previa.texto, /Séries novas: 1; removidas: 2/);
+  assert.equal(ler().etapa, "impacto", "Confirmar substituição visível");
   const endpointFile = harness.element("upload-endpoint-file").files[0];
   const detailsFile = harness.element("upload-details-file").files[0];
 
@@ -72,7 +72,7 @@ test("successful inventory upload refreshes selection and presents comparison re
   assert.equal(harness.element("upload-endpoint-file").value, "");
   assert.deepEqual(harness.effects.comparisons, [{ resumo: "comparação fictícia" }]);
   assert.deepEqual(harness.effects.refreshes, ["estatisticas", "unidades", "contagem-historico"]);
-  assert.equal(harness.element("btn-confirmar-planilhas").disabled, false);
+  assert.equal(ler().ocupado, null, "botão Confirmar destravado");
   assert.equal(harness.effects.toasts.length, 0);
 });
 
@@ -80,15 +80,13 @@ test("automatic history export preference is restored and saved in this browser"
   const localStorage = new Map();
   const firstHarness = createAppHarness(async () => apiResponse({}), { localStorage });
   await firstHarness.run("inicializarExportacaoAutomaticaHistorico()");
-  const firstInput = firstHarness.element("auto-export-history-after-update");
-  assert.equal(firstInput.checked, false);
-  firstInput.checked = true;
-  firstInput.dispatchEvent("change");
+  assert.equal(ler().exportarHistorico, false);
+  definirExportarHistorico(true); // o onChange do checkbox
   assert.equal(localStorage.get("simpress:auto-export-history-after-update"), "true");
 
   const nextHarness = createAppHarness(async () => apiResponse({}), { localStorage });
   await nextHarness.run("inicializarExportacaoAutomaticaHistorico()");
-  assert.equal(nextHarness.element("auto-export-history-after-update").checked, true);
+  assert.equal(ler().exportarHistorico, true);
 });
 
 test("enabled automatic history export downloads the updated event day", async () => {
@@ -110,7 +108,7 @@ test("enabled automatic history export downloads the updated event day", async (
     }
     throw new Error(`Chamada API inesperada: ${url}`);
   });
-  harness.element("auto-export-history-after-update").checked = true;
+  definirExportarHistorico(true);
   chooseUploadFiles(harness);
 
   await harness.run("previsualizarPlanilhas()");
@@ -141,7 +139,7 @@ test("automatic export failure does not turn a successful inventory update into 
     }
     throw new Error(`Chamada API inesperada: ${url}`);
   });
-  harness.element("auto-export-history-after-update").checked = true;
+  definirExportarHistorico(true);
   chooseUploadFiles(harness);
 
   await harness.run("previsualizarPlanilhas()");
@@ -154,7 +152,7 @@ test("automatic export failure does not turn a successful inventory update into 
     "/api/historico-comparacoes/exportar/excel?data=2026-10-09",
   ]);
   assert.deepEqual(harness.effects.comparisons, [{ horario_comparacao: eventTime }]);
-  assert.equal(harness.element("upload-planilhas-status").textContent, "");
+  assert.equal(ler().status.texto, "");
   assert.match(harness.effects.toasts.at(-1).message, /não foi possível exportar o histórico/);
   assert.equal(harness.effects.toasts.at(-1).type, "warning");
 });
@@ -174,14 +172,13 @@ test("failed inventory upload keeps the selected equipment and shows its error",
   assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-ANTIGA");
   assert.equal(harness.element("retirada-endereco").value, "Rua antiga, 10");
   assert.equal(harness.element("card-equipamento").classList.contains("hidden"), false);
-  assert.equal(harness.element("upload-planilhas-status").textContent, "Arquivo fictício inválido");
-  assert.equal(harness.element("upload-planilhas-status").scrollIntoViewOptions?.block, "nearest");
-  assert.equal(harness.element("upload-planilhas-status").attributes.get("role"), "alert");
-  assert.equal(harness.element("upload-planilhas-status").attributes.get("aria-live"), "assertive");
+  assert.equal(ler().status.texto, "Arquivo fictício inválido");
+  assert.equal(ler().status.erro, true, "o efeito do React faz o scrollIntoView nearest (e2e)");
+  assert.equal(ler().status.role, "alert");
+  assert.equal(ler().status.aoVivo, "assertive");
   assert.equal(harness.effects.comparisons.length, 0);
-  assert.equal(harness.element("btn-confirmar-planilhas").disabled, false);
-  assert.equal(harness.element("btn-confirmar-planilhas").classList.contains("hidden"), true);
-  assert.equal(harness.element("btn-previsualizar-planilhas").classList.contains("hidden"), false);
+  assert.equal(ler().ocupado, null, "botão Confirmar destravado");
+  assert.equal(ler().etapa, "arquivos", "Confirmar escondido e Pré-visualizar visível");
 });
 
 test("missing upload files block the preview and announce the error immediately", async () => {
@@ -192,11 +189,11 @@ test("missing upload files block the preview and announce the error immediately"
 
   await harness.run("previsualizarPlanilhas()");
 
-  const status = harness.element("upload-planilhas-status");
-  assert.match(status.textContent, /Selecione Endpoint e EquipamentosDetalhes antes de gerar a prévia/);
-  assert.equal(status.scrollIntoViewOptions?.block, "nearest");
-  assert.equal(status.attributes.get("role"), "alert");
-  assert.equal(status.attributes.get("aria-live"), "assertive");
+  const { status } = ler();
+  assert.match(status.texto, /Selecione Endpoint e EquipamentosDetalhes antes de gerar a prévia/);
+  assert.equal(status.erro, true, "o efeito do React faz o scrollIntoView nearest (e2e)");
+  assert.equal(status.role, "alert");
+  assert.equal(status.aoVivo, "assertive");
 });
 
 test("replacing a selected file after preview requires a fresh preview", async () => {
@@ -213,9 +210,8 @@ test("replacing a selected file after preview requires a fresh preview", async (
   await harness.run("enviarPlanilhas()");
 
   assert.deepEqual(calls, ["/api/planilhas/previsualizar"]);
-  assert.match(harness.element("upload-planilhas-status").textContent, /Os arquivos mudaram depois da prévia/);
-  assert.equal(harness.element("btn-confirmar-planilhas").classList.contains("hidden"), true);
-  assert.equal(harness.element("btn-previsualizar-planilhas").classList.contains("hidden"), false);
+  assert.match(ler().status.texto, /Os arquivos mudaram depois da prévia/);
+  assert.equal(ler().etapa, "arquivos", "Confirmar escondido e Pré-visualizar visível");
 });
 
 test("preview failure keeps the modal open and does not expose a confirmation action", async () => {
@@ -228,8 +224,8 @@ test("preview failure keeps the modal open and does not expose a confirmation ac
   await harness.run("previsualizarPlanilhas()");
 
   assert.equal(harness.element("modal-atualizar-planilhas").classList.contains("hidden"), false);
-  assert.equal(harness.element("upload-planilhas-status").textContent, "A base ativa não pôde ser validada.");
-  assert.equal(harness.element("btn-confirmar-planilhas").classList.contains("hidden"), true);
+  assert.equal(ler().status.texto, "A base ativa não pôde ser validada.");
+  assert.equal(ler().etapa, "arquivos", "Confirmar escondido");
 });
 
 test("missing preview API instructs the user to restart the local server", async () => {
@@ -241,8 +237,8 @@ test("missing preview API instructs the user to restart the local server", async
 
   await harness.run("previsualizarPlanilhas()");
 
-  assert.match(harness.element("upload-planilhas-status").textContent, /API ativa está desatualizada/);
-  assert.equal(harness.element("btn-confirmar-planilhas").classList.contains("hidden"), true);
+  assert.match(ler().status.texto, /API ativa está desatualizada/);
+  assert.equal(ler().etapa, "arquivos", "Confirmar escondido");
 });
 
 test("cancelling a completed preview never submits an inventory replacement", async () => {
@@ -258,7 +254,7 @@ test("cancelling a completed preview never submits an inventory replacement", as
 
   assert.deepEqual(calls, ["/api/planilhas/previsualizar"]);
   assert.equal(harness.run("SimpressApp.state.previaPlanilhasAtual"), null);
-  assert.equal(harness.element("btn-confirmar-planilhas").classList.contains("hidden"), true);
+  assert.equal(ler().etapa, "arquivos", "Confirmar escondido");
 });
 
 
@@ -330,7 +326,7 @@ test("successful upload concludes even when the Entra file input is not mounted"
   assert.deepEqual(harness.effects.refreshes, ["estatisticas", "unidades", "contagem-historico"]);
   assert.equal(harness.element("upload-endpoint-file").value, "");
   assert.equal(harness.element("upload-details-file").value, "");
-  assert.equal(harness.element("btn-confirmar-planilhas").disabled, false);
+  assert.equal(ler().ocupado, null, "botão Confirmar destravado");
   assert.equal(harness.effects.toasts.length, 0);
 });
 
