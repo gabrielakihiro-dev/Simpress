@@ -2267,6 +2267,44 @@ def _equipment_dossier_header(serial: str) -> Optional[Dict[str, Any]]:
         return None if equipment is None else {"serie": clean_serial, "modelo": str(equipment.get("modelo") or "")}
 
 
+def _sebrae_tickets() -> Dict[str, List[Tuple[str, Dict[str, str]]]]:
+    """Chamados das listas do F5 (novos, antigos, finalizados) como ``(número, {titulo, solicitante, descricao})`` (a descrição o filtro do F5 não procura; a busca global sim); fonte ausente ou ilegível vira lista vazia."""
+    caminhos = sebrae_novos.caminhos_padrao(STATE_DIR)
+
+    def ler(leitor: Callable[[], List[Tuple[str, Dict[str, str]]]]) -> List[Tuple[str, Dict[str, str]]]:
+        try:
+            return leitor()
+        except (OSError, ValueError, DomainError) as error:  # ArquivoIlegivel is a ValueError, ler_estado raises DomainBusyError; log only the type
+            logger.warning("Fonte de chamados da busca indisponível (%s).", type(error).__name__)
+            return []
+
+    importado: Dict[str, Any] = sebrae_novos.ler_existentes(caminhos.existentes) or {}  # one read for novos and antigos; a bad file reads as empty
+
+    def antigos() -> List[Tuple[str, Dict[str, str]]]:
+        return [(str(a.get("chamado") or ""), {"titulo": str(a.get("titulo") or ""), "solicitante": str(a.get("usuario") or ""),
+                                                 "descricao": str(a.get("descricao") or "")})
+                for a in importado.get("abertos", [])]
+
+    def novos() -> List[Tuple[str, Dict[str, str]]]:
+        lidos = sebrae_novos.ler_novos(caminhos.novos, ja_lancados=importado.get("numeros", ())) or {}
+        return [(c.numero, {"titulo": c.titulo, "solicitante": c.solicitante, "descricao": c.descricao}) for c in lidos.get("chamados", [])]
+
+    def finalizados() -> List[Tuple[str, Dict[str, str]]]:
+        achados = []
+        for f in sebrae_finalizacao.finalizados_no_dashboard(STATE_DIR):
+            ficha = f.get("ficha") or {}
+            descricao = next((str(v) for r, v in ficha.get("detalhes") or [] if r == "Descrição"), "")  # `detalhes` guarda pares [rótulo, valor]
+            achados.append((str(f["numero"]), {"titulo": str(ficha.get("titulo") or ""), "solicitante": str(ficha.get("solicitante") or ""), "descricao": descricao}))
+        return achados
+
+    return {"novos": ler(novos), "antigos": ler(antigos), "finalizados": ler(finalizados)}
+
+
+def _equipment_series_for_term(q: str) -> List[str]:
+    """Séries dos equipamentos que a busca da Home acha para o termo (série, hostname, apelido, usuário, nome), até 15."""
+    return [str(item.get("serie") or "") for item in _buscar_equipamentos_por_termo(q)[:15]]
+
+
 def _dossier_sources() -> DossierSources:
     """Reads of the other timeline sources of the dossier; the history of transfers comes raw (no ``nome_pessoa``)."""
     def coverage() -> Any:
@@ -2297,6 +2335,8 @@ operations_router = create_operations_router(
     ticket_os_marks_file=lambda: os_marcas_finalizacao.caminho_marcas(STATE_DIR),
     ticket_os_marks_sources=_marcas_fontes,
     equipment_header=_equipment_dossier_header,
+    sebrae_tickets=_sebrae_tickets,
+    equipment_series_for_term=_equipment_series_for_term,
     dossier_sources=_dossier_sources(),
 )
 app.include_router(operations_router)

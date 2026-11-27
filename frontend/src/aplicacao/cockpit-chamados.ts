@@ -68,6 +68,7 @@ export function createCockpitChamados(context: ContextoApp): Acoes {
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     alvo?.scrollIntoView?.({ block: "center", behavior: "auto" });
     app.destacarLinhaCockpit?.(alvo);
+    return Boolean(alvo);
   }
 
   return {

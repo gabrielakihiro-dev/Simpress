@@ -1,4 +1,5 @@
 import type { EstadoApp } from "../../estado-app";
+import type { BuscaChamadosOsResposta } from "../../api-tipos.gerado";
 import type { ApiFetchError, ApiFetchOptions } from "../../api";
 import { ENDPOINT, painelCompartilhado } from "../paineis-dados/utilitarios.ts";
 
@@ -66,6 +67,8 @@ interface RecentEquipment {
 }
 interface RenderersPesquisa {
   criarLinhaAutocomplete(item: ItemLista, index: number, query: string, callbacks: { onSelect(): unknown; onHighlight(): void }): HTMLElement;
+  criarLinhaChamado(item: BuscaChamadosOsResposta["chamados"][number], index: number, query: string, callbacks: { onSelect(): unknown; onHighlight(): void }): HTMLElement;
+  criarLinhaOs(item: BuscaChamadosOsResposta["os"][number], index: number, query: string, callbacks: { onSelect(): unknown; onHighlight(): void }): HTMLElement;
 }
 interface MotionPesquisa {
   reveal(elemento: HTMLElement, efeito?: string): void;
@@ -142,7 +145,11 @@ interface AppPesquisa {
   recolherVisualizacoesModelosChamado(): unknown;
   termosPreencherDoEquipamento?(equipment: EquipamentoPesquisa): unknown;
   abrirComparacaoDaSerie(serial: string, categoria: string): unknown;
+  abrirChamadoSebraeNoF5?(numero: string): Promise<boolean>;
+  abrirChamadoDaOs?(fontes: unknown[], serie: string, os: string): Promise<boolean>;
+  destacarLinhaCockpit?(linha: HTMLElement): void;
 }
+const SEM_CHAMADOS_OS: BuscaChamadosOsResposta = { chamados: [], os: [] };
 export interface ContextoPesquisaEquipamento {
   app: AppPesquisa;
   appState: EstadoPesquisa;
@@ -701,6 +708,9 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
   let autocompleteItemsList: ItemLista[] = [];
 
   let highlightedAutocompleteIndex = -1;
+  // Chamados e OS vêm depois dos equipamentos na lista e no índice de navegação (cabeçalhos de grupo não contam).
+  let autocompleteExtras: BuscaChamadosOsResposta = SEM_CHAMADOS_OS;
+  const totalAutocomplete = () => autocompleteItemsList.length + autocompleteExtras.chamados.length + autocompleteExtras.os.length;
 
   function handleSerialInput(val: string) {
     app.invalidarBuscasEquipamento();
@@ -728,15 +738,30 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     debounceTimer = setTimeout(async () => {
       const request = autocompleteRequestGate.begin();
       try {
+        // Falha da busca de chamados e OS é silenciosa: os equipamentos aparecem do mesmo jeito.
+        const pedidoExtras = context.apiFetch<BuscaChamadosOsResposta>(`/api/buscar/chamados-os?q=${encodeURIComponent(term)}`, {
+          signal: request.signal,
+          errorMessage: "Não foi possível consultar chamados e OS.",
+        }).then((extras): BuscaChamadosOsResposta => ({ chamados: extras?.chamados ?? [], os: extras?.os ?? [] }))
+          .catch((): BuscaChamadosOsResposta => SEM_CHAMADOS_OS);
         const results = await context.apiFetch<RespostaBusca>(`/api/buscar-expandida?q=${encodeURIComponent(term)}&limit=15`, {
           signal: request.signal,
           errorMessage: "Não foi possível consultar os equipamentos.",
         });
-        if (!autocompleteRequestGate.isCurrent(request.id)) return;
-        if (transferUtils.isCurrentQuery(
+        const atual = () => autocompleteRequestGate.isCurrent(request.id) && transferUtils.isCurrentQuery(
           autocompleteRequestGate, request.id, elemento("input-serial").value, term
-        )) {
-          renderAutocomplete(results.items, results.total, results.has_more, results.sugestao);
+        );
+        if (!atual()) return;
+        // Com equipamentos, desenha já; sem eles, espera a rota nova para não piscar "nenhum equipamento" antes dos chamados/OS.
+        const comEquipamentos = results.items.length > 0;
+        if (comEquipamentos) renderAutocomplete(results.items, results.total, results.has_more, results.sugestao);
+        const extras = await pedidoExtras;
+        if (!atual()) return;
+        if (!comEquipamentos || extras.chamados.length + extras.os.length > 0) {
+          // Equipamentos vêm primeiro no índice: o destaque de antes continua valendo ao anexar os grupos.
+          const destaque = highlightedAutocompleteIndex;
+          renderAutocomplete(results.items, results.total, results.has_more, results.sugestao, extras);
+          if (destaque >= 0) { highlightedAutocompleteIndex = destaque; updateAutocompleteHighlight(); }
         }
       } catch (err: unknown) {
         if (!(err instanceof Error && err.name === "AbortError") && autocompleteRequestGate.isCurrent(request.id)) {
@@ -757,28 +782,29 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
 
   function handleSerialKeydown(e: KeyboardEvent) {
     const box = elemento("autocomplete-box");
-    const isBoxOpen = box && !box.classList.contains("hidden") && autocompleteItemsList.length > 0;
+    const isBoxOpen = box && !box.classList.contains("hidden") && totalAutocomplete() > 0;
 
     if (e.key === "ArrowDown") {
       if (isBoxOpen) {
         e.preventDefault();
-        highlightedAutocompleteIndex = (highlightedAutocompleteIndex + 1) % autocompleteItemsList.length;
+        highlightedAutocompleteIndex = (highlightedAutocompleteIndex + 1) % totalAutocomplete();
         updateAutocompleteHighlight();
       }
     } else if (e.key === "ArrowUp") {
       if (isBoxOpen) {
         e.preventDefault();
-        highlightedAutocompleteIndex = (highlightedAutocompleteIndex - 1 + autocompleteItemsList.length) % autocompleteItemsList.length;
+        highlightedAutocompleteIndex = (highlightedAutocompleteIndex - 1 + totalAutocomplete()) % totalAutocomplete();
         updateAutocompleteHighlight();
       }
     } else if (e.key === "Enter") {
       e.preventDefault();
       // Pesquisar sempre leva ao Home (F1), mesmo vindo de outra aba ou de um painel F5-F9.
       app.ativarAbaTransferencia?.("home");
-      if (isBoxOpen && highlightedAutocompleteIndex >= 0 && autocompleteItemsList[highlightedAutocompleteIndex]) {
-        app.selecionarItemAutocomplete(autocompleteItemsList[highlightedAutocompleteIndex]);
-      } else if (isBoxOpen && autocompleteItemsList.length === 1) {
-        app.selecionarItemAutocomplete(autocompleteItemsList[0]);
+      if (isBoxOpen && highlightedAutocompleteIndex >= 0) {
+        selecionarPorIndice(highlightedAutocompleteIndex);
+      } else if (isBoxOpen && (totalAutocomplete() === 1 || autocompleteItemsList.length <= 1)) {
+        // Um só equipamento (mesmo com chamados/OS ao lado) ou, sem equipamentos, o primeiro chamado/OS: a pesquisa completa é só de equipamentos.
+        selecionarPorIndice(0);
       } else if (isBoxOpen) {
         app.abrirPesquisaCompleta();
       } else {
@@ -787,6 +813,39 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     } else if (e.key === "Escape") {
       app.fecharAutocomplete();
     }
+  }
+
+  function selecionarPorIndice(index: number) {
+    const equipamentos = autocompleteItemsList.length;
+    if (index < equipamentos) return app.selecionarItemAutocomplete(autocompleteItemsList[index]);
+    const { chamados, os } = autocompleteExtras;
+    return index - equipamentos < chamados.length
+      ? selecionarChamado(chamados[index - equipamentos].numero)
+      : selecionarOs(os[index - equipamentos - chamados.length]);
+  }
+
+  async function selecionarChamado(numero: string) {
+    app.fecharAutocomplete();
+    if (!await app.abrirChamadoSebraeNoF5?.(numero)) app.showToast(`Chamado ${numero} não está na lista do F5.`, "warning");
+  }
+
+  // Abre a F6 na sub-aba da OS, limpa os filtros que a escondem e a destaca; depois a busca da F6 passa a mostrar só ela.
+  async function selecionarOs({ os, serie }: BuscaChamadosOsResposta["os"][number]) {
+    app.fecharAutocomplete();
+    if (!await app.abrirChamadoDaOs?.([], serie, os)) return app.showToast(`OS ${os} não apareceu na aba OS (F6).`, "warning");
+    const busca = elemento<HTMLInputElement>("cockpit-tickets-search");
+    busca.value = os;
+    busca.dispatchEvent(new Event("input", { bubbles: true }));
+    // O filtro da F6 espera 150 ms: espera a linha da OS aparecer visível (até ~1 s).
+    const procurar = () => [...document.querySelectorAll<HTMLElement>("#cockpit-tickets-os tbody tr[data-os]")].find(item => item.dataset.os === os && !item.hidden);
+    let linha = procurar();
+    for (let tentativa = 0; !linha && tentativa < 10; tentativa += 1) {
+      await new Promise(resolver => setTimeout(resolver, 100));
+      linha = procurar();
+    }
+    if (!linha) return;
+    linha.scrollIntoView?.({ block: "center", behavior: "auto" });
+    app.destacarLinhaCockpit?.(linha);
   }
 
   function updateAutocompleteHighlight() {
@@ -836,7 +895,7 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     handleSerialInput(suggestion);
   }
 
-  function renderAutocomplete(items: ItemLista[], total = items.length, hasMore = false, suggestion = "") {
+  function renderAutocomplete(items: ItemLista[], total = items.length, hasMore = false, suggestion = "", extras: BuscaChamadosOsResposta = SEM_CHAMADOS_OS) {
     const box = elemento("autocomplete-box");
     const list = elemento("autocomplete-list");
     const emptyState = elemento("autocomplete-empty-state");
@@ -845,16 +904,18 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     const moreResultsLabel = moreResults.querySelector<HTMLElement>("[data-autocomplete-more-label]")!;
     const currentQuery = (elemento("input-serial").value || "").trim();
 
-    if (!items || items.length === 0) {
+    const temExtras = extras.chamados.length + extras.os.length > 0;
+    const semEquipamentos = !items || items.length === 0;
+    if (semEquipamentos) {
       list.replaceChildren();
-      list.classList.add("hidden");
+      list.classList.toggle("hidden", !temExtras);
       emptyState.classList.remove("hidden");
       moreResults.classList.add("hidden");
       emptyState.innerHTML = `
           <div class="ck-ac__vazio">
             <svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
-            <p class="ck-ac__vazio-titulo" role="status" aria-live="polite">Nenhum equipamento localizado</p>
-            <p class="ck-ac__vazio-texto">Nenhum registro com o termo <strong class="ck-ac__vazio-termo">"${escapeHtml(currentQuery)}"</strong> foi encontrado no inventário do SEBRAE/PR.</p>
+            ${temExtras ? "" : `<p class="ck-ac__vazio-titulo" role="status" aria-live="polite">Nenhum equipamento localizado</p>`}
+            ${temExtras ? "" : `<p class="ck-ac__vazio-texto">Nenhum registro com o termo <strong class="ck-ac__vazio-termo">"${escapeHtml(currentQuery)}"</strong> foi encontrado no inventário do SEBRAE/PR.</p>`}
             ${suggestion ? `<p class="ck-ac__vazio-sugestao">Você quis dizer <button type="button" class="ck-ac__vazio-sugestao-botao" data-on-click="aplicarSugestaoBusca" data-args='["$this"]' data-sugestao="${escapeHtml(suggestion)}">${escapeHtml(suggestion)}</button>?</p>` : ""}
             <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="ck-btn ck-btn--primario ck-btn--sm">
               <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
@@ -866,20 +927,23 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
       moreResultsLabel.textContent = "Mostrar mais";
       moreResults.querySelector("button")?.removeAttribute("aria-label");
       autocompleteItemsList = [];
+      autocompleteExtras = SEM_CHAMADOS_OS;
       highlightedAutocompleteIndex = -1;
       elemento("input-serial").setAttribute("aria-expanded", "true");
       elemento("input-serial").removeAttribute("aria-activedescendant");
       box.classList.remove("hidden");
       ajustarAlturaAutocomplete();
       lucide.createIcons({ root: box });
-      return;
+      // Sem equipamentos mas com chamados/OS: o estado vazio (cadastro e sugestão) fica junto dos grupos.
+      if (!temExtras) return;
     }
 
-    autocompleteItemsList = items;
+    autocompleteItemsList = items || [];
+    autocompleteExtras = extras;
     highlightedAutocompleteIndex = -1;
     list.innerHTML = "";
     list.classList.remove("hidden");
-    emptyState.classList.add("hidden");
+    emptyState.classList.toggle("hidden", !semEquipamentos);
     countEl.innerHTML = hasMore
       ? `<strong>Equipamentos</strong> · ${items.length} de ${total}`
       : `<strong>Equipamentos</strong> · ${total}`;
@@ -893,13 +957,31 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
     elemento("input-serial").setAttribute("aria-expanded", "true");
     elemento("input-serial").removeAttribute("aria-activedescendant");
 
-    items.forEach((item, index) => list.appendChild(renderers.criarLinhaAutocomplete(item, index, currentQuery, {
-      onSelect: () => app.selecionarItemAutocomplete(item),
+    // Cabeçalhos só existem com chamados ou OS; sem eles a lista fica como sempre foi (linhas direto no listbox).
+    const grupo = (id: string, titulo: string, linhas: HTMLElement[]) => {
+      if (linhas.length === 0) return;
+      if (!temExtras) return list.append(...linhas);
+      const rotulo = createTextElement("span", "", titulo);
+      rotulo.id = `autocomplete-grupo-${id}`;
+      const cabecalho = createTextElement("div", "ck-ac__grupo-cab", "");
+      cabecalho.append(rotulo, createTextElement("span", "ck-ac__grupo-n", String(linhas.length)));
+      const wrapper = createTextElement("div", "ck-ac__grupo", "");
+      wrapper.setAttribute("role", "group");
+      wrapper.setAttribute("aria-labelledby", rotulo.id);
+      wrapper.append(cabecalho, ...linhas);
+      list.append(wrapper);
+    };
+    const callbacks = (index: number) => ({
+      onSelect: () => selecionarPorIndice(index),
       onHighlight: () => {
         highlightedAutocompleteIndex = index;
         updateAutocompleteHighlight();
       },
-    })));
+    });
+    const base = autocompleteItemsList.length;
+    grupo("equipamentos", "Equipamentos", autocompleteItemsList.map((item, index) => renderers.criarLinhaAutocomplete(item, index, currentQuery, callbacks(index))));
+    grupo("chamados", "Chamados", extras.chamados.map((item, index) => renderers.criarLinhaChamado(item, base + index, currentQuery, callbacks(base + index))));
+    grupo("os", "OS", extras.os.map((item, index) => renderers.criarLinhaOs(item, base + extras.chamados.length + index, currentQuery, callbacks(base + extras.chamados.length + index))));
 
     box.classList.remove("hidden");
     ajustarAlturaAutocomplete();
@@ -916,6 +998,7 @@ export function criarPesquisaEquipamento(context: ContextoPesquisaEquipamento) {
       input.removeAttribute("aria-activedescendant");
     }
     autocompleteItemsList = [];
+    autocompleteExtras = SEM_CHAMADOS_OS;
     highlightedAutocompleteIndex = -1;
   }
 

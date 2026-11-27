@@ -527,9 +527,10 @@ test.describe("estrutura e comportamento (1366 px)", () => {
       "POST /api/equipamento/atualizar-apelido", "POST /api/equipamento/salvar", "POST /api/equipamento/salvar",
     ]);
     // Leituras medidas no código antigo: as do diálogo (/api/buscar-expandida e /api/equipamento/<série>) e as duas que
-    // a própria página refaz depois de salvar (/api/stats e /api/sebrae/novos). Nenhuma outra rota de leitura entra.
+    // a própria página refaz depois de salvar (/api/stats e /api/sebrae/novos), mais a busca de chamados e OS que o
+    // autocompletar chama junto com /api/buscar-expandida (26/11/2026). Nenhuma outra rota de leitura entra.
     const leituras = [...new Set(feitas.filter(chamada => chamada.metodo === "GET").map(chamada => chamada.caminho))].sort();
-    expect(leituras).toEqual(["/api/buscar-expandida", "/api/equipamento/BRJ0001", "/api/sebrae/novos", "/api/stats"]);
+    expect(leituras).toEqual(["/api/buscar-expandida", "/api/buscar/chamados-os", "/api/equipamento/BRJ0001", "/api/sebrae/novos", "/api/stats"]);
   });
 
   test("invariante: o payload do salvar da edição é {serial, novo, modelo, tipo, apelido, idCliente}, com o apelido atual do equipamento", async ({ page }) => {

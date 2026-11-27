@@ -127,6 +127,26 @@ export type Body_previsualizar_planilhas_endpoint_api_planilhas_previsualizar_po
   "details_file": Blob;
 };
 
+export type BuscaChamadoItem = {
+  "numero": string;
+  "aba": "novos" | "antigos" | "finalizados";
+  "campo": "numero" | "titulo" | "descricao" | "solicitante" | "os_vinculada";
+};
+
+export type BuscaChamadosOsResposta = {
+  "chamados": BuscaChamadoItem[];
+  "os": BuscaOsItem[];
+};
+
+export type BuscaOsItem = {
+  "fonte": "simpress" | "oracle";
+  "os": string;
+  "serie": string;
+  "status": string;
+  "utic": string | null;
+  "campo": "os" | "serie" | "equipamento" | "descricao" | "chamado_vinculado";
+};
+
 export type BuscaWebPayload = {
   "ativa": boolean;
 };
@@ -1340,6 +1360,11 @@ export interface Rotas {
     consulta: { "q"?: string; "offset"?: number; "limit"?: number; "categoria"?: string | null; "tipo"?: string | null; "cidade"?: string | null; "usuario"?: string | null; "serie"?: string[] | null; "include_filters"?: boolean; "listar_todos"?: boolean; };
     corpo: never;
     resposta: unknown;
+  };
+  "GET /api/buscar/chamados-os": {
+    consulta: { "q": string; };
+    corpo: never;
+    resposta: BuscaChamadosOsResposta;
   };
   "GET /api/cobertura": {
     consulta: never;
