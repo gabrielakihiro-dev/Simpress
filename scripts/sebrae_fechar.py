@@ -563,7 +563,7 @@ def _processar(
             raise
         status = str(detalhes.get("status") or fin.STATUS_ERRO)
         info = detalhes.get("detalhes") if isinstance(detalhes.get("detalhes"), dict) else {}
-        extras = {
+        extras: Dict[str, Any] = {
             "mensagem": str(info.get("mensagem") or ""), "motivo": str(info.get("motivo") or ""),
             "captura": str(info.get("captura") or ""), "escritas": [str(e) for e in info.get("escritas") or []],
         }

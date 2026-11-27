@@ -206,6 +206,35 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         self.assertIn("Rotina Completa desde 07:30", raised.exception.detail)
         self.assertEqual(harness.popen_calls, [])
 
+    def test_ocupado_reads_the_live_lock_only(self):
+        harness = self.harness(alive_pids={999})
+        self.assertFalse(harness.runner.ocupado())
+        harness.contract.lock_file.parent.mkdir(parents=True)
+        harness.contract.lock_file.write_text(json.dumps({"pid": 999, "rotina": "os", "inicio": ""}), encoding="utf-8")
+        self.assertTrue(harness.runner.ocupado())
+        harness.alive_pids.clear()
+        self.assertFalse(harness.runner.ocupado())
+
+    def test_recent_unreadable_lock_counts_as_busy_like_the_script(self):
+        from domains.chrome_automation import LOCK_WRITE_SECONDS, live_lock_owner
+
+        harness = self.harness()
+        lock = harness.contract.lock_file
+        lock.parent.mkdir(parents=True)
+        self.assertIsNone(live_lock_owner(lock))
+        for content in ("", "{incompleto", json.dumps({"pid": "999"}), json.dumps(["x"])):
+            with self.subTest(content=content):
+                lock.write_text(content, encoding="utf-8")
+                self.assertEqual(live_lock_owner(lock, lambda pid: False), {"pid": -1, "rotina": "", "inicio": ""})
+                self.assertTrue(harness.runner.ocupado())
+                old = lock.stat().st_mtime - LOCK_WRITE_SECONDS - 1
+                os.utime(lock, (old, old))
+                self.assertIsNone(live_lock_owner(lock, lambda pid: True))
+                self.assertFalse(harness.runner.ocupado())
+        lock.write_text(json.dumps({"pid": 999, "rotina": "os", "inicio": ""}), encoding="utf-8")
+        self.assertIsNone(live_lock_owner(lock, lambda pid: False))
+        self.assertEqual(live_lock_owner(lock, lambda pid: pid == 999)["rotina"], "os")
+
     def test_stale_lock_with_dead_pid_does_not_block(self):
         harness = self.harness()
         harness.contract.lock_file.parent.mkdir(parents=True)

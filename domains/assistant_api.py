@@ -1237,6 +1237,10 @@ class SimpressApi:
     def obter_prontidao(self) -> Dict[str, Any]:
         return self._leitura("/api/prontidao")
 
+    def obter_saude_local(self) -> Dict[str, Any]:
+        # Read-only: the prévia, the cleanup and the diagnostic package stay on the screen only.
+        return self._leitura("/api/saude-local")
+
     def listar_pendencias_operacionais(self) -> Dict[str, Any]:
         """Lean view: count per section plus serial, computer and reason of each item."""
         ok, dados = self._chamar("GET", "/api/operacoes/pendencias")

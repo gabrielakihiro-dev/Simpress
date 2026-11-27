@@ -20,6 +20,7 @@ interface AppIndicadores {
   abrirImportacaoModelo(tipo: string): unknown;
   abrirModalGerenciarUnidades(evento?: Event): unknown;
   abrirConfiguracaoLocal(): unknown;
+  abrirSaudeLocal(): unknown;
   carregarEstatisticas(): unknown;
 }
 interface StatusProntidao {
@@ -68,7 +69,8 @@ interface ItemProntidao {
   descricao: string;
   detalhe?: string;
   secundario?: string;
-  estado: EstadoItemProntidao;
+  /** Ausente: item sem selo de estado (ex.: Saúde local). */
+  estado?: EstadoItemProntidao;
   acao?: AcaoProntidao;
 }
 interface DadosLembretesAgendados { total?: unknown; atrasados?: unknown; hoje?: unknown; indisponivel?: unknown }
@@ -313,7 +315,7 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
   function adicionarItemProntidao(list: DocumentFragment, { id, pendencia, icone, titulo, descricao, detalhe, secundario, estado, acao }: ItemProntidao): void {
     const item = document.createElement("li");
     item.className = "ck-pront__item";
-    item.dataset.status = estado;
+    if (estado) item.dataset.status = estado;
     if (id) item.id = id;
     if (pendencia) item.dataset.pendencia = pendencia;
 
@@ -329,10 +331,14 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
     const meta = document.createElement("span");
     meta.className = "ck-pront__meta";
     meta.title = detalhe ? `${descricao} — ${detalhe}` : descricao;
-    const rotuloEstado = document.createElement("span");
-    rotuloEstado.className = "ck-pront__estado";
-    rotuloEstado.textContent = PRONTIDAO_ESTADOS[estado];
-    meta.append(rotuloEstado, ` · ${estado === "invalido" && detalhe ? detalhe : descricao}`);
+    if (estado) {
+      const rotuloEstado = document.createElement("span");
+      rotuloEstado.className = "ck-pront__estado";
+      rotuloEstado.textContent = PRONTIDAO_ESTADOS[estado];
+      meta.append(rotuloEstado, ` · ${estado === "invalido" && detalhe ? detalhe : descricao}`);
+    } else {
+      meta.append(descricao);
+    }
     textos.append(nome, meta);
     if (secundario) {
       const complemento = document.createElement("span");
@@ -348,7 +354,7 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
       if (acao.id) button.id = acao.id;
       // Em dia: ação discreta (Atualizar/Abrir/Editar); pendente: ação em destaque.
       const rotulo = estado === "ok" && acao.labelOk ? acao.labelOk : acao.label;
-      button.className = `ck-btn ${estado === "ok" ? "ck-btn--fantasma" : "ck-btn--secundario"} ck-btn--sm ck-pront__acao`;
+      button.className = `ck-btn ${estado === "ok" || !estado ? "ck-btn--fantasma" : "ck-btn--secundario"} ck-btn--sm ck-pront__acao`;
       button.append(criarIconeProntidao(acao.icone || "i-upload"), rotulo);
       button.setAttribute("aria-label", acao.ariaLabel || `${rotulo} — ${titulo}`);
       button.addEventListener("click", acao.onClick);
@@ -468,6 +474,14 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
         acao: { id: "btn-configuracao-local", label: "Configurar", icone: "i-arrow-right", ariaLabel: "Configurar contas, links e dados do cliente", onClick: () => app.abrirConfiguracaoLocal() },
       });
     }
+    // Item fixo, sem selo nem contagem: a Prontidão se recalcula a cada 2 s e medir disco só vale ao abrir.
+    adicionarItemProntidao(list, {
+      id: "readiness-saude-local",
+      icone: "i-activity",
+      titulo: "Saúde local",
+      descricao: "Disco, arquivos de estado e temporários",
+      acao: { id: "btn-saude-local", label: "Abrir", icone: "i-arrow-right", ariaLabel: "Abrir saúde local", onClick: () => app.abrirSaudeLocal() },
+    });
     details.replaceChildren(list);
     atualizarProgressoProntidao(details);
     // Later refreshes after saves update in place; only the first render cascades in.
