@@ -764,6 +764,63 @@ test("antigo lido mostra título, solicitante, abertura, descrição e atendimen
   await expect(semUtic.locator("[data-leitura='pendente']")).toHaveCount(0);
 });
 
+// Chips da última leitura dos antigos (React, frontend/src/paineis/sebrae-dashboard/leitura.tsx). A fixture nunca traz
+// falhas: só aqui GET /api/sebrae/antigos/ler é simulado com um resultado sintético com duas falhas.
+const LEITURA_COM_FALHAS = {
+  em_andamento: false,
+  resultado: { em: "2026-10-28T10:40:00-03:00", concluido: false, total: 4, lidos: ["UTIC-2026-1210"], falhas: { "UTIC-2026-1211": "Página não abriu.", "UTIC-2026-1212": "Sem acesso." }, sem_utic: 1, ja_lidos: 0 },
+};
+
+test("chips da última leitura: horário, lidos, falhas e sem UTIC; o popover abre no clique e fecha com clique fora, novo clique e Esc", async ({ page, request }) => {
+  await page.route("**/api/sebrae/antigos/ler", rota => (rota.request().method() === "GET" ? rota.fulfill({ json: LEITURA_COM_FALHAS }) : rota.fallback()));
+  const erros = [];
+  page.on("pageerror", erro => erros.push(erro.message));
+  const { painel } = await abrirPainel(page, request);
+  const grupo = painel.locator("#sebrae-leitura");
+  await expect(grupo).toBeVisible();
+  await expect(painel.locator("#sebrae-leitura-hora")).toHaveText(/^\d\d\/\d\d \d\d:\d\d · interrompida$/);
+  await expect(painel.locator("#sebrae-leitura-lidos")).toHaveText("1 lido");
+  await expect(painel.locator("#sebrae-leitura-sem-utic")).toHaveText("1 sem UTIC");
+  const botao = painel.locator("#btn-sebrae-falhas");
+  const popover = painel.locator("#sebrae-falhas-popover");
+  await expect(botao).toHaveText("2 falhas");
+  await expect(botao).toHaveAttribute("aria-expanded", "false");
+  await expect(popover).toBeHidden();
+  await botao.click();
+  await expect(botao).toHaveAttribute("aria-expanded", "true");
+  await expect(popover).toBeVisible();
+  await expect(popover.locator("#sebrae-antigos-leitura-falhas > li")).toHaveText(["UTIC-2026-1211: Página não abriu.", "UTIC-2026-1212: Sem acesso."]);
+  await expect(popover.locator("li").first().locator("span")).toHaveClass(["sebrae-falha__utic", "sebrae-falha__motivo"]);
+  await painel.locator("#sebrae-aba-novos").click(); // clique fora fecha (a aba Novos já está ativa)
+  await expect(popover).toBeHidden();
+  await botao.click();
+  await expect(popover).toBeVisible();
+  await botao.click(); // novo clique no chip fecha
+  await expect(popover).toBeHidden();
+  await expect(botao).toHaveAttribute("aria-expanded", "false");
+  await botao.click();
+  await expect(popover).toBeVisible();
+  // Por último: o mesmo Esc também fecha o painel F5 (o atalho do cockpit; igual na main em 27/11/2026), então o foco não é conferido.
+  await page.keyboard.press("Escape");
+  await expect(popover).toBeHidden();
+  await expect(botao).toHaveAttribute("aria-expanded", "false");
+  expect(erros).toEqual([]);
+});
+
+test("chips da última leitura: sem resultado o grupo fica oculto; durante a leitura somem e voltam com o resultado novo", async ({ page, request }) => {
+  const { painel } = await abrirPainel(page, request, "", "leitura");
+  const grupo = painel.locator("#sebrae-leitura");
+  await expect(grupo).toBeHidden(); // a fixture começa sem leitura
+  await painel.locator("#btn-sebrae-ler-antigos").click();
+  await expect(painel.locator("#sebrae-antigos-leitura-status")).toContainText("Lendo chamados antigos no SoftExpert");
+  await expect(grupo).toBeHidden();
+  await expect(painel.locator("#sebrae-antigos-leitura-status")).toContainText("1 lido(s), 0 com falha", { timeout: 10000 });
+  await expect(grupo).toBeVisible();
+  await expect(painel.locator("#sebrae-leitura-lidos")).toHaveText("1 lido");
+  await expect(painel.locator("#sebrae-leitura-falhas")).toBeHidden();
+  await expect(painel.locator("#sebrae-leitura-sem-utic")).toHaveText("1 sem UTIC");
+});
+
 test("antigo não encontrado no SoftExpert na última leitura fica laranja, com selo e aviso para conferir depois", async ({ page, request }) => {
   await page.route("**/api/sebrae/novos", async rota => {
     const resposta = await rota.fetch();

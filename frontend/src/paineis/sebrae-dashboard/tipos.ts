@@ -2,6 +2,7 @@
 // finalizados, resultados da rotina, SharePoint) mudam de campo com frequência e o código antigo os lia por nome:
 // ficam como Registro, como em cobertura/tipos.ts. Estado, visão, contexto e modelo têm tipo próprio.
 import type { ApiFetchOptions } from "../../api";
+import type { LojaLeitura } from "./leitura-loja";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Os antigos em aberto (`abertos[]`) trazem `os_nova` e, no lugar dele, `os_sem_relacao` (nunca os dois com valor). */
@@ -152,6 +153,8 @@ export interface ContextoSebraeDashboard {
   ticketRules?: { normalizarFiltroChamados?: (valor: unknown) => string };
   /** Opcional: sem ele a sugestão de OS não é desenhada (testes sem React). */
   sugestaoOs?: SugestaoOsPainel;
+  /** Loja dos chips da última leitura dos antigos; o montar cria a que o React lê (sem ela a fábrica usa uma própria). */
+  lojaLeitura?: LojaLeitura;
 }
 
 export interface EstadoSebrae {
