@@ -297,3 +297,40 @@ test("Automação shows the failure screenshot as a thumbnail that opens enlarge
     await expect(thumb).toBeFocused();
   }
 });
+
+test("Automação shows the Dashboard-open warning with its own cancel button, and hides it otherwise", async ({ page, request }) => {
+  const panel = await openAutomation(page, request);
+  await request.get("/__fixture_automacao?run=enviar&dashboard=1");
+  await page.goto("/");
+  await page.locator("#tab-automacao").click();
+  await expect(panel).toBeVisible();
+
+  const warning = page.locator("#automacao-aviso-dashboard");
+  const cancelWarning = page.locator("#btn-automacao-cancelar-dashboard");
+  await expect(warning).toBeVisible();
+  await expect(warning.locator("#automacao-aviso-dashboard-titulo")).toHaveText("Dashboard aberto no Excel");
+  await expect(warning.locator("#automacao-aviso-dashboard-texto")).toHaveText("O Dashboard está aberto no Excel, por você ou por outra pessoa. Feche-o: a rotina continua sozinha quando ele for liberado. Se não for você, use Cancelar execução.");
+  await expect(page.locator("#automacao-aviso-login")).toBeHidden();
+  await expect(cancelWarning).toHaveText("Cancelar execução");
+  await expect(cancelWarning).toBeVisible();
+  await expect(cancelWarning).toBeEnabled();
+  await expect(page.locator("#btn-automacao-cancelar")).toHaveText("Cancelar execução");
+  await expect(page.locator("#btn-automacao-cancelar")).toBeEnabled();
+
+  await page.setViewportSize({ width: 320, height: 800 });
+  await expect(warning).toBeVisible();
+  await expect(cancelWarning).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  let posts = 0;
+  page.on("request", req => { if (req.method() === "POST" && req.url().endsWith("/api/automacao/cancelar")) posts += 1; });
+  await cancelWarning.click();
+  await expect(warning).toBeHidden();
+  expect(posts).toBe(1);
+});
+
+test("Automação keeps the Dashboard-open warning hidden for an ordinary running routine", async ({ page, request }) => {
+  const panel = await openAutomation(page, request, 0, "padrao", "enviar");
+  await expect(panel.locator("#automacao-estado")).toContainText("Ocupado");
+  await expect(page.locator("#automacao-aviso-dashboard")).toBeHidden();
+});
