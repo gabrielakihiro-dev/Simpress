@@ -3,7 +3,7 @@
 A sugestão só aparece na tela: nunca é gravada no Dashboard. O índice (``sebrae_categoria_indice.json``,
 estado local fora do Git) guarda apenas contagens de palavras de uso comum, sem texto, nome, CPF nem e-mail,
 e é refeito a cada importação ou atualização do Dashboard. Ordem da categoria: solicitante de sistema,
-regras (DESLIGAMENTO, NOVO USUÁRIO, INSTALAÇÃO, PERIFÉRICO, ENDPOINT CENTER, categorias novas), Naive Bayes
+regras (DESLIGAMENTO, NOVO USUÁRIO, fone/headset em PERIFÉRICO, INSTALAÇÃO, PERIFÉRICO, ENDPOINT CENTER, categorias novas), Naive Bayes
 e, por último, OUTRO."""
 from __future__ import annotations
 
@@ -43,14 +43,19 @@ _STOP = frozenset(
     "boa tarde noite ola prezado prezados prezada atenciosamente obrigado obrigada grato cordialmente att".split()
 )
 
+# Fone e headset em qualquer grafia comum (head set, headfone, headphone); pedido do usuário (27/11/2026).
+_FONE = r"fones?|head ?sets?|head ?(fone|phone)s?|auricular\w*"
+
 # Regras de categoria, na ordem de prioridade; cada rótulo só vale se estiver nas opções da lista de B.
+# Fone/headset é PERIFÉRICO antes de INSTALAÇÃO (27/11/2026); entrada e saída de usuário continuam vencendo.
 REGRAS_B: Tuple[Tuple[str, Pattern[str]], ...] = tuple(
     (rotulo, re.compile(padrao))
     for rotulo, padrao in (
         ("DESLIGAMENTO", r"\b(desligament\w*|deslig\w* (de |do |da )?(usuario|colaborador|funcionario|estagiario)|remoc\w* (de |do |da )?(usuario|acesso|conta|colaborador)|remover (o |a )?(usuario|acesso|conta)|exclu\w* (de |do |da )?(usuario|conta|acesso)|demiss\w*|demitid\w*|rescis\w*|desativ\w* (de |da |a )?(conta|usuario|login)|bloque\w* (de |da |do )?(conta|usuario|login|acesso)|retirada (de |do |dos )?(equipamento|kit|notebook)|devoluc\w* (de |do |dos )?(equipamento|kit|notebook)|saida (de |do |da )?(colaborador|funcionario|estagiario)|fim (de |do )?contrato)\b"),
         ("NOVO USUÁRIO", r"\b(novos? usuarios?|usuarios? novos?|novos? colaborador\w*|colaborador\w* novos?|novos? funcionari\w*|novos? estagiari\w*|criac\w* (de |do |da )?(login|usuario|conta|acesso|e ?mail)|cria\w* (o |a |um |uma )?(login|usuario|conta)|login novo|novo login|nova conta|conta nova|admiss\w*|admitid\w*|contratad\w*|onboarding|inicio (das )?atividades|liberac\w* (de |do )?acesso (para|ao|a) (o |a )?novo)\b"),
+        ("PERIFÉRICO", rf"\b({_FONE})\b"),
         ("INSTALAÇÃO", r"\b(instal\w*|reinstal\w*)\b"),
-        ("PERIFÉRICO", r"\b(teclad\w*|mouses?|monitor(es)?|fones?|headsets?|headphones?|webcam\w*|perifer\w*|caixa de som|auricular\w*)\b"),
+        ("PERIFÉRICO", r"\b(teclad\w*|mouses?|monitor(es)?|webcam\w*|perifer\w*|caixa de som)\b"),
         ("ENDPOINT CENTER", r"\b(computer added|central inactivity|staged)\b"),
         ("IMPRESSORA", r"\b(impressor\w*|impressao|impressoes|imprimi\w*|scanner\w*|digitaliz\w*|toner\w*)\b"),
         ("LICENÇA", r"\b(licenc\w*|adobe|acrobat)\b"),
@@ -314,8 +319,7 @@ _A_PESSOAS = re.compile(
     + r"|\b(libera\w* (de |do |da )?(usuario|acesso|login|conta)|remoc\w* (de |do |da )?usuario|desbloque\w*)\b"
 )
 _A_HARDWARE = re.compile(
-    r"\b(teclad\w*|mouses?|monitor(es)?|fones?|headsets?|headphones?|webcam\w*|perifer\w*|caixa de som|auricular\w*|"
-    r"hardware|carregador\w*)\b"
+    rf"\b(teclad\w*|mouses?|monitor(es)?|webcam\w*|perifer\w*|caixa de som|{_FONE}|hardware|carregador\w*)\b"
 )
 # Pedido do usuário (17/11/2026): cabo HDMI e cabo de força do monitor são do CLIENTE e INCIDENTE (pedido ou defeito, tanto faz);
 # o resto do hardware segue SIMPRESS.
