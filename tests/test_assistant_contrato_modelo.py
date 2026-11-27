@@ -18,8 +18,8 @@ SHA256_POR_SECAO = {
     "tool_schemas_false": "e0e00c0c81f1b751e4382a4424bf7f808c901e7bd43013cf91bb70ee3f767d5a",
     "mensagens": "4637f061dee590ffb754fec456ef79b45f9442aaaed1dcb55ee12f4d2ffa03c0",
     "ferramentas_locais_ux": "9f553132586c39cedaadae3e17483b41168bf424d532d8dc21780f2ebef4b3ba",
-    "system_prompt": "d3c602bda915fe007d7755f2359f7574039c6359515e57d60d9ab1262400fc5a",
-    "montar_prompt": "8d1a69118938abf8e9d9a8e7cbfdd4396fa081bb0205f07ae99ca1b5f0ce5191",
+    "system_prompt": "c9ed7ec816a416ce99f4642b254946bd40cc90be74bb84329529a28eacb3f77c",
+    "montar_prompt": "2b757fa38b4f77ccc89be1d210affc232c116f769f0a59b7dc4385d4f0249767",
     "membros": "5c94858e9b30915e6f9e997d03b039b68a9d3c7e938928b3b97101d4d3311664",
     "assinaturas": "72b191c705d69fc8a32506de04684c917a2d4adde572990b2b68355ef7c71412",
 }
