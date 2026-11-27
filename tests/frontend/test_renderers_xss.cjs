@@ -143,18 +143,19 @@ test("OS table of the Chamados panel renders Simpress and Oracle fields as text"
       oracle: [{ solicitacao: carga("solicitacao"), ordem_servico: "9001", fila: carga("fila"), descricao: carga("descricao") }],
     }],
   };
+  // tabela-os.ts pede por apiFetch (api.ts), que usa o fetch global.
+  globalThis.fetch = async url => {
+    const json = url === "/api/operacoes/chamados" ? report
+      : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos: [] }
+      : url === "/api/equipamentos/usuarios-logados" ? { usuarios: {} } : null;
+    return { ok: json !== null, json: async () => json || {} };
+  };
   panels.install({
     document: doc,
     MutationObserver: class { observe() {} },
     CustomEvent: class { constructor(type) { this.type = type; } },
     getComputedStyle: () => ({ display: "" }),
     console: { warn() {} },
-    fetch: async url => {
-      const json = url === "/api/operacoes/chamados" ? report
-        : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos: [] }
-        : url === "/api/equipamentos/usuarios-logados" ? { usuarios: {} } : null;
-      return { ok: json !== null, json: async () => json || {} };
-    },
   });
   const host = doc.createElement("div");
   doc.body.append(host);

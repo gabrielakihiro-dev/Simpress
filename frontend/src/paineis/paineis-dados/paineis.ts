@@ -1,3 +1,4 @@
+import { apiFetch } from "../../api.ts";
 import type { Janela, Qualquer } from "./tipos";
 import { criarTabelaOs } from "./tabela-os.ts";
 import { DENSITY_KEY, ENDPOINT, barPercentages, contagemLembretesAgendados, compareValues, divergenceTotal, formatNumber, nextDirection, painelCompartilhado, pluralize, sortKey, sortedOrder, toTsv } from "./utilitarios.ts";
@@ -323,11 +324,7 @@ export function criarPaineisDados() {
       lastFetch = Date.now();
       const serial = ++requestSerial;
       try {
-        const data = await painelCompartilhado<Qualquer>(async () => {
-          const response = await win.fetch(ENDPOINT, { headers: { Accept: "application/json" } });
-          if (!response.ok) throw new Error(String(response.status));
-          return response.json();
-        }, { novo: depoisDeMudanca });
+        const data = await painelCompartilhado<Qualquer>(() => apiFetch(ENDPOINT, { headers: { Accept: "application/json" } }), { novo: depoisDeMudanca });
         if (serial !== requestSerial) return;
         painelOk = true;
         renderBadge(divergenceTotal(data.ultima_comparacao));

@@ -33,7 +33,8 @@ test("Resumo lists notebooks past 60 days after the 7+ table, with estimated day
   assert.match(linhas[0][0], /~64[\s\S]*Saiu para Ausentes no Endpoint/);
   assert.match(linhas[1][0], />61<[\s\S]*Ainda no Endpoint, sem acesso/);
   assert.match(linhas[1][0], /&lt;b&gt;PRNOTE-N1/);
-  assert.match(html, /href="\/api\/config\/local\/endpoint\/staged-computers"[^>]*data-endpoint-staged-link/);
+  assert.match(html, /href="#" data-endpoint-tela="staged-computers" data-endpoint-staged-link/);
+  assert.doesNotMatch(html, /href="\/api\//);
 });
 
 test("Empty list keeps the section with a message; without the field the section is left out", () => {

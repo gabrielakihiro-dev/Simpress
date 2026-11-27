@@ -1,6 +1,6 @@
 // Único auxiliar de requisição JSON (painéis React e aplicação em frontend/src/aplicacao): aceita corpo vazio, transforma o `detail`
 // do FastAPI (texto ou lista 422 do Pydantic) em Error legível, mantém o evento simpress:servidor-offline,
-// o detail do 422 e error.status (409 de versao_importacao). Nunca usar fetch cru nos painéis React.
+// o detail do 422 e error.status (409 de versao_importacao) e soma o X-Simpress-Sessao. Nunca usar fetch cru nos painéis React.
 import { format as formatarDetalhe } from "./comum/api-errors.ts";
 import type { Rotas } from "./api-tipos.gerado";
 
@@ -20,6 +20,51 @@ export interface ApiFetchError extends Error {
 const DEFAULT_ERROR_MESSAGE = "Não foi possível concluir a solicitação.";
 // No navegador é a janela; no teste em Node, o globalThis (sem dispatchEvent, o evento offline não sai).
 const root: any = typeof window !== "undefined" ? window : globalThis; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+// Sessão local (security/sessao_local.py): o /bootstrap redireciona para /#sessao=<hex> e o valor segue em X-Simpress-Sessao
+// junto do cookie. Fica no localStorage (por origem, porta incluída: outro servidor em 127.0.0.1 não o vê), mas só depois
+// que um /api/* feito com ele responder 2xx: qualquer site pode abrir /#sessao=<inventado> e não pode apagar a sessão
+// boa das outras abas. Até lá o valor vale só nesta aba; um 401 com ele o descarta.
+const CHAVE_SESSAO = "simpress_sessao";
+const FORMATO_SESSAO = /^[0-9a-f]{64}$/;
+let sessaoDoEndereco = ""; // #sessao= ainda não confirmado
+let sessaoReserva = ""; // confirmado, para quando o localStorage não está disponível
+
+function lerSessaoDoEndereco() {
+  if (typeof location === "undefined") return;
+  const valor = location.hash.startsWith("#sessao=") ? location.hash.slice("#sessao=".length) : "";
+  if (!FORMATO_SESSAO.test(valor)) return;
+  sessaoDoEndereco = valor;
+  try { history.replaceState(null, "", location.pathname + location.search); } catch { /* sem history: o valor fica na barra */ }
+}
+lerSessaoDoEndereco();
+
+// Lido a cada pedido (não no carregamento): um novo /bootstrap em outra aba vale para todas.
+function sessaoAtual(): string {
+  if (sessaoDoEndereco) return sessaoDoEndereco;
+  try {
+    const salvo = localStorage.getItem(CHAVE_SESSAO) || "";
+    if (FORMATO_SESSAO.test(salvo)) return salvo;
+  } catch { /* sem armazenamento */ }
+  return sessaoReserva;
+}
+
+function confirmarSessaoDoEndereco(enviada: string, status: number) {
+  if (!enviada || enviada !== sessaoDoEndereco) return;
+  if (status === 401) sessaoDoEndereco = "";
+  if (!(status >= 200 && status <= 299)) return;
+  sessaoReserva = enviada;
+  sessaoDoEndereco = "";
+  try { localStorage.setItem(CHAVE_SESSAO, enviada); } catch { /* sem armazenamento: vale a reserva desta aba */ }
+}
+
+function mesmaOrigem(url: string): boolean {
+  try {
+    return typeof location !== "undefined" && new URL(url, location.href).origin === location.origin;
+  } catch {
+    return false;
+  }
+}
 
 export function isAbortError(error: unknown): boolean {
   return Boolean(error) && (error as { name?: unknown }).name === "AbortError";
@@ -58,6 +103,13 @@ export function apiFetch<T = unknown>(url: string, options?: ApiFetchOptions & {
 export function apiFetch(url: string, options: ApiFetchOptions & { responseType: "response" }): Promise<Response>;
 export async function apiFetch(url: string, options: ApiFetchOptions = {}): Promise<unknown> {
   const { errorMessage = DEFAULT_ERROR_MESSAGE, responseType = "json", ...init } = options;
+  const sessao = mesmaOrigem(url) ? sessaoAtual() : "";
+  if (sessao) {
+    // Headers não define Content-Type: o FormData continua com o boundary do navegador.
+    const headers = new Headers(init.headers);
+    headers.set("X-Simpress-Sessao", sessao);
+    init.headers = headers;
+  }
   // Resolvido a cada chamada para testes e harnesses poderem trocar o fetch global.
   let response: Response;
   try {
@@ -68,6 +120,7 @@ export async function apiFetch(url: string, options: ApiFetchOptions = {}): Prom
     }
     throw networkError;
   }
+  confirmarSessaoDoEndereco(sessao, response.status);
   if (!response.ok) {
     const data = await readJson(response, true, errorMessage);
     const detail = data && typeof data === "object" ? (data as { detail?: unknown }).detail : undefined;

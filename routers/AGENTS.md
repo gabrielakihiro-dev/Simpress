@@ -2,7 +2,7 @@
 
 Contratos HTTP. Valem junto com o `AGENTS.md` da raiz; rotas, campos e códigos estão em `docs/arquitetura/CONTRATOS_API_BACKEND.md` (seção "Regras movidas do AGENTS.md (10/11/2026)").
 
-- Sessão: `/api/*` exige o cookie `simpress_sessao_<porta>` (`GET /bootstrap?t=<segredo>`); sem ele, 401. Clientes internos usam `cabecalho_cookie` e `ler_segredo` de `security/sessao_local.py`.
+- Sessão: `/api/*` exige o cookie `simpress_sessao_<porta>` e o cabeçalho `X-Simpress-Sessao` (`GET /bootstrap?t=<segredo>`, aprovado em 26/11/2026); sem eles, 401. Clientes internos usam `cabecalhos_sessao` e `ler_segredo` de `security/sessao_local.py`; rota que a interface abre por link ou `<img>` devolve JSON ou é baixada por `apiFetch`, nunca 302 para fora.
 - Ações irreversíveis exigem `confirmado: true` (ex.: `POST /api/sebrae/finalizar-softexpert`); sem ele, 422 e nada dispara. Envio real ao UX exige também `enviar: true`.
 - `POST /api/sebrae/dashboard/atualizar` e `POST /api/sebrae/finalizar-softexpert` exigem `versao_importacao` igual à da tela; ausente ou antiga: 409. Doc: `docs/operacao/automacao-chrome.md`, seção "Agendamento do Dashboard".
 - Códigos: 409 para trava ocupada ou conflito, 422 para entrada inválida ou recusa de regra, 503 para recurso indisponível (`chrome_indisponivel`, registro ilegível).

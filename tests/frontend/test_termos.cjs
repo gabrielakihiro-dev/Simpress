@@ -128,7 +128,8 @@ test("termos: nada é guardado nem enviado (sem storage, cookie, fetch nem inner
   dosTermos.push(pontes[0]);
   const todos = dosTermos.join("\n");
   assert.deepEqual(todos.match(/["'`]\/api\/[^"'`]*["'`]/g), ['"/api/assinatura-tecnico"']);
-  assert.deepEqual(todos.match(/\.(src|href)\s*=[^=;]*/g), [".src = URL_ASSINATURA"]);
+  // A imagem vem como blob: pelo auxiliar comum (apiFetch leva o X-Simpress-Sessao); o painel não faz fetch.
+  assert.deepEqual(todos.match(/\.(src|href)\s*=[^=;]*/g), [".src = await urlDeBlobDaApi(URL_ASSINATURA, controle.signal)"]);
 });
 
 test("painel Lembretes e Termos: abas e botões aprovados no código React, nenhum Imprimir e nenhum atalho novo", () => {

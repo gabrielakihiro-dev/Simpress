@@ -251,7 +251,7 @@ class SebraeRouteTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.origin = f"http://127.0.0.1:{main.SERVER_PORT}"
-        self.client = TestClient(main.app, base_url=self.origin, client=("127.0.0.1", 1234), cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+        self.client = TestClient(main.app, base_url=self.origin, client=("127.0.0.1", 1234), headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT))
         self.addCleanup(self.client.close)
 
     def test_summary(self):

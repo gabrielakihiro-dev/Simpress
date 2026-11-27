@@ -860,7 +860,7 @@ class PainelRealLeLembretesDaApiTests(unittest.TestCase):
             # Sem ``with``: não roda o lifespan do main.app (workers sobre ``data/`` real).
             cliente = TestClient(
                 main.app, base_url=f"http://localhost:{main.SERVER_PORT}", client=("127.0.0.1", 50000),
-                headers={"Cookie": sessao_local.cabecalho_cookie(main.SERVER_PORT)},
+                headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT),
             )
             self.addCleanup(cliente.close)
             with mock.patch.object(main, "STATE_DIR", estado):

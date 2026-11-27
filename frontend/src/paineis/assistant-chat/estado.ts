@@ -5,6 +5,7 @@
 // nunca envia duas vezes. Todo texto vindo do usuário ou do Assistente entra como texto (nunca como HTML). Nada de dado pessoal em log.
 import { flushSync } from "react-dom";
 import { apiFetch, type ApiFetchOptions } from "../../api";
+import { baixarDaApi } from "../../comum/baixar-api";
 import {
   AVISO_BUSCA_WEB, CHAVE_VOZ, DESLIGADO, LIMITE, LIMITE_ANEXO_BYTES, LIMITE_SEGUNDOS, MSG_FALHA_ENVIO, PENDENTE_SEM_DESCRICAO, PRAZO_ENVIO_MS,
   TAXA_WAV, VELOCIDADE_GLOBO, arquivosValidos, buscasValidas, contador, contextoUX, dataHoraConversa, estadoDoGlobo, nivelDoGlobo, paraWav,
@@ -379,6 +380,15 @@ async function copiarTexto(texto: string) {
     document.body.append(campo);
     campo.select();
     try { return document.execCommand("copy"); } catch { return false; } finally { campo.remove(); }
+  }
+}
+
+// Por apiFetch (leva o X-Simpress-Sessao); a falha vira aviso no status do painel, nunca uma página de erro.
+export async function baixarRelatorioAssistente(arquivo: ArquivoValido) {
+  try {
+    await baixarDaApi(`/api/assistente/relatorio/${encodeURIComponent(arquivo.id)}`, arquivo.nome, "Não foi possível baixar o relatório.");
+  } catch (erro) {
+    mostrarStatus(erro instanceof Error ? erro.message : String(erro));
   }
 }
 

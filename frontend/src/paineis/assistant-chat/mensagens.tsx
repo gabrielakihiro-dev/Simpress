@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { resumirFerramentas } from "./assistente-puro";
 import { Icone } from "./comuns";
-import { acoes, copiarResposta, type Estado, type Mensagem } from "./estado";
+import { acoes, baixarRelatorioAssistente, copiarResposta, type Estado, type Mensagem } from "./estado";
 
 // Todo texto vindo do usuário ou do Assistente entra como texto do React (nunca como HTML); só links http/https abrem.
 function MensagemItem({ mensagem }: { mensagem: Mensagem }) {
@@ -13,9 +13,9 @@ function MensagemItem({ mensagem }: { mensagem: Mensagem }) {
       {mensagem.temArquivos ? (
         <div className="ck-assist__arquivos">
           {mensagem.arquivos.map(arquivo => (
-            <a key={arquivo.id} className="ck-btn ck-btn--secundario ck-assist__arquivo" href={`/api/assistente/relatorio/${arquivo.id}`} download={arquivo.nome} title={arquivo.titulo || undefined}>
+            <button key={arquivo.id} type="button" className="ck-btn ck-btn--secundario ck-assist__arquivo" title={arquivo.titulo || undefined} onClick={() => baixarRelatorioAssistente(arquivo)}>
               {`Baixar ${arquivo.nome}`}
-            </a>
+            </button>
           ))}
         </div>
       ) : null}

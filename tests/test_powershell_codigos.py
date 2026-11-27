@@ -146,7 +146,7 @@ class PowerShellCodigosHttpTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "powershell_codigos.json"
             client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000),
-                                cookies={sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO})
+                                headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT))
             with mock.patch.object(main, "STATE_DIR", Path(pasta)):
                 lido = client.get(ROTA)
                 self.assertEqual(lido.status_code, 200)

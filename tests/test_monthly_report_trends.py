@@ -165,8 +165,7 @@ class TrendsRouteTests(unittest.TestCase):
         kwargs = {"base_url": f"http://127.0.0.1:{main.SERVER_PORT}", "client": ("127.0.0.1", 1234)}
         with TestClient(app, **kwargs) as anonymous:
             self.assertEqual(anonymous.get(url).status_code, 401)
-        cookies = {sessao_local.nome_cookie(main.SERVER_PORT): sessao_local.SEGREDO}
-        with TestClient(app, cookies=cookies, **kwargs) as session:
+        with TestClient(app, headers=sessao_local.cabecalhos_sessao(main.SERVER_PORT), **kwargs) as session:
             self.assertEqual(session.get(url).status_code, 200)
 
 

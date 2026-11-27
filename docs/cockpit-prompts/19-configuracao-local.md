@@ -106,13 +106,13 @@ Regras de segredo:
 
 ## API
 
-Todos os endpoints exigem o cookie `simpress_sessao_<porta>` (401 sem ele).
+Todos os endpoints exigem o cookie `simpress_sessao_<porta>` e o cabeçalho `X-Simpress-Sessao` (401 sem eles; `security/sessao_local.py`).
 
 | Método e rota | Faz |
 |---|---|
 | `GET /api/config/local` | status de cada seção; e-mails e usuário voltam inteiros (são do próprio usuário, na máquina dele); chaves só como `configurada` e `final` |
 | `PUT /api/config/local/contas` | grava `config/contas_automacao.json` |
-| `GET /api/config/local/endpoint/{tela}` | redireciona os links da interface para o Endpoint (`computadores`, `som-computadores`, `staged-computers`) no host do link configurado, lido a cada clique |
+| `GET /api/config/local/endpoint/{tela}` | devolve `{"url": ...}` do Endpoint (`computadores`, `som-computadores`, `staged-computers`) no host do link configurado, lido a cada clique; os links da interface (`data-endpoint-tela`, `frontend/src/comum/links-endpoint.ts`) pedem por `apiFetch` e abrem a URL numa aba nova (26/11/2026: era 302, que uma navegação comum não autentica) |
 | `GET` e `PUT /api/config/cliente` (já existem) | lê e grava `config/cliente.json` |
 | `PUT /api/config/local/assistente` | grava as chaves no `.env`; corpo vazio numa chave mantém o valor |
 | `DELETE /api/config/local/assistente/{chave}` | remove a chave do `.env` |

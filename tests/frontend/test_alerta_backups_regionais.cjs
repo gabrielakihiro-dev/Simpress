@@ -142,12 +142,13 @@ const painelSino = no("section", "notification-center-panel");
 const resumoSino = no("p", "notification-center-summary");
 const tituloSino = no("h2", "notification-center-title");
 let resposta = {};
+// tabela-os.ts e paineis.ts pedem por apiFetch (api.ts), que usa o fetch global.
+globalThis.fetch = async () => ({ ok: true, json: async () => resposta });
 panels.install({
   document: doc,
   MutationObserver: class { observe() {} },
   CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
   console: { warn() {} },
-  fetch: async () => ({ ok: true, json: async () => resposta }),
 });
 
 async function atualizar(dados) {

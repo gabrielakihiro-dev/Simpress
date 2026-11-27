@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from core.config import ENDPOINT_URL_PADRAO, endpoint_url
@@ -35,6 +34,11 @@ class ContasPayload(BaseModel):
     links: dict[str, str] = Field(default_factory=dict, max_length=50)
 
 
+class LinkEndpoint(BaseModel):
+    """Resposta de GET /api/config/local/endpoint/{tela}: a interface abre a URL externa numa aba nova."""
+    url: str
+
+
 class AssistentePayload(BaseModel):
     """Corpo de PUT /api/config/local/assistente. Ausente ou em branco mantém a chave atual."""
     openrouter_api_key: Optional[str] = Field(None, max_length=1000)
@@ -61,16 +65,17 @@ def create_configuracao_local_router(*, contas_file: Callable[[], Path], client_
     def get_configuracao_local() -> Any:
         return leitura()
 
-    @router.get("/api/config/local/endpoint/{tela}")
-    def abrir_endpoint(tela: str) -> RedirectResponse:
-        """Links da interface para o Endpoint: lê o link a cada clique, então vale sem reiniciar."""
+    @router.get("/api/config/local/endpoint/{tela}", response_model=LinkEndpoint)
+    def abrir_endpoint(tela: str) -> Any:
+        """Links da interface para o Endpoint: lê o link a cada clique, então vale sem reiniciar. JSON e não 302,
+        porque /api/* exige o cabeçalho X-Simpress-Sessao, que uma navegação comum não leva."""
         if tela not in TELAS_ENDPOINT:
             raise HTTPException(404, "Tela do Endpoint desconhecida.")
         url = endpoint_url(contas_file())
         if configuracao.validar_valor("link", url) is not None:
             url = ENDPOINT_URL_PADRAO
         fragmento = TELAS_ENDPOINT[tela]
-        return RedirectResponse(url if fragmento is None else url.split("#")[0] + fragmento, status_code=302)
+        return {"url": url if fragmento is None else url.split("#")[0] + fragmento}
 
     @router.put("/api/config/local/contas")
     def put_contas(payload: ContasPayload) -> Any:
