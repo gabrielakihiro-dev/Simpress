@@ -17,6 +17,8 @@ class LoggingSetupTests(unittest.TestCase):
         self.log_dir = Path(self.enterContext(tempfile.TemporaryDirectory())) / "logs"
         # Registered last so it runs first: Windows cannot delete an open log file.
         self.addCleanup(self.restore_root)
+        for name in logging_setup.HTTP_CLIENT_LOGGERS:
+            self.addCleanup(logging.getLogger(name).setLevel, logging.getLogger(name).level)
 
     def restore_root(self):
         for handler in self.root.handlers:
@@ -76,6 +78,33 @@ class LoggingSetupTests(unittest.TestCase):
         self.assertEqual(token, logging_setup.redact_reference("SERIE-FICTICIA-01"))
         self.assertNotIn("FICTICIA", token)
         self.assertEqual(logging_setup.redact_reference(""), "-")
+
+
+    def test_http_client_request_urls_with_personal_data_stay_out_of_the_log(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        app = FastAPI()
+
+        @app.get("/api/buscar")
+        def buscar(q: str):
+            logging.getLogger("domains.busca").info("Busca concluída.")
+            return {}
+
+        log_file = logging_setup.configure_logging(self.log_dir)
+        resposta = TestClient(app).get("/api/buscar", params={"q": "Fulano 123.456.789-00"})
+        for name in logging_setup.HTTP_CLIENT_LOGGERS:
+            logging.getLogger(name).warning("falha de conexão")
+        for handler in self.added_handlers():
+            handler.flush()
+
+        self.assertEqual(resposta.status_code, 200)
+        text = log_file.read_text(encoding="utf-8")
+        self.assertIn("Busca concluída.", text)
+        self.assertNotIn("Fulano", text)
+        self.assertNotIn("123.456.789-00", text)
+        for name in logging_setup.HTTP_CLIENT_LOGGERS:
+            self.assertIn(f"[WARNING] {name}: falha de conexão", text)
 
 
 if __name__ == "__main__":
