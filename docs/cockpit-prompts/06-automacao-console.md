@@ -111,6 +111,7 @@ Leitor de tela (26/11/2026, pedido do usuário): o console `#cockpit-automation-
 - `#automacao-log-paginas`, `#automacao-log-anterior`, `#automacao-log-proxima`, `#automacao-log-pagina`
 - `#automacao-andamento-painel`, `#automacao-andamento-conteudo`, `#automacao-andamento-titulo`
 - `#automacao-aviso-login`, `#automacao-aviso-login-titulo`, `#automacao-aviso-login-texto`
+- `#automacao-aviso-dashboard` (27/11/2026: Dashboard aberto no Excel, durante `enviar`; botão `#btn-automacao-cancelar-dashboard`; doc em `docs/operacao/automacao-chrome.md`)
 - Todos os `data-on-click` e `data-on-change`
 
 ---

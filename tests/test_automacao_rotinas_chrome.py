@@ -1,4 +1,5 @@
 import contextlib
+import importlib.util
 import hashlib
 import io
 import itertools
@@ -40,6 +41,42 @@ def tearDownModule():
 def _menu_da_linha_simulado():
     """Menu de contexto da linha simulado como antes: o item é ``page.get_by_role("menuitem", name=...).first``."""
     return patch.object(automacao, "_item_do_menu_da_linha", side_effect=lambda page, _linha, nome: page.get_by_role("menuitem", name=nome).first)
+
+
+class _Elementos:
+    """Locator falso sobre elementos (texto, visível, dentro da lista de arquivos); não tem como ler o texto (o toast traz e-mail)."""
+
+    def __init__(self, itens):
+        self.itens = list(itens)
+
+    def filter(self, visible=None, **_k):
+        return _Elementos([i for i in self.itens if visible is None or i[1] == visible])
+
+    def and_(self, outro):
+        return _Elementos([i for i in self.itens if i in outro.itens])
+
+    def or_(self, outro):
+        return _Elementos(self.itens + (outro.itens if isinstance(outro, _Elementos) else []))
+
+    def count(self):
+        return len(self.itens)
+
+    @property
+    def first(self):
+        return _Elementos(self.itens[:1])
+
+
+class _PaginaDeElementos:
+    """``get_by_text`` casa o padrão com cada texto; ``locator(_FORA_DA_LISTA)`` deixa de fora o que está numa linha da lista."""
+
+    def __init__(self, itens):
+        self.itens = list(itens)
+
+    def get_by_text(self, padrao, **_k):
+        return _Elementos([i for i in self.itens if padrao.search(i[0])])
+
+    def locator(self, seletor):
+        return _Elementos([i for i in self.itens if not i[2]] if seletor == automacao._FORA_DA_LISTA else [])
 
 
 class ChromeAutomationHelpersTests(unittest.TestCase):
@@ -903,7 +940,7 @@ class DashboardDownloadDaPastaTests(unittest.TestCase):
 
     def test_download_clicks_row_menu_then_download_and_returns_the_file(self):
         page = MagicMock()
-        linha = page.get_by_role.return_value.filter.return_value.first
+        linha = page.get_by_role.return_value.filter.return_value.filter.return_value.first  # só a linha visível
         chamado = {}
 
         def exportar(pagina, origem, clicar, prefixo):
@@ -1000,6 +1037,14 @@ class DashboardDownloadDaPastaTests(unittest.TestCase):
 
 
 class EnviarDashboardTests(unittest.TestCase):
+    def setUp(self):
+        avisar = patch.object(automacao, "avisar")  # nenhum toast real do Windows
+        self.avisar = avisar.start()
+        self.addCleanup(avisar.stop)
+        dormir = patch.object(automacao.time, "sleep")  # nenhuma espera real
+        dormir.start()
+        self.addCleanup(dormir.stop)
+
     def _pagina(self, botoes):
         """Página simulada cujo diálogo de nome repetido oferece só os botões de ``botoes``."""
         page = MagicMock()
@@ -1008,55 +1053,69 @@ class EnviarDashboardTests(unittest.TestCase):
         def get_by_role(role, name=None, **_kwargs):
             if role == "button" and name in (automacao._BOTAO_SUBSTITUIR, automacao._BOTAO_MANTER_AMBOS):
                 chave = "substituir" if name is automacao._BOTAO_SUBSTITUIR else "manter"
-                locators.setdefault(chave, MagicMock()).count.return_value = 1 if chave in botoes else 0
-                return locators[chave]
+                return locators.setdefault(chave, MagicMock())
             if role in ("dialog", "row"):
                 return locators.setdefault(role, MagicMock())
             return MagicMock()
 
         page.get_by_role.side_effect = get_by_role
         page.locators = locators
+        page.botoes = botoes
         return page
 
-    def _enviar(self, page, concluido=None, em_uso=False, conflito=False, botao=None, dialogo=True, andamento=False, relogio=None):
+    def _enviar(self, page, concluido=None, em_uso=False, conflito=False, botao=None, dialogo=True, andamento=False, relogio=None,
+                espera=None, ao_retomar=None, marcar_incerto=None, aba=False, cancelar=None):
         """Roda o envio com os avisos simulados; cada aviso é um valor fixo ou uma função sem argumentos lida a cada volta.
 
         ``concluido`` padrão: o aviso de concluído aparece depois do clique em Replace (ou logo, sem diálogo).
         ``dialogo``: o diálogo de nome repetido (Replace/Keep both) visível; ``andamento``: "Uploading 1 item to ..." visível;
-        ``relogio``: valores de ``time.time`` (padrão: 10 s por leitura)."""
+        ``em_uso``: o aviso de arquivo bloqueado (toast) visível; ``aba``: aba do Excel com o Dashboard aberta neste Chrome;
+        ``relogio``: valores de ``time.time`` (padrão: 10 s por leitura); ``time.monotonic`` anda 1 s por leitura;
+        ``cancelar``: função sem argumentos; verdadeira, ``verificar_cancelamento`` levanta ``RotinaCancelada``."""
         avisos = {}
         page.get_by_text.side_effect = lambda padrao, *_a, **_k: avisos.setdefault(padrao, MagicMock())
         if concluido is None:
             concluido = lambda: not dialogo or self._substituiu(page)  # noqa: E731
         leituras = {
-            page.get_by_text(automacao._AVISO_ENVIO_CONCLUIDO).first: concluido,
-            page.get_by_text(automacao._AVISO_CONFLITO).first: conflito,
-            page.get_by_text(automacao._AVISO_ENVIANDO).first: andamento,
+            page.get_by_text(automacao._AVISO_ENVIO_CONCLUIDO): concluido,
+            page.get_by_text(automacao._AVISO_CONFLITO): conflito,
+            page.get_by_text(automacao._AVISO_ENVIANDO): andamento,
         }
 
-        def visivel(loc):
-            if "dialog" in page.locators and loc is page.locators["dialog"].or_.return_value.filter.return_value.first:
-                valor = em_uso
-            elif "substituir" in page.locators and loc is page.locators["substituir"].or_.return_value.first:
-                valor = dialogo
-            else:
-                valor = leituras.get(loc, False)  # linhas selecionadas e o resto: não
+        def ler(valor):
             return valor() if callable(valor) else valor
+
+        def visivel(loc):
+            if "substituir" in page.locators:
+                substituir = page.locators["substituir"].filter.return_value
+                if loc is substituir.or_.return_value:
+                    return ler(dialogo)
+                if loc is substituir:
+                    return ler(dialogo) and "substituir" in page.botoes
+            return ler(leituras.get(loc, False))  # linhas selecionadas e o resto: não
+
+        def verificar(*_a):
+            if cancelar is not None and cancelar():
+                raise automacao.RotinaCancelada()
 
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
             arquivo.write_bytes(b"x")
             with patch.object(automacao, "esperar_visivel", return_value=True), \
                     patch.object(automacao, "visivel", side_effect=visivel), \
-                    patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log, \
+                    patch.object(automacao, "_aviso_de_bloqueio_visivel", side_effect=lambda _p: ler(em_uso)), \
+                    patch.object(automacao, "_aba_do_dashboard_aberta", side_effect=lambda _p: ler(aba)), \
+                    patch.object(automacao, "aguardar_login"), \
+                    patch.object(automacao, "verificar_cancelamento", side_effect=verificar), patch.object(automacao, "log") as log, \
                     patch.object(automacao, "_botao_enviar", return_value=botao or MagicMock()), \
                     patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
                     patch.object(automacao.time, "time", side_effect=relogio if relogio is not None else itertools.count(0, 10)), \
-                    patch.object(automacao.time, "sleep"):
+                    patch.object(automacao.time, "monotonic", side_effect=itertools.count(0, 1)):
                 try:
-                    automacao.enviar_arquivo_para_pasta(page, arquivo)
+                    automacao.enviar_arquivo_para_pasta(page, arquivo, espera=espera, ao_retomar=ao_retomar, marcar_incerto=marcar_incerto)
                 finally:
                     self.logs = "\n".join(str(c.args[1]) for c in log.call_args_list)
+                    self.log = log
 
     def test_menu_and_dialog_labels_in_portuguese_and_english(self):
         for texto in ("Duplicata", "Duplicate", " duplicata "):
@@ -1071,13 +1130,13 @@ class EnviarDashboardTests(unittest.TestCase):
 
     @staticmethod
     def _substituiu(page) -> bool:
-        return "substituir" in page.locators and page.locators["substituir"].first.click.called
+        return "substituir" in page.locators and page.locators["substituir"].filter.return_value.first.click.called
 
     def test_upload_clicks_replace_and_never_keep_both(self):
         page = self._pagina({"substituir", "manter"})
         self._enviar(page)
-        page.locators["substituir"].first.click.assert_called_once()
-        page.locators["manter"].first.click.assert_not_called()
+        page.locators["substituir"].filter.return_value.first.click.assert_called_once()
+        page.locators["manter"].filter.return_value.first.click.assert_not_called()
 
     def test_upload_menu_retried_once_then_clicks_replace_exactly_once(self):
         page = self._pagina({"substituir"})
@@ -1085,18 +1144,24 @@ class EnviarDashboardTests(unittest.TestCase):
         botao.click.side_effect = [RuntimeError("DOM desatualizado"), None]
         self._enviar(page, botao=botao)
         self.assertEqual(botao.click.call_count, 2)
-        page.locators["substituir"].first.click.assert_called_once()
+        page.locators["substituir"].filter.return_value.first.click.assert_called_once()
 
     def test_upload_refuses_when_only_keep_both_is_offered(self):
         page = self._pagina({"manter"})
         with self.assertRaisesRegex(automacao.RotinaErro, "Keep both"):
             self._enviar(page)
-        page.locators["manter"].first.click.assert_not_called()
+        page.locators["manter"].filter.return_value.first.click.assert_not_called()
 
-    def test_upload_fails_clearly_when_the_dashboard_is_in_use(self):
+    def test_pending_copy_upload_stops_on_the_locked_notice_without_marking_uncertain(self):
+        # Cópia pendente (sem espera): o aviso de bloqueio prova que nada subiu; nada de esperar 15 min nem de "incerto".
         page = self._pagina({"substituir"})
-        with self.assertRaisesRegex(automacao.RotinaErro, "em uso ou bloqueado"):
-            self._enviar(page, concluido=False, em_uso=True)
+        marcar = MagicMock()
+        with self.assertRaises(automacao.EnvioNaoIniciado) as erro:
+            self._enviar(page, concluido=False, dialogo=False, em_uso=True, marcar_incerto=marcar)
+        self.assertEqual(str(erro.exception), automacao.MSG_COPIA_BLOQUEADA)
+        marcar.assert_not_called()
+        page.goto.assert_not_called()
+        self.avisar.assert_not_called()
 
     def test_upload_stops_on_save_conflict_without_retrying(self):
         # 08/11/2026: "Save Conflict" do SharePoint; Replace clicado uma vez e nada repetido ("Retry" nunca).
@@ -1104,7 +1169,7 @@ class EnviarDashboardTests(unittest.TestCase):
         with self.assertRaises(automacao.RotinaErro) as erro:
             self._enviar(page, concluido=False, conflito=lambda: self._substituiu(page))
         self.assertEqual(str(erro.exception), automacao.MSG_CONFLITO_SHAREPOINT)
-        page.locators["substituir"].first.click.assert_called_once()
+        page.locators["substituir"].filter.return_value.first.click.assert_called_once()
         nomes = [c.kwargs.get("name") for c in page.get_by_role.call_args_list]
         self.assertFalse(any(isinstance(n, str) and "retry" in n.lower() for n in nomes))
 
@@ -1136,8 +1201,8 @@ class EnviarDashboardTests(unittest.TestCase):
         page = self._pagina({"substituir", "manter"})
         dialogo = iter([False] * 3 + [True] * 100)  # aparece depois de 8 s (a espera antiga)
         self._enviar(page, dialogo=lambda: next(dialogo), relogio=itertools.count(0, 5))
-        page.locators["substituir"].first.click.assert_called_once()
-        page.locators["manter"].first.click.assert_not_called()
+        page.locators["substituir"].filter.return_value.first.click.assert_called_once()
+        page.locators["manter"].filter.return_value.first.click.assert_not_called()
         for etapa in ("Arquivo escolhido", "Diálogo de nome repetido visto", "Replace clicado", "Aviso de envio concluído visto"):
             self.assertIn(etapa, self.logs)
 
@@ -1146,7 +1211,7 @@ class EnviarDashboardTests(unittest.TestCase):
         dialogo = iter([False] * 3 + [True] * 100)
         with self.assertRaisesRegex(automacao.RotinaErro, "Keep both"):
             self._enviar(page, concluido=False, dialogo=lambda: next(dialogo), relogio=itertools.count(0, 5))
-        page.locators["manter"].first.click.assert_not_called()
+        page.locators["manter"].filter.return_value.first.click.assert_not_called()
 
     def test_upload_that_never_starts_fails_clearly_without_choosing_the_file_again(self):
         page = self._pagina(set())
@@ -1157,7 +1222,7 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertFalse(erro.exception.andamento)
         botao.click.assert_called_once()
         page.expect_file_chooser.assert_called_once()
-        page.locators["substituir"].first.click.assert_not_called()
+        page.locators["substituir"].filter.return_value.first.click.assert_not_called()
 
     def test_upload_in_progress_at_the_deadline_is_reported_as_in_progress(self):
         page = self._pagina(set())
@@ -1372,9 +1437,10 @@ class EnviarDashboardTests(unittest.TestCase):
         baixado.write_bytes(sharepoint)
         enviados: list = []
 
-        def enviar(_page, snapshot):
+        def enviar(_page, snapshot, marcar_incerto, **_k):
             enviados.append(snapshot.read_bytes())
             if falha_no_envio is not None:
+                marcar_incerto()  # falha depois do Replace
                 raise falha_no_envio
         with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba"), \
                 patch.object(automacao, "DASHBOARD_SAIDA_DIR", raiz / "sebrae_dashboard_saida"), \
@@ -1996,7 +2062,7 @@ class EnviarDashboardTests(unittest.TestCase):
                     patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=lambda p: ordem.append("baixar") or baixado), \
                     patch.object(automacao, "conferir_dashboard_do_sharepoint", side_effect=lambda b: ordem.append("conferir")), \
                     patch.object(automacao, "guardar_backup_do_dashboard", side_effect=lambda b: ordem.append("backup")), \
-                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=lambda p, a: ordem.append("enviar")), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=lambda p, a, **_k: ordem.append("enviar")), \
                     redirect_stdout(io.StringIO()):
                 codigo = automacao.rodar_rotina_enviar(context)
         self.assertEqual(codigo, 0)
@@ -2060,7 +2126,7 @@ class EnviarDashboardTests(unittest.TestCase):
                     patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=_baixar), \
                     patch.object(automacao, "conferir_dashboard_do_sharepoint", side_effect=lambda b: ordem.append("conferir")), \
                     patch.object(automacao, "guardar_backup_do_dashboard", side_effect=lambda b: ordem.append("backup")), \
-                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=lambda p, a: ordem.append("enviar")), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=lambda p, a, **_k: ordem.append("enviar")), \
                     patch.object(automacao.time, "sleep"), redirect_stdout(io.StringIO()):
                 codigo = automacao.rodar_rotina_enviar(MagicMock())
         self.assertEqual(codigo, 0)
@@ -2288,7 +2354,11 @@ class EnviarDashboardTests(unittest.TestCase):
     def _rodar_enviar(self, pasta: str, falha_no_envio: bool, ao_enviar=None, falha_close=False):
         arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
         arquivo.write_bytes(b"conteudo novo")
-        erro = ao_enviar or (automacao.RotinaErro("sem aviso") if falha_no_envio else None)
+        def falhar_depois_do_replace(_page, _arquivo, marcar_incerto, **_k):
+            marcar_incerto()
+            raise automacao.RotinaErro("sem aviso")
+
+        erro = ao_enviar or (falhar_depois_do_replace if falha_no_envio else None)
         with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
                 patch.object(automacao, "nova_aba", return_value=MagicMock(close=MagicMock(side_effect=OSError("close") if falha_close else None))), patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
                 patch.object(automacao, "duplicar_dashboard_na_pasta"), patch.object(automacao, "baixar_dashboard_da_pasta"), \
@@ -2314,11 +2384,11 @@ class EnviarDashboardTests(unittest.TestCase):
             copia = fin.guardar_pendente(raiz, origem, fin.agora_local(), motivo="x", tickets=[])
             chamadas = []
             with patch.object(fin, "descartar_pendente", side_effect=PermissionError("ocupado")):
-                self.assertEqual(self._rodar_enviar(pasta, False, lambda *args: chamadas.append("upload")), 0)
+                self.assertEqual(self._rodar_enviar(pasta, False, lambda *args, **_k: chamadas.append("upload")), 0)
             fin.gravar_resultado(raiz, {"sharepoint": None})
             self.assertTrue(fin.aviso_do_pendente(raiz)["limpeza_pendente"])
             with self.assertRaises(fin.DomainConflictError):
-                self._rodar_enviar(pasta, False, lambda *args: chamadas.append("upload"))
+                self._rodar_enviar(pasta, False, lambda *args, **_k: chamadas.append("upload"))
             self.assertEqual(chamadas, ["upload"])
             self.assertTrue(copia.exists())
 
@@ -2328,7 +2398,7 @@ class EnviarDashboardTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as pasta:
             raiz = Path(pasta)
             copias = []
-            def criar(page, arquivo):
+            def criar(page, arquivo, **_k):
                 copias.append(fin.guardar_pendente(raiz, arquivo, fin.agora_local(), motivo="nova", tickets=[]))
             self.assertEqual(self._rodar_enviar(pasta, False, criar), 0)
             self.assertTrue(copias[0].exists())
@@ -2338,7 +2408,8 @@ class EnviarDashboardTests(unittest.TestCase):
         from domains import sebrae_finalizacao as fin
 
         with tempfile.TemporaryDirectory() as pasta:
-            def alterar(page, arquivo):
+            def alterar(page, arquivo, marcar_incerto, **_k):
+                marcar_incerto()  # o Replace foi clicado; depois o arquivo local muda
                 arquivo.write_bytes(b"outros bytes")
             with self.assertRaises(automacao.RotinaErro):
                 self._rodar_enviar(pasta, False, alterar)
@@ -2356,10 +2427,10 @@ class EnviarDashboardTests(unittest.TestCase):
                 gravar(path, dados)
             with patch.object(fin, "atomic_write_json", side_effect=falhar_confirmacao):
                 with self.assertRaises(fin.DomainBusyError):
-                    self._rodar_enviar(pasta, False, lambda *args: chamadas.append("upload"))
+                    self._rodar_enviar(pasta, False, lambda *args, **_k: chamadas.append("upload"))
             self.assertTrue(fin.aviso_do_pendente(Path(pasta))["incerto"])
             with self.assertRaises(fin.DomainConflictError):
-                self._rodar_enviar(pasta, False, lambda *args: chamadas.append("upload"))
+                self._rodar_enviar(pasta, False, lambda *args, **_k: chamadas.append("upload"))
             self.assertEqual(chamadas, ["upload"])
 
     def test_routine_records_the_sha256_of_what_it_uploaded_and_nothing_on_failure(self):
@@ -2415,6 +2486,545 @@ class EnviarDashboardTests(unittest.TestCase):
             with patch.object(sebrae_fechar, "executar", return_value=0) as executar:
                 self.assertEqual(automacao.rodar_rotina_fechar(context, valor), 0)
             executar.assert_called_once_with(context, sys.modules[automacao.__name__], sem_finalizar=valor)
+
+    # Dashboard aberto (27/11/2026): toast de bloqueio fora de diálogo, aba do Excel no Chrome de automação; a rotina espera, avisa uma
+    # vez, confere o SharePoint ao retomar e só marca "incerto" a partir do Replace. Textos sintéticos; o e-mail nunca vai a log.
+
+    TOAST = "The file https://exemplo.invalid/Dashboard Operacional_SEBRAE.xlsx is locked for shared use by pessoa@exemplo.invalid [membership]."
+
+    def test_locked_notice_pattern_is_narrow(self):
+        for texto in (self.TOAST, "O arquivo está bloqueado para uso compartilhado por pessoa@exemplo.invalid",
+                      "The file is checked out to pessoa@exemplo.invalid", "Arquivo em uso por pessoa@exemplo.invalid",
+                      # variantes do aviso (revisão de 27/11/2026)
+                      "The file is checked out for editing by a@b.c", "The file is locked by a@b.c", "O arquivo está bloqueado por a@b.c",
+                      "O arquivo está sendo editado por a@b.c", "The file is in use by a@b.c", "O arquivo foi bloqueado para edição por a@b.c"):
+            self.assertRegex(texto, automacao._AVISO_DASHBOARD_BLOQUEADO)
+        for texto in ("Sign in user", "Relatório locked.xlsx", "Dashboard Operacional_SEBRAE.xlsx", "Uploading 1 item to DASHBOARD SEBRAE"):
+            self.assertNotRegex(texto, automacao._AVISO_DASHBOARD_BLOQUEADO)
+
+    def test_locked_notice_outside_a_dialog_is_seen_but_a_file_name_in_the_list_is_not(self):
+        com_toast = _PaginaDeElementos([("Relatório locked for shared use.xlsx", True, True), (self.TOAST, True, False)])
+        self.assertTrue(automacao._aviso_de_bloqueio_visivel(com_toast))
+        so_na_lista = _PaginaDeElementos([("Relatório locked for shared use.xlsx", True, True), ("Sign in user", True, False)])
+        self.assertFalse(automacao._aviso_de_bloqueio_visivel(so_na_lista))
+        oculto = _PaginaDeElementos([(self.TOAST, False, False)])
+        self.assertFalse(automacao._aviso_de_bloqueio_visivel(oculto))
+
+    def test_excel_tab_with_the_dashboard_open_for_editing_is_detected_by_the_url_only(self):
+        def pagina(*urls):
+            page = MagicMock()
+            abas = []
+            for url in urls:
+                aba = MagicMock(url=url)
+                aba.title.side_effect = AssertionError("title() pode travar numa aba ocupada")
+                abas.append(aba)
+            page.context.pages = [page, *abas]
+            return page
+
+        doc = "https://exemplo.invalid/sites/x/_layouts/15/Doc.aspx?sourcedoc=%7B1%7D&file=Dashboard%20Operacional_SEBRAE.xlsx&action=default"
+        edicao = doc.replace("action=default", "action=edit")
+        atalho = "https://exemplo.invalid/:x:/r/sites/x/Shared%20Documents/DASHBOARD%20SEBRAE/Dashboard%20Operacional_SEBRAE.xlsx?d=w1&web=1"
+        for url in (doc, edicao, atalho):
+            with self.subTest(url=url):
+                self.assertTrue(automacao._aba_do_dashboard_aberta(pagina(url)))
+        so_visualizacao = [doc.replace("action=default", "action=view"), doc.replace("action=default", "action=embedview")]
+        copia = doc.replace("Operacional_SEBRAE.xlsx", "Operacional_SEBRAE%20-%20Copiar.xlsx")
+        pasta = "https://exemplo.invalid/sites/pasta-do-dashboard/Forms/AllItems.aspx?id=/DASHBOARD%20SEBRAE"
+        outra = doc.replace("Dashboard%20Operacional_SEBRAE.xlsx", "Relat%C3%B3rio.xlsx")
+        baixado = "file:///C:/Downloads/Dashboard%20Operacional_SEBRAE.xlsx"
+        self.assertFalse(automacao._aba_do_dashboard_aberta(pagina(*so_visualizacao, copia, pasta, outra, baixado)))
+        propria = MagicMock(url=doc)
+        propria.context.pages = [propria]  # a aba da própria rotina não conta
+        self.assertFalse(automacao._aba_do_dashboard_aberta(propria))
+
+    def test_hidden_first_notice_does_not_hide_a_visible_one(self):
+        # Ensaio de 27/11/2026: 2 elementos com o aviso, o primeiro oculto; .first enganava. Sem visivel simulado.
+        page = MagicMock()
+        elementos = _PaginaDeElementos([("Uploaded 1 item to DASHBOARD SEBRAE", False, False), ("Uploaded 1 item to DASHBOARD SEBRAE", True, False)])
+        page.get_by_text.side_effect = elementos.get_by_text
+        page.locator.side_effect = elementos.locator
+        self.assertFalse(automacao.visivel(page.get_by_text(automacao._AVISO_ENVIO_CONCLUIDO).first))
+        marcar = MagicMock()
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "esperar_visivel", return_value=True), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "log"), patch.object(automacao, "_aba_do_dashboard_aberta", return_value=False):
+                automacao.enviar_arquivo_para_pasta(page, arquivo, espera=automacao.EsperaDashboard(), marcar_incerto=marcar)
+        marcar.assert_called_once()  # concluído sem Replace: algo subiu
+
+    def test_duplicate_sees_the_copied_notice_behind_a_hidden_duplicate(self):
+        elementos = _PaginaDeElementos([("Copied 1 item", False, False), ("Copied 1 item", True, False)])
+        page = MagicMock()
+        page.get_by_text.side_effect = elementos.get_by_text
+        contagens = iter([1, 2, 2])
+        with patch.object(automacao, "_linha_do_dashboard"), _menu_da_linha_simulado(), \
+                patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
+                patch.object(automacao, "_copias_na_lista", return_value=0), \
+                patch.object(automacao, "obter_posicao_cursor", return_value=(0, 0)), \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log:
+            automacao.duplicar_dashboard_na_pasta(page)
+        self.assertIn("Cópia de segurança criada", str(log.call_args_list))
+
+    def test_upload_waits_for_the_excel_tab_to_close_then_resumes_and_warns_once(self):
+        page = self._pagina({"substituir"})
+        leituras = iter([True] * 4 + [False] * 1000)
+        retomar, marcar, espera = MagicMock(), MagicMock(), automacao.EsperaDashboard()
+        self._enviar(page, aba=lambda: next(leituras), espera=espera, ao_retomar=retomar, marcar_incerto=marcar)
+        retomar.assert_called_once()
+        self.avisar.assert_called_once_with("Dashboard aberto", automacao.AVISO_DASHBOARD_ABERTO)
+        self.assertEqual(self.logs.count(automacao.MARCA_DASHBOARD_ABERTO), 1)
+        self.assertEqual(self.logs.count(automacao.MARCA_DASHBOARD_LIBERADO), 1)
+        self.assertLess(self.logs.index(automacao.MARCA_DASHBOARD_ABERTO), self.logs.index(automacao.MARCA_DASHBOARD_LIBERADO))
+        self.assertIn(automacao.MSG_DASHBOARD_ABERTO, self.logs)
+        page.expect_file_chooser.assert_called_once()
+        page.locators["substituir"].filter.return_value.first.click.assert_called_once()
+        marcar.assert_called_once()
+
+    def test_locked_notice_waits_goes_back_by_goto_checks_and_chooses_again_without_retry(self):
+        # O toast não some: goto na pasta LOGO (o "Retry" some; nunca reload), espera, confere o SharePoint e escolhe de novo; o fim
+        # da espera só sai no diálogo Replace (depois do goto o aviso some, mas o arquivo pode continuar bloqueado).
+        page = self._pagina({"substituir"})
+        ordem = []
+        voltas_no_aviso = []
+        page.goto.side_effect = lambda *_a, **_k: ordem.append(("goto", voltas_no_aviso[-1] == page.wait_for_timeout.call_count))
+        escolhas = page.expect_file_chooser
+
+        def em_uso():
+            if escolhas.call_count == 1 and not page.goto.called:
+                voltas_no_aviso.append(page.wait_for_timeout.call_count)
+                return True
+            return False
+
+        def retomar_():
+            liberado = automacao.MARCA_DASHBOARD_LIBERADO in str(automacao.log.call_args_list)
+            ordem.append("retomar depois do fim da espera" if liberado else "retomar")
+
+        retomar = MagicMock(side_effect=retomar_)
+        marcar = MagicMock(side_effect=lambda: ordem.append("incerto"))
+        page.locators["substituir"] = MagicMock()
+        page.locators["substituir"].filter.return_value.first.click.side_effect = lambda *_a, **_k: ordem.append("replace")
+        self._enviar(
+            page, espera=automacao.EsperaDashboard(), ao_retomar=retomar, marcar_incerto=marcar,
+            em_uso=em_uso, dialogo=lambda: page.goto.called, concluido=lambda: self._substituiu(page),
+        )
+        # ("goto", True): nenhuma espera entre ver o aviso e voltar à pasta
+        self.assertEqual(ordem, [("goto", True), "retomar", "incerto", "replace"])
+        self.assertGreater(page.wait_for_timeout.call_count, voltas_no_aviso[-1] + 30)  # a espera vem depois do goto
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_PASTA_MS)
+        page.reload.assert_not_called()
+        self.assertEqual(escolhas.call_count, 2)
+        self.avisar.assert_called_once()
+        self.assertEqual(self.logs.count(automacao.MARCA_DASHBOARD_ABERTO), 1)
+        self.assertEqual(self.logs.count(automacao.MARCA_DASHBOARD_LIBERADO), 1)
+        textos = [str(c) for c in page.get_by_role.call_args_list + page.get_by_text.call_args_list]
+        self.assertFalse([t for t in textos if "retry" in t.lower() or "tentar de novo" in t.lower()])
+        self.assertNotIn("pessoa@exemplo.invalid", self.logs)
+
+    def test_locked_notice_on_every_attempt_keeps_one_notice_and_stops_at_the_total_deadline_without_replace(self):
+        # Bloqueios seguidos: um "AÇÃO NECESSÁRIA" só e nenhum "Dashboard liberado" (o painel não pisca); o prazo total limita.
+        page = self._pagina({"substituir"})
+        escolhas = page.expect_file_chooser
+        marcar = MagicMock()
+        with patch.object(automacao, "ESPERA_DASHBOARD_LIVRE_S", 150), self.assertRaises(automacao.RotinaErro) as erro:
+            self._enviar(page, espera=automacao.EsperaDashboard(), ao_retomar=MagicMock(), marcar_incerto=marcar, dialogo=False, concluido=False,
+                         em_uso=lambda: escolhas.call_count > page.goto.call_count)
+        self.assertEqual(str(erro.exception), automacao.MSG_DASHBOARD_CONTINUOU_ABERTO)
+        self.assertGreaterEqual(escolhas.call_count, 2)
+        self.assertEqual(escolhas.call_count, page.goto.call_count)
+        self.assertEqual(self.logs.count(automacao.MARCA_DASHBOARD_ABERTO), 1)
+        self.assertNotIn(automacao.MARCA_DASHBOARD_LIBERADO, self.logs)
+        marcar.assert_not_called()
+        self.avisar.assert_called_once()
+        page.locators["substituir"].filter.return_value.first.click.assert_not_called()
+
+    def test_dashboard_left_open_past_the_total_deadline_fails_without_choosing_the_file(self):
+        page = self._pagina({"substituir"})
+        marcar = MagicMock()
+        with patch.object(automacao, "ESPERA_DASHBOARD_LIVRE_S", 30), self.assertRaises(automacao.RotinaErro) as erro:
+            self._enviar(page, espera=automacao.EsperaDashboard(), ao_retomar=MagicMock(), marcar_incerto=marcar, aba=True)
+        self.assertEqual(str(erro.exception), automacao.MSG_DASHBOARD_CONTINUOU_ABERTO)
+        page.expect_file_chooser.assert_not_called()
+        marcar.assert_not_called()
+
+    def test_progress_alone_does_not_mark_uncertain_but_replace_does_and_the_90s_restart_after_it(self):
+        # 27/11/2026: andamento antes do diálogo; Replace aos ~75 s e concluído aos ~150 s: o prazo de 90 s recomeça no Replace.
+        page = self._pagina({"substituir"})
+        marcar = MagicMock()
+        voltas = page.wait_for_timeout
+        marcado_antes_do_replace = []
+        page.locators["substituir"] = MagicMock()
+        page.locators["substituir"].filter.return_value.first.click.side_effect = lambda *_a, **_k: marcado_antes_do_replace.append(marcar.called)
+        self._enviar(page, andamento=True, marcar_incerto=marcar, relogio=itertools.count(0, 5),
+                     dialogo=lambda: voltas.call_count >= 15, concluido=lambda: voltas.call_count >= 30)
+        self.assertEqual(marcado_antes_do_replace, [True])
+        marcar.assert_called_once()
+        self.assertIn("Andamento do envio visto", self.logs)
+
+    def test_keep_both_refusal_does_not_mark_uncertain(self):
+        page = self._pagina({"manter"})
+        marcar = MagicMock()
+        with self.assertRaises(automacao.EnvioNaoIniciado):
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        marcar.assert_not_called()
+
+    def _dialogo_que_fecha(self, page, fecha: bool, visivel_antes: bool = True):
+        """Diálogo Replace/Keep both visível antes do Escape (``visivel_antes``); o Escape fecha (``fecha``) ou não."""
+        page.locators.setdefault("substituir", MagicMock())
+        botoes = page.locators["substituir"].or_.return_value.filter.return_value
+        botoes.count.side_effect = lambda: (0 if fecha else 1) if page.keyboard.press.called else int(visivel_antes)
+
+    def test_guard_exhausted_before_replace_fails_without_marking_uncertain(self):
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True)
+        marcar = MagicMock()
+        guarda = automacao.RotinaErro("Substituir o Dashboard no SharePoint: o cursor do sistema se moveu antes do clique; não cliquei.")
+        with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
+                self.assertRaises(automacao.EnvioNaoIniciado) as erro:
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        self.assertIn("não cliquei", str(erro.exception))
+        marcar.assert_not_called()
+        page.locators["substituir"].filter.return_value.first.click.assert_not_called()
+        page.keyboard.press.assert_called_with("Escape")
+
+    def test_cancel_before_the_dialog_renders_leaves_the_folder_by_goto_and_fails(self):
+        # Cancelado logo depois de escolher o arquivo, sem diálogo ainda: o goto descarta o upload pendente e um Replace futuro.
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True, visivel_antes=False)
+        marcar = MagicMock()
+        with self.assertRaises(automacao.RotinaCancelada):
+            self._enviar(page, concluido=False, dialogo=False, marcar_incerto=marcar, cancelar=lambda: page.expect_file_chooser.called)
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_CANCELAMENTO_MS)
+        page.keyboard.press.assert_not_called()  # nada na tela para fechar
+        marcar.assert_not_called()
+
+    def test_cancel_before_the_dialog_renders_and_goto_fails_marks_uncertain(self):
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True, visivel_antes=False)
+        page.goto.side_effect = RuntimeError("a aba não respondeu")
+        marcar = MagicMock()
+        with self.assertRaises(automacao.RotinaCancelada):
+            self._enviar(page, concluido=False, dialogo=False, marcar_incerto=marcar, cancelar=lambda: page.expect_file_chooser.called)
+        marcar.assert_called_once()
+
+    def test_guard_exhausted_with_the_dialog_still_open_marks_uncertain(self):
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=False)
+        marcar = MagicMock()
+        guarda = automacao.RotinaErro("Substituir o Dashboard no SharePoint: o estado mudou antes do clique; não cliquei.")
+        with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
+                self.assertRaises(automacao.RotinaErro) as erro:
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        self.assertNotIsInstance(erro.exception, automacao.EnvioNaoIniciado)
+        self.assertIn("continuou na tela", str(erro.exception))
+        marcar.assert_called_once()
+        page.locators["substituir"].filter.return_value.first.click.assert_not_called()
+        # melhor esforço: sai da pasta para não deixar o Replace armado
+        page.goto.assert_called_once_with(automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_CANCELAMENTO_MS)
+
+    def test_guard_exhausted_with_the_dialog_gone_by_itself_marks_uncertain(self):
+        # A guarda estourou porque o diálogo sumiu (alguém clicou Replace no Chrome de automação?): nada a fechar, envio incerto.
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True, visivel_antes=False)
+        marcar = MagicMock()
+        guarda = automacao.RotinaErro("Substituir o Dashboard no SharePoint: o estado mudou antes do clique; não cliquei.")
+        with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=guarda), \
+                self.assertRaises(automacao.RotinaErro) as erro:
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        self.assertNotIsInstance(erro.exception, automacao.EnvioNaoIniciado)
+        self.assertIn("sumiu antes do meu clique", str(erro.exception))
+        marcar.assert_called_once()
+        page.keyboard.press.assert_not_called()
+
+    def test_cancel_with_the_replace_dialog_open_fails_only_if_escape_closes_it(self):
+        for fecha, incerto in ((True, False), (False, True)):
+            with self.subTest(fecha=fecha):
+                page = self._pagina({"substituir"})
+                self._dialogo_que_fecha(page, fecha=fecha)
+                marcar = MagicMock()
+                with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=automacao.RotinaCancelada()), \
+                        self.assertRaises(automacao.RotinaCancelada):
+                    self._enviar(page, concluido=False, marcar_incerto=marcar)
+                self.assertEqual(marcar.called, incerto)
+                page.keyboard.press.assert_called_with("Escape")
+                page.locators["substituir"].filter.return_value.first.click.assert_not_called()
+                # fechou: goto descarta o upload pendente; continuou: goto de melhor esforço (o registro já está incerto)
+                page.goto.assert_called_once_with(
+                    automacao.DASHBOARD_PASTA_URL, wait_until="domcontentloaded", timeout=automacao.GOTO_CANCELAMENTO_MS,
+                )
+
+    def test_cancel_after_the_dialog_was_seen_and_vanished_by_itself_marks_uncertain(self):
+        page = self._pagina({"substituir"})
+        self._dialogo_que_fecha(page, fecha=True, visivel_antes=False)
+        marcar = MagicMock()
+        with patch.object(automacao, "aguardar_estabilidade_pre_clique", side_effect=automacao.RotinaCancelada()), \
+                self.assertRaises(automacao.RotinaCancelada):
+            self._enviar(page, concluido=False, marcar_incerto=marcar)
+        marcar.assert_called_once()
+        page.keyboard.press.assert_not_called()
+        page.goto.assert_called_once()  # melhor esforço
+
+    def test_unexpected_failure_after_choosing_the_file_marks_uncertain(self):
+        page = self._pagina({"substituir"})
+        marcar = MagicMock()
+        with self.assertRaises(automacao.EnvioNaoConfirmado):
+            self._enviar(page, concluido=False, dialogo=False, marcar_incerto=marcar)  # "o upload não começou"
+        marcar.assert_called_once()
+
+    def test_copy_pattern_accepts_numbered_copies(self):
+        for nome in ("Dashboard Operacional_SEBRAE 1", "Dashboard Operacional_SEBRAE1", "Dashboard Operacional_SEBRAE 2.xlsx",
+                     "Dashboard Operacional_SEBRAE - Copiar 1", "Dashboard Operacional_SEBRAE - Copy 1.xlsx",
+                     "Dashboard Operacional_SEBRAE - Cópia (2).xlsx"):
+            self.assertRegex(nome, automacao._COPIA_DO_DASHBOARD)
+        for nome in ("Dashboard Operacional_SEBRAE", "Dashboard Operacional_SEBRAE1 minuto atrás", "Dashboard Operacional_SEBRAE_teste.xlsx",
+                     "Dashboard Operacional_SEBRAE (atualizado).xlsx", "Dashboard Operacional_SEBRAE (pendente 2026-11-26 101500).xlsx"):
+            self.assertNotRegex(nome, automacao._COPIA_DO_DASHBOARD)
+
+    # Rotina enviar inteira com o estado real do registro; só o navegador e o acompanhamento do upload são simulados.
+
+    def _rodar_com_dashboard_aberto(self, *, aba=lambda: False, acompanhar=("ok",), cancelar=lambda: False, baixados=None, envio_preparado=False,
+                                    duplicar_falha=None):
+        """``acompanhar``: por escolha do arquivo, "bloqueado" (toast antes do Replace) ou "ok" (Replace e concluído).
+
+        Devolve (código ou exceção, registro, mocks)."""
+        from domains import sebrae_finalizacao as fin
+
+        raiz = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        arquivo = raiz / "Dashboard Operacional_SEBRAE.xlsx"
+        arquivo.write_bytes(b"conteudo novo")
+        fila = list(baixados or [b"sharepoint"] * 5)
+        page = MagicMock()
+        roteiro = list(acompanhar)
+
+        def baixar(_page):
+            destino = raiz / f"baixado{len(fila)}.xlsx"
+            destino.write_bytes(fila.pop(0))
+            return destino
+
+        def acompanhar_envio(_page, espera, incerto):
+            passo = roteiro.pop(0)
+            if passo == "bloqueado":
+                return True
+            if passo == "guarda":
+                raise automacao.EnvioNaoIniciado("a guarda estourou antes do Replace")
+            if passo == "cancelado":
+                raise automacao.RotinaCancelada()
+            if passo == "cancelado_incerto":  # o diálogo continuou na tela ou sumiu sozinho
+                incerto()
+                raise automacao.RotinaCancelada()
+            incerto()
+            if passo == "erro":
+                raise RuntimeError("falha depois do Replace")
+            return False
+
+        def verificar(*_a):
+            if cancelar():
+                raise automacao.RotinaCancelada()
+
+        envio_id = fin.preparar_envio(raiz, b"conteudo novo") if envio_preparado else None
+        with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba", return_value=page), \
+                patch.object(automacao, "DASHBOARD_SAIDA_DIR", raiz / "sebrae_dashboard_saida"), \
+                patch.object(automacao, "aguardar_login"), patch.object(automacao, "esperar_visivel", return_value=True), \
+                patch.object(automacao, "verificar_cancelamento", side_effect=verificar), \
+                patch.object(automacao, "duplicar_dashboard_na_pasta", side_effect=duplicar_falha) as duplicar, \
+                patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=baixar) as baixar_mock, \
+                patch.object(automacao, "conferir_dashboard_do_sharepoint", return_value=None), \
+                patch.object(automacao, "guardar_backup_do_dashboard"), \
+                patch.object(automacao, "_aba_do_dashboard_aberta", side_effect=lambda _p: aba()), \
+                patch.object(automacao, "_aviso_de_bloqueio_visivel", return_value=False), \
+                patch.object(automacao, "_acompanhar_envio", side_effect=acompanhar_envio) as acompanhar_mock, \
+                patch.object(automacao, "registrar_erro") as registrar, patch.object(automacao, "log") as log, \
+                patch.object(automacao.time, "monotonic", side_effect=itertools.count(0, 1)), redirect_stdout(io.StringIO()):
+            self.page, self.duplicar, self.log_rotina = page, duplicar, log
+            try:
+                resultado = automacao.rodar_rotina_enviar(MagicMock(), arquivo if envio_preparado else None, envio_id=envio_id)
+            except BaseException as erro:  # RotinaCancelada é BaseException
+                resultado = erro
+        registro = fin.ler_envio(raiz)
+        self.logs_rotina = [str(c.args[1]) for c in log.call_args_list]
+        return resultado, registro, {"duplicar": duplicar, "baixar": baixar_mock, "acompanhar": acompanhar_mock, "page": page, "registrar": registrar}
+
+    def _espera_fechada(self):
+        """O painel não fica preso: depois do último "AÇÃO NECESSÁRIA" há uma linha "Dashboard liberado"."""
+        abertos = [i for i, t in enumerate(self.logs_rotina) if t.startswith(automacao.MARCA_DASHBOARD_ABERTO)]
+        fins = [i for i, t in enumerate(self.logs_rotina) if t.startswith(automacao.MARCA_DASHBOARD_LIBERADO)]
+        self.assertTrue(abertos, "a espera nem começou")
+        self.assertTrue(fins and fins[-1] > abertos[-1], self.logs_rotina)
+
+    def test_cancel_while_waiting_before_the_duplicate_fails_the_send(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(aba=lambda: True, cancelar=lambda: self.avisar.called, envio_preparado=True)
+        self.assertIsInstance(resultado, automacao.RotinaCancelada)
+        self.assertEqual(registro["status"], "falhou")
+        mocks["duplicar"].assert_not_called()
+        self.avisar.assert_called_once()
+        self._espera_fechada()
+        self.assertIn(automacao.MSG_DASHBOARD_ESPERA_ENCERRADA, self.logs_rotina)
+
+    def test_cancel_while_waiting_between_the_duplicate_and_the_upload_fails_the_send(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(
+            aba=lambda: self.duplicar.called, cancelar=lambda: self.avisar.called,
+        )
+        self.assertIsInstance(resultado, automacao.RotinaCancelada)
+        self.assertEqual(registro["status"], "falhou")
+        mocks["duplicar"].assert_called_once()
+        mocks["acompanhar"].assert_not_called()
+        mocks["page"].expect_file_chooser.assert_not_called()
+        self._espera_fechada()
+
+    def test_cancel_while_waiting_after_the_locked_notice_fails_the_send(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado",), cancelar=lambda: self.avisar.called)
+        self.assertIsInstance(resultado, automacao.RotinaCancelada)
+        self.assertEqual(registro["status"], "falhou")
+        mocks["acompanhar"].assert_called_once()
+        mocks["page"].goto.assert_called_once()  # o goto vem antes de conferir o cancelamento: o aviso com "Retry" não fica na tela
+        self._espera_fechada()
+        mocks["registrar"].assert_not_called()  # depois de escolher o arquivo, nenhuma captura (LGPD)
+
+    def test_total_deadline_in_the_routine_fails_the_send(self):
+        with patch.object(automacao, "ESPERA_DASHBOARD_LIVRE_S", 30):
+            resultado, registro, mocks = self._rodar_com_dashboard_aberto(aba=lambda: self.duplicar.called)
+        self.assertEqual(str(resultado), automacao.MSG_DASHBOARD_CONTINUOU_ABERTO)
+        self.assertEqual(registro["status"], "falhou")
+        mocks["acompanhar"].assert_not_called()
+        self._espera_fechada()
+
+    def test_sharepoint_changed_during_the_wait_stops_without_a_new_duplicate_or_choice(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado", "ok"), baixados=[b"conferido", b"editado por terceiro"])
+        self.assertIs(type(resultado), automacao.RotinaErro)
+        self.assertEqual(str(resultado), automacao.MSG_SHAREPOINT_MUDOU + automacao.MSG_SHAREPOINT_PROXIMO_PASSO)
+        self.assertEqual(registro["status"], "falhou")
+        mocks["duplicar"].assert_called_once()
+        mocks["acompanhar"].assert_called_once()
+        mocks["page"].expect_file_chooser.assert_called_once()
+        self.assertEqual(mocks["baixar"].call_count, 2)
+        self._espera_fechada()
+
+    def test_unchanged_sharepoint_after_the_locked_notice_sends_and_concludes(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado", "ok"), baixados=[b"conferido", b"conferido"])
+        self.assertEqual(resultado, 0)
+        self.assertEqual(registro["status"], "concluido")
+        mocks["duplicar"].assert_called_once()
+        self.assertEqual(mocks["page"].expect_file_chooser.call_count, 2)
+        self.avisar.assert_called_once()
+
+    def test_locked_notice_until_the_total_deadline_fails_the_send_and_never_leaves_it_uncertain(self):
+        with patch.object(automacao, "ESPERA_DASHBOARD_LIVRE_S", 150):
+            resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado",) * 10, baixados=[b"c"] * 10)
+        self.assertEqual(str(resultado), automacao.MSG_DASHBOARD_CONTINUOU_ABERTO)
+        self.assertEqual(registro["status"], "falhou")
+        self.assertGreaterEqual(mocks["acompanhar"].call_count, 2)
+        self.assertEqual(sum(t.startswith(automacao.MARCA_DASHBOARD_ABERTO) for t in self.logs_rotina), 1)
+        self._espera_fechada()
+
+    def test_cancel_with_the_replace_dialog_open_in_the_routine(self):
+        for passo, status in (("cancelado", "falhou"), ("cancelado_incerto", "incerto")):
+            with self.subTest(passo=passo):
+                resultado, registro, _ = self._rodar_com_dashboard_aberto(acompanhar=(passo,))
+                self.assertIsInstance(resultado, automacao.RotinaCancelada)
+                self.assertEqual(registro["status"], status)
+
+    def test_end_of_wait_line_is_neutral_when_something_may_have_been_uploaded(self):
+        # A espera abriu (aba do Excel) e o envio terminou incerto: a linha de fim não afirma que nada foi substituído.
+        sondas = []
+
+        def aba():  # aberta nas 2 primeiras sondas depois da Duplicata
+            if not self.duplicar.called:
+                return False
+            sondas.append(1)
+            return len(sondas) <= 2
+
+        resultado, registro, _ = self._rodar_com_dashboard_aberto(aba=aba, acompanhar=("erro",))
+        self.assertIsInstance(resultado, RuntimeError)
+        self.assertEqual(registro["status"], "incerto")
+        self.assertEqual(self.logs_rotina.count(automacao.MSG_DASHBOARD_ESPERA_ENCERRADA), 1)
+        self.assertEqual(automacao.MSG_DASHBOARD_ESPERA_ENCERRADA, "Dashboard liberado da espera.")
+        self._espera_fechada()
+
+    def test_guard_exhausted_before_replace_leaves_the_send_failed(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("guarda",))
+        self.assertIsInstance(resultado, automacao.EnvioNaoIniciado)
+        self.assertEqual(registro["status"], "falhou")
+        mocks["registrar"].assert_not_called()
+
+    def test_cancel_between_the_steps_of_the_resume_downloads_nothing(self):
+        sondas_depois_do_goto = []  # a sonda da aba no começo da volta seguinte é o último passo antes da retomada
+
+        def aba():
+            sondas_depois_do_goto.append(self.page.goto.called)
+            return False
+
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(
+            acompanhar=("bloqueado", "ok"), aba=aba, cancelar=lambda: any(sondas_depois_do_goto),
+        )
+        self.assertIsInstance(resultado, automacao.RotinaCancelada)
+        self.assertEqual(registro["status"], "falhou")
+        self.assertEqual(mocks["baixar"].call_count, 1)  # só o download conferido; a retomada parou antes de baixar
+        mocks["page"].goto.assert_called_once()
+
+    def test_no_screenshot_after_the_upload_starts_but_one_before(self):
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("erro",))
+        self.assertIsInstance(resultado, RuntimeError)
+        self.assertEqual(registro["status"], "incerto")
+        mocks["registrar"].assert_not_called()
+        resultado, _, mocks = self._rodar_com_dashboard_aberto(duplicar_falha=RuntimeError("antes do envio"))
+        self.assertIsInstance(resultado, RuntimeError)
+        mocks["registrar"].assert_called_once()
+
+    def test_pending_copy_takes_no_screenshot_once_the_upload_starts(self):
+        copia = Path(self.enterContext(tempfile.TemporaryDirectory())) / "Dashboard Operacional_SEBRAE (pendente 2026-11-27 1000).xlsx"
+        copia.write_bytes(b"x")
+        for toast in (True, False):  # o aviso pode ter uma variante que o padrão não reconhece: falha fechada
+            with self.subTest(toast=toast), patch.object(automacao, "nova_aba"), patch.object(automacao, "aguardar_login"), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=RuntimeError("falha no envio")), \
+                    patch.object(automacao, "_aviso_de_bloqueio_visivel", return_value=toast), \
+                    patch.object(automacao, "registrar_erro") as registrar, patch.object(automacao, "log"):
+                with self.assertRaises(RuntimeError):
+                    automacao.enviar_copia_pendente(MagicMock(), copia)
+            registrar.assert_not_called()
+        with patch.object(automacao, "nova_aba"), patch.object(automacao, "aguardar_login", side_effect=RuntimeError("login")), \
+                patch.object(automacao, "_aviso_de_bloqueio_visivel", return_value=False), \
+                patch.object(automacao, "registrar_erro") as registrar, patch.object(automacao, "log"):
+            with self.assertRaises(RuntimeError):
+                automacao.enviar_copia_pendente(MagicMock(), copia)
+        registrar.assert_called_once()  # antes do envio a captura continua
+
+    def test_new_failure_messages_keep_the_text_the_assistant_recognizes(self):
+        for mensagem in (automacao.MSG_DASHBOARD_CONTINUOU_ABERTO, automacao.MSG_COPIA_BLOQUEADA):
+            self.assertIn("em uso ou bloqueado", mensagem)
+        # Depois do Replace o envio é incerto: nunca "em uso" (que leva a reenviar), e sim "não vi o aviso de envio concluído".
+        self.assertNotIn("em uso ou bloqueado", automacao.MSG_BLOQUEIO_DEPOIS_DO_REPLACE)
+        self.assertIn("Não vi o aviso de envio concluído", automacao.MSG_BLOQUEIO_DEPOIS_DO_REPLACE)
+
+
+TOAST_HTML = """<!doctype html><html><body>
+<div role="grid"><div role="row"><div role="gridcell">Relatório locked for shared use.xlsx</div></div>
+<div role="row"><div role="gridcell">Dashboard Operacional_SEBRAE.xlsx</div></div></div>
+<div id="toast" class="od-Notification">The file <a href="#">https://exemplo.invalid/Dashboard Operacional_SEBRAE.xlsx</a>
+is locked for shared use by pessoa@exemplo.invalid [membership]. <button>Retry</button></div>
+<div id="oculto" style="display:none">O arquivo está bloqueado por pessoa@exemplo.invalid</div>
+</body></html>"""
+
+
+@unittest.skipUnless(importlib.util.find_spec("playwright") is not None, "playwright não está instalado")
+class AvisoDeBloqueioNoNavegadorTests(unittest.TestCase):
+    """O XPath e o regex rodam no navegador de verdade (Chromium headless do Playwright, página sintética)."""
+
+    def test_toast_outside_the_list_is_seen_and_a_file_name_inside_a_row_is_not(self):
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as pw:
+            try:
+                browser = pw.chromium.launch()
+            except Exception as erro:
+                self.skipTest(f"Chromium do Playwright indisponível: {type(erro).__name__}")
+            try:
+                page = browser.new_page()
+                page.set_content(TOAST_HTML)
+                self.assertTrue(automacao._aviso_de_bloqueio_visivel(page))
+                page.evaluate("document.getElementById('toast').remove()")
+                self.assertFalse(automacao._aviso_de_bloqueio_visivel(page))  # só o nome na lista e o aviso oculto sobraram
+            finally:
+                browser.close()
 
 
 class PastaDashboardNaoConfiguradaTests(unittest.TestCase):

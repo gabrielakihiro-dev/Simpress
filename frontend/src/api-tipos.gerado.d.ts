@@ -509,6 +509,7 @@ export type EstadoAutomacao = {
   "pid"?: unknown;
   "cancelamento_pedido"?: unknown;
   "aguardando_login"?: unknown;
+  "aguardando_dashboard"?: unknown;
   "login_origem"?: string;
   "log"?: LogParcialAutomacao | null;
   "ultima"?: ExecucaoAutomacao | null;

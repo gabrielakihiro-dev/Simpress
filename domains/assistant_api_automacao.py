@@ -133,8 +133,10 @@ def _status_automacao(dados: Dict[str, Any]) -> Dict[str, Any]:
     """Current state (from /api/automacao/estado) without the log chunk, pid or login source."""
     executando = dados.get("estado") == "em_andamento"
     aguardando = executando and bool(dados.get("aguardando_login"))
+    dashboard = executando and bool(dados.get("aguardando_dashboard"))
     cancelando = executando and bool(dados.get("cancelamento_pedido"))
-    situacao = "cancelamento_solicitado" if cancelando else "aguardando_login" if aguardando else "em_andamento" if executando else "livre"
+    situacao = ("cancelamento_solicitado" if cancelando else "aguardando_login" if aguardando
+                else "aguardando_dashboard" if dashboard else "em_andamento" if executando else "livre")
     rotina, rotulo = _rotina_segura(dados.get("rotina")) if executando else ("nenhuma", "Nenhuma rotina em andamento")
     resposta: Dict[str, Any] = {
         "fonte": "estado_atual",
@@ -143,6 +145,7 @@ def _status_automacao(dados: Dict[str, Any]) -> Dict[str, Any]:
             "livre": "Nenhuma rotina em andamento.",
             "em_andamento": "Rotina em andamento.",
             "aguardando_login": "Rotina em andamento, aguardando o login manual do operador no Chrome de automação.",
+            "aguardando_dashboard": "Rotina em andamento, aguardando fecharem o Dashboard no Excel; ela continua sozinha quando ele for liberado ou pode ser cancelada.",
             "cancelamento_solicitado": "Cancelamento solicitado; a rotina ainda não terminou.",
         }[situacao],
         "executando": executando, "aguardando_login": aguardando, "cancelamento_pedido": cancelando,
@@ -150,8 +153,8 @@ def _status_automacao(dados: Dict[str, Any]) -> Dict[str, Any]:
         "inicio": _data_iso(dados.get("inicio")) if executando else None,
         "origem": dados.get("origem") if executando and dados.get("origem") in ("site", "externo") else None,
     }
-    if aguardando:
-        resposta["etapa"] = "aguardando_login"
+    if aguardando or dashboard:
+        resposta["etapa"] = "aguardando_login" if aguardando else "aguardando_dashboard"
     elif executando:
         resposta["etapa"], resposta["nota_etapa"] = "indisponível", NOTA_ETAPA
     ultima = dados.get("ultima")
