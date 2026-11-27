@@ -2,7 +2,7 @@
 summary sent to the model.
 
 Leaf module: `assistant_api` re-exports these names, so nothing here may import it or a theme mixin
-(`assistant_api_sebrae`, `assistant_api_historico`).
+(`assistant_api_sebrae`, `assistant_api_historico`, `assistant_api_regionais`).
 """
 
 import re

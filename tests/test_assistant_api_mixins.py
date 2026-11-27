@@ -1,28 +1,16 @@
 """Theme mixins of `SimpressApi` stay leaf modules and never shadow each other or the class."""
 
-import ast
+import subprocess
 import sys
 import unittest
 from pathlib import Path
 
 from domains.assistant_api import SimpressApi
 
+RAIZ = Path(__file__).resolve().parent.parent
 # Every base of `SimpressApi` except `object`: a new mixin is covered without editing this file.
 MIXINS = [cls for cls in SimpressApi.__mro__[1:] if cls is not object]
-# The facade and the other mixins; `assistant_api_comum` is the shared leaf every mixin may import.
-PROIBIDOS = {"domains.assistant_api", *(cls.__module__ for cls in MIXINS)}
-
-
-def _modulos_importados(cls: type) -> set:
-    arvore = ast.parse(Path(sys.modules[cls.__module__].__file__ or "").read_text(encoding="utf-8"))
-    nomes: set = set()
-    for no in ast.walk(arvore):
-        if isinstance(no, ast.Import):
-            nomes.update(alias.name for alias in no.names)
-        elif isinstance(no, ast.ImportFrom) and no.module:
-            nomes.add(no.module)
-            nomes.update(f"{no.module}.{alias.name}" for alias in no.names)
-    return nomes
+FOLHAS = {"domains.assistant_api_comum", *(cls.__module__ for cls in MIXINS)}
 
 
 class MixinsFolhaTests(unittest.TestCase):
@@ -31,10 +19,15 @@ class MixinsFolhaTests(unittest.TestCase):
         self.assertEqual(len({cls.__module__ for cls in MIXINS}), len(MIXINS))
         self.assertNotIn(SimpressApi.__module__, {cls.__module__ for cls in MIXINS})
 
-    def test_mixin_nao_importa_fachada_nem_outro_mixin(self):
-        for cls in MIXINS:
-            with self.subTest(mixin=cls.__name__):
-                self.assertEqual(_modulos_importados(cls) & PROIBIDOS, set())
+    def test_folha_nao_carrega_fachada_nem_outro_mixin(self):
+        # A fresh interpreter per module, so an indirect import (through another module) is caught too.
+        for modulo in sorted(FOLHAS):
+            proibidos = sorted({"domains.assistant_api", *FOLHAS} - {modulo, "domains.assistant_api_comum"})
+            codigo = f"import sys, {modulo}; print(sorted(set({proibidos!r}) & set(sys.modules)))"
+            with self.subTest(modulo=modulo):
+                saida = subprocess.run([sys.executable, "-c", codigo], cwd=RAIZ, capture_output=True, text=True, timeout=60)
+                self.assertEqual(saida.returncode, 0, saida.stderr)
+                self.assertEqual(saida.stdout.strip(), "[]")
 
     def test_nenhum_nome_se_repete_entre_classe_e_mixins(self):
         def proprios(cls):
