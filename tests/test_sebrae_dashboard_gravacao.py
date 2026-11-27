@@ -899,6 +899,22 @@ class ReaplicarTest(unittest.TestCase):
                 saida = self.ok(base, gerado, base, removidas=removidas)
                 self.assertEqual("E" not in por_chamado(saida)["UTIC-2026-0001"], apaga)
 
+    def test_r_corrigido_a_mao_no_sharepoint_nunca_e_sobrescrito_pelo_r_registrado(self):
+        # 26/11/2026: o R registrado ao finalizar não passa por cima do R que o usuário corrigiu no SharePoint.
+        base = tres()
+        registrado = G.registrar_encerramentos(base, {"UTIC-2026-0001": "20/11/2026 10:00"})[0].conteudo  # o que o Atualizar reaplica
+        corrigido = G.registrar_encerramentos(registrado, {"UTIC-2026-0001": "19/11/2026 08:30"})[0].conteudo  # R corrigido à mão
+        self.assertEqual(por_chamado(corrigido)["UTIC-2026-0001"]["R"], "19/11/2026 08:30")
+        # já enviado (n_e): o valor do SharePoint vale
+        saida = self.ok(base, registrado, corrigido, enviado=registrado)
+        self.assertEqual(por_chamado(saida)["UTIC-2026-0001"]["R"], "19/11/2026 08:30")
+        # reimportado com o R corrigido: a base já tem o R do SharePoint e o gerado, que o mantém, não tem o que aplicar
+        self.assertEqual(por_chamado(self.ok(corrigido, corrigido, corrigido))["UTIC-2026-0001"]["R"], "19/11/2026 08:30")
+        # sem a cópia enviada: conflito, nunca sobrescrita
+        resultado = G.reaplicar(base, registrado, corrigido)
+        self.assertIsNone(resultado.conteudo)
+        self.assertEqual([(c["coluna"], c["sharepoint"], c["site"]) for c in resultado.conflitos], [("R", "19/11/2026 08:30", "20/11/2026 10:00")])
+
     def test_ac2_mesma_celula_com_valores_diferentes_e_conflito_sem_conteudo(self):
         base = tres()
         gerado = do_site(base, {"UTIC-2026-0001": {"B": "REDE", "J": "INCIDENTE"}})
