@@ -6,10 +6,11 @@ import {
   mudarPaginaHistoricoAutomacao, mudarPaginaLogAutomacao, selecionarLogAutomacao, voltarAoVivoAutomacao, alterarLimiteLogAutomacao,
 } from "./acoes";
 import { alterarAgendamentoDashboard, carregarAgendamentoDashboard } from "./agendamento";
-import { Aviso, Chrome, Console, DialogoLog, Historico, Rotinas } from "./componentes";
+import { Aviso, AvisoDashboard, Chrome, Console, DialogoLog, Historico, Rotinas } from "./componentes";
 
 const REGIOES: Record<string, (host: HTMLElement) => ReactNode> = {
   aviso: host => <Aviso host={host} />,
+  "aviso-dashboard": host => <AvisoDashboard host={host} />,
   chrome: () => <Chrome />,
   rotinas: () => <Rotinas />,
   historico: () => <Historico />,

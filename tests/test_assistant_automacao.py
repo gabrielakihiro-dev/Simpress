@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from domains.assistant_api import _MOTIVOS, MOTIVOS_AUTOMACAO, SimpressApi, _motivo_codigo
 from domains.assistant_tools import TOOLS, grupos_da_mensagem
+from scripts.automacao_rotinas_chrome import MSG_BLOQUEIO_DEPOIS_DO_REPLACE
 from tests.test_assistant import FakeModel, abrir, call, calls, make_conversation, text
 
 # Synthetic sensitive data: none of these pieces may reach the model.
@@ -113,6 +114,14 @@ class StatusTests(unittest.TestCase):
         r = self.status({"estado": "em_andamento", "rotina": "sebrae", "aguardando_login": True, "login_origem": NOME})
         self.assertEqual((r["situacao"], r["etapa"]), ("aguardando_login", "aguardando_login"))
         self.assertNotIn(NOME, dump(r))
+
+    def test_waiting_dashboard_has_its_own_step_and_login_wins(self) -> None:
+        r = self.status({"estado": "em_andamento", "rotina": "enviar", "aguardando_dashboard": True})
+        self.assertEqual((r["situacao"], r["etapa"]), ("aguardando_dashboard", "aguardando_dashboard"))
+        r = self.status({"estado": "em_andamento", "rotina": "enviar", "aguardando_dashboard": True, "aguardando_login": True})
+        self.assertEqual(r["situacao"], "aguardando_login")
+        r = self.status({"estado": "livre", "aguardando_dashboard": True})
+        self.assertEqual(r["situacao"], "livre")
 
     def test_cancel_requested_wins(self) -> None:
         r = self.status({"estado": "em_andamento", "rotina": "sebrae", "aguardando_login": True, "cancelamento_pedido": True})
@@ -232,6 +241,7 @@ class LogTests(unittest.TestCase):
             "como cópia pendente; escolha na tela qual valor manter e envie de novo.": "dashboard_sharepoint_conflito",
             "Não vi o aviso de envio concluído em 90 s; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.":
                 "envio_sharepoint_nao_confirmado",
+            MSG_BLOQUEIO_DEPOIS_DO_REPLACE: "envio_sharepoint_nao_confirmado",  # incerto depois do Replace: nunca "em uso"
             "O upload não começou: em 60 s não vi o diálogo Replace/Keep both nem o andamento do envio; não escolhi o arquivo de novo.":
                 "envio_sharepoint_nao_comecou",
             "O SharePoint não recebeu o Dashboard: baixei o arquivo de novo, duas vezes, e ele ainda tem os valores de antes do envio. "

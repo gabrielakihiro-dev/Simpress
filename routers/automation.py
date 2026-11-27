@@ -84,6 +84,7 @@ class EstadoAutomacao(_Saida):
     pid: Any = None
     cancelamento_pedido: Any = None
     aguardando_login: Any = None
+    aguardando_dashboard: Any = None
     login_origem: str = ""
     log: Optional[LogParcialAutomacao] = None
     ultima: Optional[ExecucaoAutomacao] = None

@@ -243,6 +243,12 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         self.assertEqual(len(harness.popen_calls), 1)
         harness.finish(0)
 
+    def test_dashboard_wait_is_false_without_active_routine(self):
+        harness = self.harness(output="[08:02:00] AÇÃO NECESSÁRIA: feche o Dashboard no Excel.\n".encode("utf-8"))
+        harness.runner.start("os")
+        harness.finish(0)
+        self.assertFalse(harness.runner.state()["aguardando_dashboard"])
+
     def test_state_returns_only_new_lines_and_detects_login_wait(self):
         harness = self.harness(output="[08:00:01] [Chrome] Reaproveitando o Chrome.\n".encode("utf-8"))
         first = harness.runner.start("os")
@@ -260,9 +266,15 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         self.assertEqual(done["log"]["linhas"], ["[08:00:21] parcial", "[08:01:00] [Oracle] Login detectado; continuando."])
         self.assertFalse(done["aguardando_login"])
 
+        self.assertFalse(done["aguardando_dashboard"])
+        harness.append_log("[08:02:00] [Dashboard] AÇÃO NECESSÁRIA: feche o Dashboard no Excel.\n")
+        self.assertTrue(harness.runner.state()["aguardando_dashboard"])
+        harness.append_log("[08:02:30] Dashboard liberado.\n")
+        self.assertFalse(harness.runner.state()["aguardando_dashboard"])
+
         other_file = harness.runner.state(done["log"]["offset"], "outro.site.log")
         self.assertTrue(other_file["log"]["reiniciado"])
-        self.assertEqual(len(other_file["log"]["linhas"]), 4)
+        self.assertEqual(len(other_file["log"]["linhas"]), 6)
         harness.finish(0)
 
     def test_finished_run_records_status_batches_and_captures(self):
