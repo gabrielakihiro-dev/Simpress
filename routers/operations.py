@@ -52,6 +52,7 @@ from domains.ticket_reporting import (
     normalize_ticket_snapshot,
     ticket_report_snapshots,
     ticket_snapshot_metadata,
+    _stable_serial,
 )
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 
@@ -564,7 +565,7 @@ def create_operations_router(
         except HTTPException as error:
             logger.warning("Dossiê do equipamento: fonte de OS indisponível (HTTP %s).", error.status_code)
             section = empty_os_section("indisponivel")
-        key = equipment_dossier._stable_serial(clean_serial)
+        key = _stable_serial(clean_serial)
         src = dossier_sources or DossierSources()
         missing: List[str] = []
         sources: Dict[str, Optional[List[Any]]] = {

@@ -411,6 +411,20 @@ class DossierTimelineTests(unittest.TestCase):
                    {"tipo": "endereco", "serial": "SN1", "horario": "2026-11-10T12:00:00"}]
         self.assertEqual(self.timeline(DossierSources(apelidos=lambda: history))["total"], 0)
 
+    def test_out_of_range_and_compact_dates_are_dropped_and_the_route_stays_200(self):
+        history = [alias_event("9999-12-31T23:59:59-12:00"), alias_event("20261126"),
+                   alias_event("2026-11-10T12:00:00-03:00", "", "Novo")]
+        body = self.get(DossierSources(apelidos=lambda: history)).json()
+        self.assertEqual(body["linha_do_tempo"]["total"], 1)
+        self.assertIn("os", body)
+
+    def test_empty_tipo_follows_the_alias_rule_of_alias_changes(self):
+        history = [alias_event("2026-11-10T12:00:00-03:00", "A", "B", tipo=""),
+                   {"tipo": "usuario", "serial": "SN1", "horario": "2026-11-09T12:00:00-03:00",
+                    "usuario_anterior": "x", "usuario_novo": "y"}]
+        titles = [e["titulo"] for e in self.timeline(DossierSources(apelidos=lambda: history))["eventos"]]
+        self.assertEqual(titles, ["Usuário alterado"])
+
     def test_sebrae_events_come_from_dated_links_and_the_archive_only(self):
         manual = dict([manual_link("oracle", "SN-1", "200", 812)])
         next(iter(manual.values()))["salvo_em"] = "2026-11-02T10:00:00+00:00"

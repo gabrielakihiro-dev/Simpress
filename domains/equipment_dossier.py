@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from domains.alias_changes import _is_alias_event
 from domains.ticket_reporting import _stable_serial, annotate_ticket_os_signals, build_ticket_timeline_index
 
 HISTORY_TITLE = "Mudanças da série nas importações de OS"
@@ -195,11 +196,10 @@ def _records(items: Any, serial_field: str, key: str) -> Iterable[Mapping[str, A
 def alias_user_events(history: Sequence[Any], key: str) -> List[Event]:
     events: List[Event] = []
     for item in _records(history, "serial", key):
-        kind = item.get("tipo") or "apelido"
-        if kind == "apelido":
+        if _is_alias_event(item):
             events.append(_event(item.get("horario"), "apelido_usuario", "Apelido alterado",
                                  _change(item.get("apelido_anterior"), item.get("apelido_novo"))))
-        elif kind == "usuario":
+        elif item.get("tipo") == "usuario":
             events.append(_event(item.get("horario"), "apelido_usuario", "Usuário alterado",
                                  _change(item.get("usuario_anterior"), item.get("usuario_novo"))))
     return events
@@ -278,8 +278,10 @@ def _when(value: Any) -> Optional[Tuple[datetime, bool]]:
     try:
         if _DAY.fullmatch(text):
             return datetime.combine(date.fromisoformat(text), time(23, 59, 59)).astimezone(), True
+        if len(text) <= 10:  # compact or partial dates ("20261126") are unreadable, not midnight UTC
+            return None
         return datetime.fromisoformat(text).astimezone(), False
-    except ValueError:
+    except (ValueError, OverflowError, OSError):  # OSError: astimezone() before 1970 on Windows
         return None
 
 
