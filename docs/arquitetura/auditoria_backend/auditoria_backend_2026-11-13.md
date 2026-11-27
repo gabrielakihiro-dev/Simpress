@@ -98,6 +98,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Evidência: `create_sebrae_dashboard_router` com 998 linhas, `create_inventory_history_router` com 798 e `create_operations_router` com 549 (seção 4).
 - Impacto: as funções internas não são testáveis isoladamente, e toda mudança no Sebrae (F5) mexe num bloco de quase mil linhas. É a continuação natural do passo 10, que tirou peso do `main.py` mas o levou para as rotas.
 - Solução: extrair para `domains/` a lógica que não depende de HTTP, como já foi feito com `domains/history_restore.py`, e deixar na fábrica só a validação do payload e a conversão de erros.
+- Andamento (26/11/2026): `create_operations_router` caiu de 568 para 454 linhas. A leitura e a chave dos vínculos manuais de OS e a mescla dos vínculos derivados foram para `domains/sebrae_vinculos.py`, as versões exibidas com cache para `domains/ticket_reporting.py`, e a gravação da anotação da linha do tempo e a seleção da exportação para `domains/ticket_import.py`. O router traduz o `DomainError` delas para `HTTPException`. Os logs (inclusive o da falha ao enfileirar a anotação), o `build_ticket_workbook` e a resposta de arquivo ficaram no router.
 - Andamento (26/11/2026): `create_inventory_history_router` caiu de 798 para 136 linhas; a lógica de anotações, listagem, apelido manual e exclusão foi para `domains/history_comparisons.py`, e a fábrica ficou com validação, chamada ao domínio, resposta HTTP e tradução de `HistoryComparisonError` em `HTTPException`.
 
 **4. E-mails, login padrão e URL de OneDrive pessoal fixos no código.** Alta, confirmado (o repositório no GitHub é público).
@@ -126,6 +127,7 @@ Gravidade: alta, média ou baixa, pelo impacto se o problema se manifestar. Cert
 - Impacto: o código pode deixar de funcionar sem que ninguém perceba.
 - Solução: incluir os testes no verify ou criar um `README.md` na pasta dizendo que é experimental e não mantido.
 - Destino decidido em 26/11/2026: `motor_ia/` fica como experimental isolado, fora do `npm run verify` e da CI; remoção só a pedido do usuário.
+- Atualização em 27/11/2026: pasta `motor_ia/` removida a pedido do usuário.
 
 **8. Documento de locks cita módulo que não existe.** Baixa, confirmado.
 - Evidência: `docs/arquitetura/auditoria_backend/hierarquia_de_locks.md:13` cita `_equipment_search_index_lock` em `persistence/postgres.py`, removido com o piloto de banco.

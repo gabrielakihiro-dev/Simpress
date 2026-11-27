@@ -157,7 +157,9 @@ def check_ready_workbook(
             "Falha temporária ao verificar prontidão da planilha (arquivo=%s, papel=%s, erro=%s).",
             path.name, role, type(error).__name__,
         )
-        status.update(reason=str(getattr(error, "detail", error)) or "arquivo temporariamente indisponível", state="unavailable")
+        # OSError text carries the full path (Windows login); FileBusyError messages name only the file.
+        reason = str(error) if isinstance(error, FileBusyError) else ""
+        status.update(reason=reason or "arquivo temporariamente indisponível (%s)" % type(error).__name__, state="unavailable")
     except (DomainError, WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
         services.logger.warning(
             "Falha ao verificar prontidão da planilha (arquivo=%s, papel=%s, erro=%s).",
