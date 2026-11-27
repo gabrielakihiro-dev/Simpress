@@ -171,7 +171,7 @@ def create_operations_router(
     ``dashboard_vinculos(report)`` proposes links derived from the Sebrae Dashboard (``origem: "dashboard"``).
     ``ticket_os_marks_sources()`` gives what the server knows now for the marks of finalized OS (``FontesMarcas``).
     ``equipment_header(serial)`` gives ``{"serie", "modelo"}`` of a registered equipment, else ``None`` (dossier route).
-    ``sebrae_tickets()`` gives ``{"novos"|"antigos"|"finalizados": [(UTIC number, {"titulo", "solicitante"})]}`` (search route; none: no tickets).
+    ``sebrae_tickets()`` gives ``{"novos"|"antigos"|"finalizados": [(UTIC number, {"titulo", "solicitante", "descricao"})]}`` (search route; none: no tickets).
     ``equipment_series_for_term(term)`` gives the series of the equipment the Home search finds for the term (search route)."""
     router = APIRouter()
 
@@ -582,10 +582,9 @@ def create_operations_router(
         try:
             snapshots = displayed_ticket_snapshots(load_ticket_report())
             manual = read_ticket_os_links(ticket_os_links_path())["vinculos"]
-            links = {
-                **{ticket_os_link_key(item["fonte"], item["serie"], item["os"]): item for item in derived_ticket_os_links(manual)},
-                **manual,
-            }
+            finalized = finalization_ticket_os_links(manual)  # same priority as GET vinculos-os: manual > finalizacao > dashboard
+            derived = {ticket_os_link_key(i["fonte"], i["serie"], i["os"]): i for i in derived_ticket_os_links({**manual, **finalized})}
+            links = {**derived, **finalized, **manual}
             rows = snapshots[-1].get("chamados", []) if snapshots else []
             series: List[str] = []
             if equipment_series_for_term is not None:
@@ -596,7 +595,12 @@ def create_operations_router(
             ordens = buscar_os(current_orders(rows, links, ticket_os_link_key), q, None, series, descricoes_oracle(rows))
         except HTTPException as error:
             logger.warning("Busca de OS: fonte indisponível (HTTP %s).", error.status_code)
-        chamados = buscar_chamados(sebrae_tickets() if sebrae_tickets is not None else {}, q, None, ordens)
+        try:
+            fontes = sebrae_tickets() if sebrae_tickets is not None else {}
+        except Exception as error:  # noqa: BLE001 - the tickets are optional here; log only the type
+            logger.warning("Busca de chamados: fonte indisponível (%s).", type(error).__name__)
+            fontes = {}
+        chamados = buscar_chamados(fontes, q, None, ordens)
         ordens, chamados = ordens[:5], chamados[:5]
         return {"chamados": chamados, "os": ordens}
 

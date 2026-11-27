@@ -10,6 +10,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from core.errors import DomainBusyError
 from domains.busca_chamados_os import buscar_chamados, buscar_os
 from routers.operations import create_operations_router
 
@@ -20,6 +21,10 @@ NOME = "Beltrano Sintetico da Silva"
 def ordem(fonte, os, utic=None):
     return {"fonte": fonte, "os": os, "serie": "ABC123", "status": "Aberta", "fila": "", "dias_aberta": None,
             "utic": {"chamado": utic, "origem": "Manual"} if utic else None}
+
+
+def _levanta():
+    raise DomainBusyError("ilegível")
 
 
 def fontes(**abas):
@@ -96,9 +101,7 @@ class RotaTests(unittest.TestCase):
             load_comparison_history=lambda: [], comparison_history_for_display=lambda e: e,
             ticket_report_path=lambda: self.root / "tickets.json", transaction_root=lambda: self.root,
             ticket_os_links_file=lambda: self.root / "vinculos.json",
-            sebrae_tickets=lambda: self.tickets,
-            equipment_series_for_term=self.series_para,
-            **extra,
+            **{"sebrae_tickets": lambda: self.tickets, "equipment_series_for_term": self.series_para, **extra},
         )
         app = FastAPI()
         app.include_router(router)
@@ -201,6 +204,28 @@ class RotaTests(unittest.TestCase):
                 self.assertNotIn(proibido, corpo)
         self.assertEqual(self.busca(CPF), {"chamados": [], "os": []})
 
+    def test_marca_de_finalizacao_vincula_a_os_ao_chamado(self):
+        self.write_report()
+        marca = {"serie": "ABC123", "os": "7285070", "chamado": "UTIC-2026-30", "ativa": True, "finalizado_em": ""}
+        client = self.client(ticket_os_marks_file=lambda: self.root / "marcas.json")
+        with patch("routers.operations.ler_marcas", return_value=[marca]):
+            corpo = self.busca("utic-2026-30", client)
+            self.assertEqual({(o["fonte"], o["utic"], o["campo"]) for o in corpo["os"]},
+                             {("simpress", "UTIC-2026-30", "chamado_vinculado"), ("oracle", "UTIC-2026-30", "chamado_vinculado")})
+            self.assertEqual(self.busca("7285", client)["chamados"], [{"numero": "UTIC-2026-30", "aba": "finalizados", "campo": "os_vinculada"}])
+
+    def test_fonte_de_chamados_quebrada_nao_derruba_as_os(self):
+        self.write_report()
+        client = self.client(sebrae_tickets=_levanta)
+        with self.assertLogs(level=logging.DEBUG) as logs:
+            logging.getLogger().debug("sentinela")
+            resposta = client.get("/api/buscar/chamados-os", params={"q": "7285070"})
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(len(resposta.json()["os"]), 2)
+        self.assertEqual(resposta.json()["chamados"], [])
+        self.assertTrue(any("DomainBusyError" in linha for linha in logs.output))
+        self.assertNotIn("7285070", "\n".join(r.getMessage() for r in logs.records if r.name != "httpx"))
+
     def test_relatorio_ausente_ou_ilegivel_nao_derruba(self):
         client = self.client()
         self.assertEqual(self.busca("7285", client), {"chamados": [], "os": []})
@@ -250,12 +275,12 @@ class MainFontesTests(unittest.TestCase):
             (state / "sebrae_observacoes.json").write_text(json.dumps({"UTIC-2026-15": "zzobs"}), encoding="utf-8")
             with patch.object(main, "STATE_DIR", state), self.assertLogs(level=logging.DEBUG) as logs:
                 logging.getLogger().debug("sentinela")
-                with patch.object(main.sebrae_finalizacao, "finalizados_no_dashboard", side_effect=ValueError("x")):
-                    fontes = main._sebrae_tickets()
+                (state / "sebrae_finalizacao.json").write_text("{", encoding="utf-8")  # ler_estado levanta DomainBusyError
+                fontes = main._sebrae_tickets()
             self.assertEqual(fontes, {"novos": [("UTIC-2026-15", {"titulo": "Mouse", "solicitante": NOME, "descricao": "zzdesc"})],
                                       "antigos": [("UTIC-2026-20", {"titulo": "Teclado", "solicitante": NOME, "descricao": "zzdesc"})], "finalizados": []})
             self.assertNotIn("zzobs", json.dumps(fontes))
-            self.assertTrue(any("ValueError" in linha for linha in logs.output))
+            self.assertTrue(any("DomainBusyError" in linha for linha in logs.output))
 
 
 if __name__ == "__main__":

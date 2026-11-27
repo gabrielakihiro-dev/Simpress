@@ -2231,30 +2231,24 @@ def _equipment_dossier_header(serial: str) -> Optional[Dict[str, Any]]:
 
 
 def _sebrae_tickets() -> Dict[str, List[Tuple[str, Dict[str, str]]]]:
-    """Chamados das listas do F5 (novos, antigos, finalizados) como ``(número, {titulo, solicitante})``: só o que o filtro do F5 procura; fonte ausente ou ilegível vira lista vazia."""
+    """Chamados das listas do F5 (novos, antigos, finalizados) como ``(número, {titulo, solicitante, descricao})`` (a descrição o filtro do F5 não procura; a busca global sim); fonte ausente ou ilegível vira lista vazia."""
     caminhos = sebrae_novos.caminhos_padrao(STATE_DIR)
 
     def ler(leitor: Callable[[], List[Tuple[str, Dict[str, str]]]]) -> List[Tuple[str, Dict[str, str]]]:
         try:
             return leitor()
-        except (OSError, ValueError) as error:  # ArquivoIlegivel is a ValueError; log only the type, never the term
+        except (OSError, ValueError, DomainError) as error:  # ArquivoIlegivel is a ValueError, ler_estado raises DomainBusyError; log only the type
             logger.warning("Fonte de chamados da busca indisponível (%s).", type(error).__name__)
             return []
 
-    try:
-        importado: Optional[Dict[str, Any]] = sebrae_novos.ler_existentes(caminhos.existentes) or {}  # one read for novos and antigos
-    except (OSError, ValueError) as error:
-        logger.warning("Fonte de chamados da busca indisponível (%s).", type(error).__name__)
-        importado = None
+    importado: Dict[str, Any] = sebrae_novos.ler_existentes(caminhos.existentes) or {}  # one read for novos and antigos; a bad file reads as empty
 
     def antigos() -> List[Tuple[str, Dict[str, str]]]:
-        return [] if importado is None else [(str(a.get("chamado") or ""), {"titulo": str(a.get("titulo") or ""), "solicitante": str(a.get("usuario") or ""),
+        return [(str(a.get("chamado") or ""), {"titulo": str(a.get("titulo") or ""), "solicitante": str(a.get("usuario") or ""),
                                                  "descricao": str(a.get("descricao") or "")})
                 for a in importado.get("abertos", [])]
 
     def novos() -> List[Tuple[str, Dict[str, str]]]:
-        if importado is None:
-            return []
         lidos = sebrae_novos.ler_novos(caminhos.novos, ja_lancados=importado.get("numeros", ())) or {}
         return [(c.numero, {"titulo": c.titulo, "solicitante": c.solicitante, "descricao": c.descricao}) for c in lidos.get("chamados", [])]
 

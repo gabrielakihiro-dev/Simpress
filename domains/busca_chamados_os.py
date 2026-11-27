@@ -1,6 +1,7 @@
 """Busca da Home por chamado Sebrae e por OS: filtro puro; cada item diz só por qual ``campo`` achou, nunca o trecho.
 
-Os campos de texto procurados são os mesmos que os filtros do F5 (`entradaVisao`, estado.ts) e da F6 (`tabela-os.ts`) procuram.
+Texto: título e solicitante dos chamados como o filtro do F5 (`entradaVisao`, estado.ts); a descrição dos chamados o F5 não procura, a busca global sim;
+OS como o filtro da F6 (`tabela-os.ts`).
 Observação, senha e encerrados nunca entram aqui (invariante de ``domains/AGENTS.md``).
 """
 
@@ -56,17 +57,15 @@ def descricoes_oracle(linhas: Iterable[Mapping[str, Any]]) -> Dict[Tuple[str, st
     return achadas
 
 
-def _campo_os(ordem: Mapping[str, Any], termo: str, series_equipamento: frozenset, descricoes: Mapping[Tuple[str, str], str]) -> Optional[str]:
-    norma = _norma(termo)
+def _campo_os(ordem: Mapping[str, Any], norma: str, numero: str, chamado: str, series_equipamento: frozenset,
+              descricoes: Mapping[Tuple[str, str], str]) -> Optional[str]:
     serie = _norma(ordem["serie"])
-    numero = termo_de_os(termo)
     if numero and numero in _chave(ordem["os"]):
         return "os"
     if norma and norma in serie:
         return "serie"
     if serie in series_equipamento:
         return "equipamento"
-    chamado = termo_de_chamado(termo)
     if chamado and chamado in _chave((ordem.get("utic") or {}).get("chamado")):
         return "chamado_vinculado"
     if len(norma) >= _MIN_TEXTO:
@@ -85,9 +84,10 @@ def buscar_os(
 ) -> List[Dict[str, Any]]:
     """Ordens (de ``current_orders``) achadas pelo termo, por prioridade de ``campo`` e depois na ordem da importação."""
     series = frozenset(_norma(s) for s in series_equipamento if _norma(s))
+    norma, numero, chamado = _norma(termo), termo_de_os(termo), termo_de_chamado(termo)
     achadas = []
     for o in ordens:
-        campo = _campo_os(o, termo, series, descricoes or {})
+        campo = _campo_os(o, norma, numero, chamado, series, descricoes or {})
         if campo:
             achadas.append({"fonte": o["fonte"], "os": o["os"], "serie": o["serie"], "status": o["status"],
                             "utic": (o.get("utic") or {}).get("chamado") or None, "campo": campo})
