@@ -3,7 +3,7 @@ const { test, expect } = require("@playwright/test");
 // Campo de busca da Home: chamados (UTIC) e OS ao lado dos equipamentos. Todo /api/* usado aqui é simulado com
 // dados sintéticos.
 const EQUIPAMENTO = { serial: "BRJ0001", tipo: "Notebook", modelo: "Modelo de teste", apelido: "PRTESTE001", retirada_cidade: "Curitiba", usuarios_logados: "usuario.teste" };
-const OS_SINTETICA = { fonte: "oracle", os: "7285001", serie: "BRJ0001", status: "Em atendimento", utic: "UTIC-2026-15" };
+const OS_SINTETICA = { fonte: "oracle", os: "7285001", serie: "BRJ0001", status: "Em atendimento", utic: "UTIC-2026-15", campo: "os" };
 
 async function preparar(page, { chamadosOs = { chamados: [], os: [] }, equipamentos = [], falhaExtra = false } = {}) {
   const pedidosExtra = [];
@@ -24,7 +24,7 @@ async function preparar(page, { chamadosOs = { chamados: [], os: [] }, equipamen
   return pedidosExtra;
 }
 
-const CHAMADOS = { chamados: [{ numero: "UTIC-2026-15", aba: "novos" }, { numero: "UTIC-2026-16", aba: "finalizados" }], os: [] };
+const CHAMADOS = { chamados: [{ numero: "UTIC-2026-15", aba: "novos", campo: "numero" }, { numero: "UTIC-2026-16", aba: "finalizados", campo: "numero" }], os: [] };
 
 for (const viewport of [{ width: 1366, height: 800 }, { width: 320, height: 700 }]) {
   test(`UTIC mostra o grupo Chamados, sem estado vazio, e abre o F5 (${viewport.width}px)`, async ({ page }) => {
@@ -69,7 +69,7 @@ async function simularF6(page) {
 
 test("OS mostra o grupo OS e abre a F6 na sub-aba da OS, filtrada e destacada", async ({ page }) => {
   await simularF6(page);
-  await preparar(page, { chamadosOs: { chamados: [], os: [{ fonte: "oracle", os: "5001", serie: "SUB-A", status: "Finalizada", utic: "UTIC-2026-2001" }] } });
+  await preparar(page, { chamadosOs: { chamados: [], os: [{ fonte: "oracle", os: "5001", serie: "SUB-A", status: "Finalizada", utic: "UTIC-2026-2001", campo: "os" }] } });
   await page.locator("#input-serial").fill("5001");
   const opcao = page.locator("#autocomplete-list [role=option]");
   await expect(page.getByRole("group", { name: "OS", exact: true })).toBeVisible();
@@ -89,7 +89,7 @@ test("OS mostra o grupo OS e abre a F6 na sub-aba da OS, filtrada e destacada", 
 
 test("OS que não está na F6 mostra aviso curto", async ({ page }) => {
   await simularF6(page);
-  await preparar(page, { chamadosOs: { chamados: [], os: [{ fonte: "simpress", os: "7285999", serie: "SUB-X", status: "Aberta", utic: null }] } });
+  await preparar(page, { chamadosOs: { chamados: [], os: [{ fonte: "simpress", os: "7285999", serie: "SUB-X", status: "Aberta", utic: null, campo: "os" }] } });
   await page.locator("#input-serial").fill("7285");
   await page.locator("#autocomplete-list [role=option]").click();
   await expect(page.locator("#toast-container")).toContainText("OS 7285999 não apareceu na aba OS (F6).", { timeout: 8000 });
@@ -121,4 +121,31 @@ test("setas pulam cabeçalhos entre grupos", async ({ page }) => {
     await expect(entrada).toHaveAttribute("aria-activedescendant", `autocomplete-option-${indice}`);
     await expect(page.locator(`#autocomplete-option-${indice}`)).toHaveAttribute("aria-selected", "true");
   }
+});
+
+const POR_NOME = {
+  chamados: [{ numero: "UTIC-2026-30", aba: "novos", campo: "solicitante" }],
+  os: [{ fonte: "simpress", os: "7290001", serie: "BRJ0001", status: "Aberta", utic: null, campo: "equipamento" }],
+};
+
+for (const viewport of [{ width: 1366, height: 800 }, { width: 320, height: 700 }]) {
+  test(`termo de nome mostra os três grupos e "encontrado em" (${viewport.width}px)`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await preparar(page, { equipamentos: [EQUIPAMENTO], chamadosOs: POR_NOME });
+    await page.locator("#input-serial").fill("Ana Exemplo");
+    await expect(page.locator("#autocomplete-list [role=group]")).toHaveCount(3);
+    const chamado = page.locator("#autocomplete-list [role=option]", { hasText: "UTIC-2026-30" });
+    const os = page.locator("#autocomplete-list [role=option]", { hasText: "7290001" });
+    await expect(chamado.getByText("encontrado em: solicitante", { exact: true })).toBeVisible();
+    await expect(os.getByText("encontrado em: equipamento", { exact: true })).toBeVisible();
+    await expect(chamado).toHaveAttribute("aria-label", /encontrado em: solicitante/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
+
+test("linha achada pelo número não mostra o rótulo", async ({ page }) => {
+  await preparar(page, { chamadosOs: CHAMADOS });
+  await page.locator("#input-serial").fill("UTIC-2026-1");
+  await expect(page.locator("#autocomplete-list [role=option]")).toHaveCount(2);
+  await expect(page.locator("#autocomplete-list .ck-ac__campo")).toHaveCount(0);
 });

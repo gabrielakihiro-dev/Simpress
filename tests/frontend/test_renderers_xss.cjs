@@ -198,8 +198,9 @@ test("equipment search rows escape every field, with and without highlighting", 
 
 test("chamado and OS autocomplete rows escape every field and keep the option id", () => {
   const renderers = createEquipmentSearchRenderers({ dom, loggedUserMarkers });
-  const chamado = { numero: carga("numero"), aba: carga("aba") };
-  const os = { fonte: "oracle", os: carga("os"), serie: carga("serie"), status: carga("status"), utic: carga("utic") };
+  const chamado = { numero: carga("numero"), aba: carga("aba"), campo: "solicitante" };
+  const os = { fonte: "oracle", os: carga("os"), serie: carga("serie"), status: carga("status"), utic: carga("utic"), campo: "chamado_vinculado" };
+  const linhaRotulo = campo => renderers.criarLinhaChamado({ numero: "UTIC-1", aba: "novos", campo }, 0, "", {}).innerHTML;
   for (const query of ["", "img", "#numero", '">']) {
     const linhaChamado = renderers.criarLinhaChamado(chamado, 3, query, {});
     const linhaOs = renderers.criarLinhaOs(os, 4, query, {});
@@ -209,10 +210,17 @@ test("chamado and OS autocomplete rows escape every field and keep the option id
     afirmarSemHtmlVivo(linhaOs.innerHTML, `OS (consulta ${JSON.stringify(query)})`);
     if (!query) {
       afirmarCamposEscapados(linhaChamado.innerHTML, ["numero", "aba"], "chamado");
+      assert.match(linhaChamado.innerHTML, />encontrado em: solicitante</);
+      assert.match(linhaOs.innerHTML, />encontrado em: chamado vinculado</);
       afirmarCamposEscapados(linhaOs.innerHTML, ["os", "serie", "status", "utic"], "OS");
     }
   }
-  assert.match(renderers.criarLinhaChamado({ numero: "UTIC-1", aba: "finalizados" }, 0, "", {}).innerHTML, />Finalizados</);
+  assert.match(renderers.criarLinhaChamado({ numero: "UTIC-1", aba: "finalizados", campo: "numero" }, 0, "", {}).innerHTML, />Finalizados</);
+  // Rótulo "encontrado em": texto aprovado só para campos que não são o próprio número; escape do rótulo vem do mapa fixo.
+  assert.match(linhaRotulo("titulo"), />encontrado em: título</);
+  assert.match(linhaRotulo("os_vinculada"), />encontrado em: OS vinculada</);
+  assert.doesNotMatch(linhaRotulo("numero"), /ck-ac__campo/);
+  assert.doesNotMatch(linhaRotulo(carga("campo")), /ck-ac__campo|<img/i);
   assert.match(renderers.criarLinhaOs({ ...os, fonte: "simpress", os: "7285", serie: "S", status: "x", utic: null }, 0, "", {}).innerHTML, />Simpress</);
 });
 
