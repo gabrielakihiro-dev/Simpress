@@ -1,21 +1,89 @@
 """Link between the Dashboard's ticket (column C) and the OS column of the ticket table (``os_chamados_vinculos.json``).
 
-Pure functions. ``vinculos_derivados`` reads the Dashboard (C = UTIC, K = serial, E = OS) and the ticket report and
+Pure functions, except ``read_ticket_os_links``, the only one that reads the store. ``vinculos_derivados`` reads the Dashboard (C = UTIC, K = serial, E = OS) and the ticket report and
 proposes links in the store's format; ``os_do_chamado`` goes the other way, giving the OS a manual link sets on a UTIC.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
-from typing import Any, Collection, Dict, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
+from pathlib import Path
+from typing import Any, Collection, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence, Set, Tuple
 
+from core.errors import DomainBusyError
+from domains.inventory_comparison import normalize_reference_value
 from domains.sebrae_chamados import NUMERO_UTIC
 from domains.sebrae_cruzamento import _chave_serie, _numero_da_os, serie_equivalente_macbook
 
 
 def _os_chave(valor: Any) -> str:
     return re.sub(r"\s+", "", str(valor or "")).upper()
+
+
+def ticket_os_link_key(fonte: str, serie: str, ordem_servico: str) -> str:
+    ordem_key = re.sub(r"\s+", "", str(ordem_servico or "")).upper()
+    return json.dumps(
+        [fonte, normalize_reference_value(serie), ordem_key],
+        ensure_ascii=False, separators=(",", ":"),
+    )
+
+
+def read_ticket_os_links(path: Path) -> Dict[str, Any]:
+    """The manual-link store; a missing file is an empty store, an unreadable or invalid one raises ``DomainBusyError`` (503)."""
+    if not path.exists():
+        return {"version": 1, "vinculos": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise DomainBusyError("Os vínculos manuais de OS não puderam ser lidos.") from None
+    if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("vinculos"), dict):
+        raise DomainBusyError("Os vínculos manuais de OS estão inválidos.")
+    links = data["vinculos"]
+    for key, link in links.items():
+        if not isinstance(key, str) or not isinstance(link, dict):
+            raise DomainBusyError("Os vínculos manuais de OS estão inválidos.")
+        try:
+            fonte = link["fonte"]
+            serie = link["serie"]
+            ordem = link["os"]
+            ano = int(link["ano"])
+            numero = link["numero"]
+            expected_key = ticket_os_link_key(fonte, serie, ordem)
+            valid = (
+                fonte in {"simpress", "oracle"}
+                and bool(str(serie).strip()) and bool(str(ordem).strip())
+                and 2000 <= ano <= 9999
+                and isinstance(numero, str) and re.fullmatch(r"\d{1,24}", numero)
+                and key == expected_key
+            )
+        except (KeyError, TypeError, ValueError):
+            valid = False
+            numero = ""
+            ano = 0
+        if not valid:
+            raise DomainBusyError("Os vínculos manuais de OS estão inválidos.")
+        link["ano"] = ano
+        link["chamado"] = f"UTIC-{ano}-{numero}"
+    return data
+
+
+def finalization_links_by_key(items: Iterable[Dict[str, Any]], manual: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Finalization links by key; a manual link on the key wins and the first item of a key wins."""
+    found: Dict[str, Dict[str, Any]] = {}
+    for item in items:
+        key = ticket_os_link_key(item["fonte"], item["serie"], item["os"])
+        if key not in manual:
+            found.setdefault(key, item)
+    return found
+
+
+def derived_links(items: Iterable[Dict[str, Any]], manual: Mapping[str, Any]) -> List[Dict[str, Any]]:
+    """Dashboard-derived links; the last item of a key wins, and a manual link on the same key always wins.
+    shortcut: derived links are never stored, so clearing one in the editor makes it reappear; upgrade if a "dismissed" list is needed."""
+    derived = {ticket_os_link_key(item["fonte"], item["serie"], item["os"]): item for item in items}
+    return [item for key, item in derived.items() if key not in manual]
 
 
 def _ordens_da_serie(chamados: Sequence[Any], alvo: str) -> Dict[str, Dict[str, Tuple[str, str]]]:
