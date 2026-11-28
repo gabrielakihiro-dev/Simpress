@@ -1149,6 +1149,16 @@ test("destaque: marcar e tirar anuncia o resultado, acende e apaga a aba Destaqu
   await expect(abaDestaques).toBeFocused(); // o original está num painel escondido: o foco vai à aba
 });
 
+test("destaques: falha do GET aparece no resumo da aba Destaques; a lista não cai", async ({ page, request }) => {
+  await page.route("**/api/sebrae/observacoes", rota => rota.fulfill({ status: 500, json: { detail: "Sem resposta do servidor de observações." } }));
+  const { painel } = await abrirPainel(page, request);
+  await painel.locator("#sebrae-aba-destaques").click();
+  const resumo = painel.locator("#sebrae-destaques-resumo");
+  await expect(resumo).toHaveText("Sem resposta do servidor de observações.");
+  await expect(resumo).toBeVisible(); // role=status com texto (o :empty esconde quando vazio)
+  await expect(painel.locator("#sebrae-novos-contagem")).not.toHaveText("0"); // as listas seguem de pé
+});
+
 test("destaque: último destaque só no servidor (sem cartão original) leva o foco à aba Destaques", async ({ page, request }) => {
   await simularDestaques(page, { "UTIC-2026-0999": { observacao: "Antiga.", atualizado_em: "2026-10-01T08:00:00-03:00", destaque: true, destaque_em: "2026-11-01T10:00:00-03:00" } });
   const { painel } = await abrirPainel(page, request);

@@ -165,6 +165,7 @@ export interface ContextoSebraeDashboard {
   lojaAbas?: LojaAbas;
   /** Loja do resultado do Atualizar/Fechar (fechar.tsx); mesma regra da lojaLeitura. */
   lojaFechar?: LojaFechar;
+  /** Loja dos avisos dos destaques (destaques.tsx); mesma regra da lojaLeitura. */
   lojaDestaques?: LojaDestaques;
 }
 
