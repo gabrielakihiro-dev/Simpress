@@ -256,6 +256,11 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
         item.dataset.hostnamePendente = "1";
         const remover = item.querySelector<HTMLElement>("[data-hostname-remove]");
         if (!remover) return;
+        if (remover.dataset.rotuloOriginal === undefined) {
+          remover.dataset.rotuloOriginal = remover.textContent || "";
+          remover.dataset.dicaOriginal = remover.title;
+          remover.dataset.ariaOriginal = remover.getAttribute("aria-label") || "";
+        }
         remover.textContent = "Gravar só no cockpit";
         remover.title = "A remoção no Endpoint Central ficou pendente: confira lá; se o computador sumiu, grave só no cockpit";
         remover.setAttribute("aria-label", `Gravar só no cockpit a remoção de ${item.dataset.hostnameNome || ""}`);
@@ -299,6 +304,16 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
             }
           );
           if (item) delete item.dataset.hostnamePendente;
+          // Gravado no cockpit: o botão volta ao rótulo original (aparece de novo se o usuário desfizer).
+          item?.querySelectorAll<HTMLElement>("[data-hostname-remove]").forEach(remover => {
+            if (remover.dataset.rotuloOriginal === undefined) return;
+            remover.textContent = remover.dataset.rotuloOriginal;
+            remover.title = remover.dataset.dicaOriginal || "";
+            remover.setAttribute("aria-label", remover.dataset.ariaOriginal || "");
+            delete remover.dataset.rotuloOriginal;
+            delete remover.dataset.dicaOriginal;
+            delete remover.dataset.ariaOriginal;
+          });
           mostrarEstadoHostname(chave, !restaurar);
           app.atualizarIndicadoresPosSalvamento();
           app.showToast(data.mensagem || (restaurar ? "Hostname restaurado." : "Hostname removido."), "success");

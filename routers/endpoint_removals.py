@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, StrictBool
 
+from core.errors import DomainError
 from domains import endpoint_remocao, endpoint_removals
 from domains.endpoint_removals import EndpointRemovalServices
 
@@ -40,16 +41,25 @@ def create_endpoint_removals_router(
         """Remove o computador antigo no Endpoint Central (Chrome de automação) e só então grava o par local."""
         automacao = endpoint_remocao.automation
 
-        def remover(hostname: str, confirmado: bool, corte: str) -> Dict[str, Any]:
+        def remover(
+            hostname: str, confirmado: bool, corte: str,
+            antes_do_clique: Callable[[], None], apos_trava: Callable[[], None],
+        ) -> Dict[str, Any]:
             aba = " Se a aba do Endpoint ficou com o diálogo de remoção aberto, clique em Cancel."
             try:
-                return remover_no_endpoint(hostname, confirmado, corte=corte)
+                nome = endpoint_remocao.validar_hostname(hostname)
+            except ValueError as erro:
+                raise HTTPException(422, str(erro)) from None
+            try:
+                return remover_no_endpoint(
+                    nome, confirmado, corte=corte, antes_do_clique=antes_do_clique, apos_trava=apos_trava
+                )
+            except DomainError:
+                raise  # par pendente relido depois da trava (409)
             except automacao.TravaOcupada:
                 raise HTTPException(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
             except automacao.RotinaEncerrada as erro:
                 raise HTTPException(409, f"{erro}{aba}") from None
-            except ValueError as erro:
-                raise HTTPException(422, str(erro)) from None
             except Exception:
                 # Erros antes do clique final (depois dele a rotina devolve ``incerto``): nada foi removido.
                 raise HTTPException(

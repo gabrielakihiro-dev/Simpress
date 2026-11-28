@@ -25,6 +25,10 @@ Endpoint Central a partir do botão "Remover mais antigo", com os passos abaixo.
    só depois de novo ``goto`` (via ``about:blank``; nunca ``reload``) e refiltro com 0 linhas (refeito a cada 5 s por até
    15 s, no máximo 3 buscas); ainda aparece: ``incerto``.
 
+``removido`` exige duas buscas seguidas com o aviso exato "Nenhum computador gerenciado.", faixa ``0 - 0``, nada
+carregando e a caixa de filtro com o próprio hostname. Imediatamente antes do "Sim", ``antes_do_clique`` grava o
+marcador durável "em_andamento" (sem ele, não clica); ``apos_trava`` relê as pendências já com a trava.
+
 Log só com etapa e resultado: nunca hostname, usuário, senha nem motivo.
 """
 import logging
@@ -36,7 +40,7 @@ import unicodedata
 from datetime import datetime
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from core.config import local_setting
 from domains.inventory_comparison import _parse_verification_datetime
@@ -64,6 +68,7 @@ _CANCELAR = re.compile(r"^\s*(?:Cancelar|Cancel)\s*$", re.I)  # o portal mostra 
 _ALERTA = "[role=alertdialog]"
 ESPERA_FECHAR_ALERTA_MS = 10_000
 ESPERA_CONTEUDO_DIALOGO_MS = 15_000
+TEXTO_GRADE_VAZIA = "Nenhum computador gerenciado."
 # Depois do "Sim": o portal demora para remover e atualiza a tela sozinho; a conferência refaz só o filtro.
 ESPERA_REMOCAO_MS = 15_000
 INTERVALO_PORTAL_MS = 1_000
@@ -87,6 +92,7 @@ MENSAGENS = {
     "motivo_obrigatorio": "O Endpoint Central pediu um motivo obrigatório; cancelei sem remover.",
     "cancelado_sem_confirmacao": "Simulação: o diálogo foi conferido e cancelado sem remover (falta a confirmação).",
     "recusado_por_configuracao": f"A remoção real está desativada ({VAR_SEM_REMOCAO}); o diálogo foi cancelado sem remover.",
+    "marcador_nao_gravado": "Não consegui registrar a remoção em andamento no cockpit; cancelei sem remover.",
     "contato_recente": (
         "O computador falou com o Endpoint Central no dia da última verificação do hostname mais recente ou depois "
         "(ou a data não pôde ser lida): o nome pode ter sido reaproveitado. Confira no Endpoint; nada foi removido."
@@ -192,7 +198,7 @@ def _fechar_alertas(page: Any) -> bool:
 
 def _sair_sem_remover(page: Any, automacao: Any, caixa: Any, pasta: Path | None, resultado: str) -> dict[str, Any]:
     """Saída antes do "Sim": captura, fecha o diálogo pelo Cancel, espera sumir e desmarca a linha."""
-    captura = _capturar(page.locator(_ALERTA).filter(visible=True), pasta)
+    captura = _capturar(page, pasta)
     fechado = _fechar_alertas(page)
     _desmarcar(caixa)
     saida = _resultado(automacao, resultado, captura=captura)
@@ -202,15 +208,48 @@ def _sair_sem_remover(page: Any, automacao: Any, caixa: Any, pasta: Path | None,
     return saida
 
 
-def _capturar(alertas: Any, pasta: Path | None) -> str:
-    """Só o diálogo (a página tem colunas com nome e usuário fora da tela); guarda as últimas capturas."""
+_JS_PAINEL = """
+(alerta) => {
+  const titulo = [...alerta.querySelectorAll('*')]
+    .find(el => el.children.length === 0 && /Esta a[çc][ãa]o resulta em/i.test(el.textContent || ''));
+  const botoes = [...alerta.querySelectorAll('button')].filter(b => /^\\s*(Cancel|Cancelar)\\s*$/i.test(b.textContent || ''));
+  if (!titulo || botoes.length !== 1) return null;
+  // Menor bloco com o título e o Cancel: o painel visível, sem a moldura que cobre a página.
+  let painel = titulo.parentElement;
+  while (painel && painel !== alerta && !painel.contains(botoes[0])) painel = painel.parentElement;
+  const r = (painel || alerta).getBoundingClientRect();
+  const x = Math.max(0, r.left), y = Math.max(0, r.top);
+  const largura = Math.min(window.innerWidth, r.right) - x, altura = Math.min(window.innerHeight, r.bottom) - y;
+  return largura > 0 && altura > 0 ? {x, y, width: largura, height: altura} : null;
+}
+"""
+
+
+def _caixa_estavel(page: Any, alerta: Any) -> dict[str, float] | None:
+    """Caixa do painel igual em 2 leituras seguidas (fim da animação); sem estabilizar, a última lida."""
+    anterior = None
+    for _ in range(15):
+        atual = alerta.evaluate(_JS_PAINEL)
+        if atual is not None and atual == anterior:
+            return dict(atual)
+        anterior = atual
+        page.wait_for_timeout(200)
+    return dict(anterior) if anterior else None
+
+
+def _capturar(page: Any, pasta: Path | None) -> str:
+    """Só o painel do diálogo (a página tem colunas com nome e usuário fora da tela); guarda as últimas capturas."""
     destino = Path(pasta or Path(tempfile.gettempdir()) / "simpress_endpoint_remocao")
     try:
+        alertas = page.locator(_ALERTA).filter(visible=True)
         if alertas.count() != 1:
+            return ""
+        caixa = _caixa_estavel(page, alertas.first)
+        if caixa is None:
             return ""
         destino.mkdir(parents=True, exist_ok=True)
         arquivo = destino / f"dialogo-remocao-{datetime.now():%Y%m%d-%H%M%S-%f}.png"
-        alertas.first.screenshot(path=str(arquivo), timeout=10000)
+        page.screenshot(path=str(arquivo), clip=caixa, timeout=10000)
         antigas = sorted(destino.glob("dialogo-remocao-*.png"), key=lambda item: item.stat().st_mtime, reverse=True)
         for velha in antigas[CAPTURAS_MANTIDAS:]:
             velha.unlink(missing_ok=True)
@@ -289,7 +328,7 @@ def contato_anterior_ao_corte(contato: Any, corte: Any) -> bool:
 
 def remover_na_pagina(
     page: Any, automacao: Any, hostname: str, confirmado: bool = False, pasta_captura: Path | None = None,
-    *, corte: str | None = None,
+    *, corte: str | None = None, antes_do_clique: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Executa os passos do docstring do módulo na aba ``page``; nunca fecha abas."""
     hostname = validar_hostname(hostname)
@@ -350,11 +389,14 @@ def remover_na_pagina(
         if parada is None:
             parada = "cancelado_sem_confirmacao" if confirmado is not True else "recusado_por_configuracao"
         return _sair_sem_remover(page, automacao, caixa, pasta_captura, parada)
-    return _confirmar_remocao(page, automacao, hostname, confirmado, alertas.first, mdm, caixa, pasta_captura)
+    return _confirmar_remocao(
+        page, automacao, hostname, confirmado, alertas.first, mdm, caixa, pasta_captura, antes_do_clique
+    )
 
 
 def _confirmar_remocao(
     page: Any, automacao: Any, hostname: str, confirmado: bool, dialogo: Any, mdm: Any, caixa: Any, pasta: Path | None,
+    antes_do_clique: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Único caminho que conhece o botão "Sim"; só é chamado com a remoção liberada."""
     sim = dialogo.get_by_role("button", name=_SIM)
@@ -374,6 +416,12 @@ def _confirmar_remocao(
     if not remocao_liberada(confirmado):  # a variável pode ter mudado durante a espera
         return _sair_sem_remover(page, automacao, caixa, pasta, "recusado_por_configuracao")
 
+    if antes_do_clique is not None:
+        try:
+            antes_do_clique()  # marcador durável "em_andamento": sem ele, nunca clica
+        except Exception as erro:
+            logger.debug("Marcador da remoção no Endpoint não gravado (%s).", type(erro).__name__)
+            return _sair_sem_remover(page, automacao, caixa, pasta, "marcador_nao_gravado")
     automacao.log(ORIGEM, "Confirmando a remoção (clique único).")
     inicio = time.monotonic()
     try:
@@ -392,12 +440,14 @@ def _confirmar_remocao(
             return _resultado(automacao, "incerto")
         # Só o filtro é refeito (caixa e lupa da grade); o diálogo e o botão de remover nunca são tocados de novo.
         fim = time.monotonic() + ESPERA_CONFERENCIA_MS / 1000
+        vazias_seguidas = 0
         for busca in range(1, BUSCAS_CONFERENCIA + 1):
             grade, nomes = _filtrar(page, automacao, hostname)  # "pare" aqui cai no except: incerto
             url_atual = str(page.url)
             if "agent/som/computers" not in url_atual or "managedStatus=true" not in url_atual:  # outra tela: vazio não prova nada
                 return _resultado(automacao, "incerto")
-            if not nomes and grade.get("vazia"):
+            vazias_seguidas = vazias_seguidas + 1 if _vazia_confirmada(page, grade, nomes, hostname) else 0
+            if vazias_seguidas >= 2:
                 automacao.log(ORIGEM, f"Remoção confirmada em {time.monotonic() - inicio:.0f} s.")
                 return _resultado(automacao, "removido")
             if busca == BUSCAS_CONFERENCIA or time.monotonic() >= fim:
@@ -410,6 +460,22 @@ def _confirmar_remocao(
         return _resultado(automacao, "incerto")
 
 
+def _vazia_confirmada(page: Any, grade: dict[str, Any], nomes: list[str], hostname: str) -> bool:
+    """Grade vazia que prova a remoção: aviso exato, faixa 0 - 0, nada carregando e o filtro com o próprio hostname."""
+    try:
+        cabecalho = grid.achar_cabecalho(grade, grid.COLUNA_NOME)
+        return (
+            not nomes and bool(grade.get("vazia"))
+            and page.get_by_text(TEXTO_GRADE_VAZIA, exact=True).filter(visible=True).count() > 0
+            and _faixa(page) == (0, 0)
+            and page.locator(_CARREGANDO).count() == 0
+            and cabecalho is not None and grid._valor_do_campo(page, cabecalho) == hostname
+        )
+    except Exception as erro:
+        logger.debug("Conferência da grade vazia do Endpoint falhou (%s).", type(erro).__name__)
+        return False
+
+
 def _aguardar_portal(page: Any, automacao: Any, hostname: str) -> bool:
     """Na mesma página, sem clicar: espera o carregamento sumir e a linha sair (ou a grade mudar). False no prazo."""
     carregando = page.locator(_CARREGANDO)
@@ -419,12 +485,15 @@ def _aguardar_portal(page: Any, automacao: Any, hostname: str) -> bool:
         cabecalho = grid.achar_cabecalho(grade, grid.COLUNA_NOME)
         return tuple(_nome(grid.valor_da_coluna(linha, cabecalho)) for linha in grade["linhas"]), _faixa(page)
 
-    antes = retrato()
+    antes = None
     fim = time.monotonic() + ESPERA_REMOCAO_MS / 1000
     while time.monotonic() < fim:
         page.wait_for_timeout(INTERVALO_PORTAL_MS)
         automacao.verificar_cancelamento()  # "pare" durante a espera: incerto (o clique já aconteceu)
         try:
+            if antes is None:
+                antes = retrato()  # a primeira leitura também pode falhar: fica no mesmo laço
+                continue
             if carregando.count():
                 continue
             agora = retrato()
@@ -438,10 +507,13 @@ def _aguardar_portal(page: Any, automacao: Any, hostname: str) -> bool:
 
 def remover_computador(
     hostname: str, confirmado: bool = False, pasta_captura: Path | None = None, *, corte: str | None = None,
+    antes_do_clique: Callable[[], None] | None = None, apos_trava: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Abre uma aba nova no Chrome de automação e remove o computador ``hostname`` (ver docstring do módulo)."""
     hostname = validar_hostname(hostname)
     with automation.trava_execucao("remover_endpoint"):
+        if apos_trava is not None:
+            apos_trava()  # relê as pendências já com a trava: outro pedido pode ter deixado uma
         from playwright.sync_api import sync_playwright
 
         # Ignora cancelamento deixado por uma execução anterior, sem apagar o arquivo dela.
@@ -453,4 +525,6 @@ def remover_computador(
             if not browser.contexts:
                 raise automation.RotinaErro("Chrome sem contexto de navegação.")
             page = browser.contexts[0].new_page()  # aba própria; fica aberta para o usuário conferir
-            return remover_na_pagina(page, automation, hostname, confirmado, pasta_captura, corte=corte)
+            return remover_na_pagina(
+                page, automation, hostname, confirmado, pasta_captura, corte=corte, antes_do_clique=antes_do_clique
+            )

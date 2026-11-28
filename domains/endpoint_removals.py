@@ -91,6 +91,10 @@ def _clean(value: str, label: str, limit: int) -> str:
 
 Update = Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]
 PENDING_LABEL = "remoções pendentes no Endpoint"
+MSG_EM_ANDAMENTO = (
+    "A remoção no Endpoint Central foi interrompida depois de começar: confira no Endpoint. Se o computador "
+    "sumiu de lá, use \"Gravar só no cockpit\"; o Endpoint não é acionado de novo."
+)
 MSG_PENDENTE = (
     "Esta remoção no Endpoint Central ficou pendente: confira no Endpoint. Se o computador sumiu de lá, "
     "use \"Gravar só no cockpit\"; o Endpoint não é acionado de novo."
@@ -137,6 +141,23 @@ def remove_endpoint_hostname(services: EndpointRemovalServices, serie: str, host
     """Descarta uma linha duplicada do Endpoint; ao menos uma linha da série permanece."""
     serie = _clean(serie, "a série", MAX_SERIAL_LENGTH)
     hostname = _clean(hostname, "o hostname", MAX_HOSTNAME_LENGTH)
+    remaining = _record_removal(services, serie, hostname)
+    services.reload_database()
+    return {
+        "sucesso": True,
+        "serie": serie,
+        "hostname": hostname,
+        "mantidos": _kept(remaining),
+        "mensagem": "Hostname removido. Os que permaneceram valem na base e nas próximas exportações.",
+    }
+
+
+def _kept(remaining: List[Dict[str, Any]]) -> List[str]:
+    return sorted({str(row.get("hostname", "")) for row in remaining if row.get("hostname")})
+
+
+def _record_removal(services: EndpointRemovalServices, serie: str, hostname: str) -> List[Dict[str, Any]]:
+    """Grava o par em hostnames_removidos.json (e encerra a pendência dele); devolve as linhas que ficam."""
     key = removal_key(serie, hostname)
 
     index = services.read_endpoint_alias_index()
@@ -162,19 +183,12 @@ def remove_endpoint_hostname(services: EndpointRemovalServices, serie: str, host
         # Gravar só no cockpit encerra a pendência do Endpoint na mesma transação.
         changes.append((services.pending_file(), PENDING_LABEL, lambda entries: _without(entries, key)))
     _write(services, changes)
-    services.reload_database()
-    return {
-        "sucesso": True,
-        "serie": serie,
-        "hostname": hostname,
-        "mantidos": sorted({row.get("hostname", "") for row in remaining if row.get("hostname")}),
-        "mensagem": "Hostname removido. Os que permaneceram valem na base e nas próximas exportações.",
-    }
+    return remaining
 
 
 def remove_in_endpoint(
     services: EndpointRemovalServices, serie: str, hostname: str, confirmado: bool,
-    remover: Callable[[str, bool, str], Dict[str, Any]],
+    remover: Callable[[str, bool, str, Callable[[], None], Callable[[], None]], Dict[str, Any]],
 ) -> Dict[str, Any]:
     """Remove o computador antigo no Endpoint Central e, só depois de ``removido``, grava o par localmente.
 
@@ -207,6 +221,12 @@ def remove_in_endpoint(
     ) or any(
         other_key != key[0] and normalize_reference_value(item.get("hostname")) == key[1]
         for other_key, rows in duplicates.items() for item in rows
+    ) or any(
+        normalize_reference_value(item.get("hostname")) == key[1] for item in index.get("blank_serials", [])
+    ) or any(  # linhas de outra série escondidas por uma remoção local continuam no Endpoint
+        isinstance(entry, dict) and removal_key(entry.get("serie"), entry.get("hostname"))[1] == key[1]
+        and removal_key(entry.get("serie"), entry.get("hostname"))[0] != key[0]
+        for entry in services.load_removals()
     )
     if em_outra_serie:
         raise DomainConflictError("Esse hostname também aparece em outra série no Endpoint; confira antes de remover.")
@@ -214,7 +234,24 @@ def remove_in_endpoint(
     if not corte:
         raise DomainConflictError("Falta a data de verificação do hostname mais recente; confira no Endpoint.")
 
-    resultado = dict(remover(str(row.get("hostname") or hostname), confirmado, str(corte)))
+    def antes_do_clique() -> None:
+        # Marcador durável imediatamente antes do "Sim": se o processo cair depois do clique, o par fica pendente.
+        if not _mark_pending(services, serie, hostname, "em_andamento"):
+            raise DomainError("Não foi possível registrar a remoção em andamento.", status_code=503)
+
+    def apos_trava() -> None:
+        if key in removal_keys(services.load_pending()):
+            raise DomainConflictError(MSG_PENDENTE)
+
+    try:
+        resultado = dict(remover(str(row.get("hostname") or hostname), confirmado, str(corte), antes_do_clique, apos_trava))
+    except DomainError:
+        raise
+    except Exception:
+        # Com o marcador gravado, o clique pode ter acontecido: nunca "nada foi removido".
+        if _marker_present(services, key):
+            raise DomainConflictError(MSG_EM_ANDAMENTO) from None
+        raise
     if resultado.get("resultado") == "incerto":
         if not _mark_pending(services, serie, hostname, "incerto"):
             resultado["mensagem"] = (
@@ -223,9 +260,10 @@ def remove_in_endpoint(
             )
         return {**resultado, "gravado_local": False, "pendente": True}
     if resultado.get("resultado") != "removido":
+        _clear_marker(services, key)  # nada foi clicado
         return {**resultado, "gravado_local": False}
     try:
-        local = remove_endpoint_hostname(services, serie, hostname)
+        remaining = _record_removal(services, serie, hostname)
     except Exception as error:
         # O Endpoint já removeu: nunca vira 409/503 nem libera nova remoção; a nova tentativa é só local.
         detalhe = str(getattr(error, "detail", "") or type(error).__name__)
@@ -239,10 +277,16 @@ def remove_in_endpoint(
                 f"Use \"Gravar só no cockpit\"; o Endpoint não é acionado de novo.{aviso}"
             ),
         }
-    return {
-        **resultado, "gravado_local": True, "serie": serie, "hostname": hostname, "mantidos": local["mantidos"],
+    saida = {
+        **resultado, "gravado_local": True, "serie": serie, "hostname": hostname, "mantidos": _kept(remaining),
         "mensagem": "Computador removido no Endpoint Central; o outro hostname passa a valer na base e nas próximas exportações.",
     }
+    try:
+        services.reload_database()
+    except Exception:
+        # A gravação local já confirmou: não é "removido sem gravação"; só a base em memória atrasa.
+        saida["mensagem"] += " A base em memória será atualizada na próxima carga."
+    return saida
 
 
 def _without(entries: List[Dict[str, Any]], key: Tuple[str, str]) -> List[Dict[str, Any]]:
@@ -250,6 +294,31 @@ def _without(entries: List[Dict[str, Any]], key: Tuple[str, str]) -> List[Dict[s
         entry for entry in entries
         if not (isinstance(entry, dict) and removal_key(entry.get("serie"), entry.get("hostname")) == key)
     ]
+
+
+def _marker_present(services: EndpointRemovalServices, key: Tuple[str, str]) -> bool:
+    try:
+        return key in removal_keys(services.load_pending())
+    except Exception:
+        return True  # ilegível: na dúvida, conta como pendente
+
+
+def _clear_marker(services: EndpointRemovalServices, key: Tuple[str, str]) -> None:
+    """Tira só o marcador "em_andamento" do par (resultados em que nada foi clicado)."""
+    try:
+        entries = services.load_pending()
+        if not any(
+            isinstance(entry, dict) and entry.get("resultado") == "em_andamento"
+            and removal_key(entry.get("serie"), entry.get("hostname")) == key for entry in entries
+        ):
+            return
+        _write(services, [(services.pending_file(), PENDING_LABEL, lambda items: [
+            item for item in items
+            if not (isinstance(item, dict) and item.get("resultado") == "em_andamento"
+                    and removal_key(item.get("serie"), item.get("hostname")) == key)
+        ])])
+    except Exception:
+        return  # o marcador fica: bloqueia um novo clique, o lado seguro
 
 
 def _mark_pending(services: EndpointRemovalServices, serie: str, hostname: str, resultado: str) -> bool:

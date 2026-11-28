@@ -15,7 +15,7 @@ BASE = "https://endpoint.teste.invalid/client"
 
 PAGINA = """<!doctype html><html><head><style>
 .ember-table-table-row { display:flex } .ember-table-cell,.ember-table-header-cell { width:220px; flex:none }
-#dlg[hidden] { display:none } #dlg { width:400px }
+#dlg[hidden] { display:none } #dlg { width:400px; transition: transform .4s } #dlg.entrando { transform: translateX(300px) }
 </style></head><body>
 <div class="ember-table-header-row ember-table-table-row">
 <div class="ember-table-header-cell"><input type="checkbox" id="todos"></div>
@@ -24,7 +24,7 @@ PAGINA = """<!doctype html><html><head><style>
 <button id="SoMManagedComputers_searchButton" disabled>Pesquisar</button>
 <div id="barra" style="display:none"><span style="width:220px;flex:none"></span><input class="search-text-box" placeholder="Somente sequência" style="width:212px"></div>
 <div class="page-loader-wrapper">Carregando...</div>
-<div id="rows"></div><p id="count"></p>
+<div id="rows"></div><div id="vazio" hidden>Nenhum computador gerenciado.</div><div id="carregador" class="grid-loading" hidden>...</div><p id="count"></p>
 <button id="remover">X Remover computador(es)</button>
 <div role="dialog" class="app--slider"></div>
 <div class="zdialog--overlay" id="overlay" hidden></div>
@@ -39,16 +39,23 @@ function render() {
  renders++;
  const value=document.querySelector('.search-text-box').value.toLowerCase();
  // some_apos: a remoção só aparece depois de N buscas (o portal demora para refletir).
- const sumiu = cfg.some_apos && renders >= cfg.some_apos;
+ const sumiu = (cfg.some_apos && renders >= cfg.some_apos) || (cfg.vazio_em || []).includes(renders);
  const filtered=sumiu ? [] : cfg.linhas.filter(n=>n.toLowerCase().includes(value));
  document.querySelector('#rows').replaceChildren(...filtered.map(nome=>{
    const row=document.createElement('div'); row.className='ember-table-table-row';
    row.innerHTML='<div class="ember-table-cell"><input type="checkbox"></div><div class="ember-table-cell"><a class="anchor-text" href="#/x"></a></div><div class="ember-table-cell contato"></div>';
    row.querySelector('a').textContent=nome; row.querySelector('.contato').textContent=cfg.contato; return row;
  }));
- document.querySelector('#count').textContent=filtered.length ? `1 - ${filtered.length} de Total de registros` : 'Nenhum computador gerenciado. 0 - 0 de Total de registros';
+ document.querySelector('#count').textContent=filtered.length ? `1 - ${filtered.length} de Total de registros` : '0 - 0 de Total de registros';
+ document.querySelector('#vazio').hidden = filtered.length > 0;
+ // vazio_com_carregador: o aviso de vazio aparece durante o carregamento (placeholder passageiro).
+ document.querySelector('#carregador').hidden = !(cfg.vazio_com_carregador && !filtered.length);
 }
-document.querySelector('.search-text-box').addEventListener('keydown', e=>{if(e.key==='Enter'){window.buscou(); render()}});
+document.querySelector('.search-text-box').addEventListener('keydown', e=>{if(e.key==='Enter'){
+ window.buscou(); render();
+ // troca_filtro: a caixa fica com outro valor depois da busca (filtro errado com grade vazia).
+ if (cfg.troca_filtro) setTimeout(()=>{document.querySelector('.search-text-box').value='OUTRO'}, 50);
+}});
 // Como o Ember: o "selecionar todos" marca sozinho quando todas as linhas visíveis estão marcadas.
 document.querySelector('#rows').addEventListener('change', ()=>{
  const caixas=[...document.querySelectorAll('#rows input[type=checkbox]')];
@@ -68,6 +75,7 @@ document.querySelector('#remover').onclick=()=>{
  window.registrar('remover');
  const n=document.querySelectorAll('#rows input:checked').length;
  document.querySelector('#overlay').hidden=false; document.querySelector('#dlg').hidden=false;
+ const dlg=document.querySelector('#dlg'); dlg.classList.add('entrando'); requestAnimationFrame(()=>requestAnimationFrame(()=>dlg.classList.remove('entrando')));
  // Como no portal: a moldura aparece primeiro e o conteúdo chega ~800 ms depois.
  setTimeout(()=>{
   document.querySelector('#conteudo').innerHTML = CONTEUDO;
@@ -151,7 +159,9 @@ class RemoverNoEndpointTests(unittest.TestCase):
         os.environ.pop(endpoint_remocao.VAR_SEM_REMOCAO, None)
 
     def rodar(self, linhas, confirmado=False, depois=None, mdm=False, motivo=False, fecha=True, reconhecivel=True,
-              contato="nov 23, 2026 11:20 AM", corte="nov 25, 2026 08:59 PM", apos_sim=None, some_apos=None):
+              contato="nov 23, 2026 11:20 AM", corte="nov 25, 2026 08:59 PM", apos_sim=None, some_apos=None,
+              segundo=None, antes_do_clique=None):
+        segundo = segundo or {}
         cliques = []
         abertas = []
         page = self.browser.new_page(viewport={"width": 1100, "height": 700})
@@ -168,7 +178,8 @@ class RemoverNoEndpointTests(unittest.TestCase):
             atuais = linhas if not abertas else (depois if depois is not None else linhas)
             abertas.append(route.request.url)
             cfg = json.dumps({"linhas": atuais, "mdm": mdm, "motivo": motivo, "fecha": fecha, "reconhecivel": reconhecivel, "contato": contato,
-                              "apos_sim": apos_sim, "some_apos": some_apos if abertas[:-1] else None})
+                              "apos_sim": apos_sim, "some_apos": some_apos if abertas[:-1] else None,
+                              **(segundo if abertas[:-1] else {})})
             route.fulfill(status=200, content_type="text/html; charset=utf-8", body=PAGINA.replace("__CFG__", cfg))
 
         page.route(f"{BASE}**", servir)
@@ -176,7 +187,8 @@ class RemoverNoEndpointTests(unittest.TestCase):
         self.logs = []
         automacao.log = lambda origem, mensagem: self.logs.append(mensagem)
         resultado = endpoint_remocao.remover_na_pagina(
-            page, automacao, "PRNOTE100", confirmado, Path(self.pasta.name), corte=corte)
+            page, automacao, "PRNOTE100", confirmado, Path(self.pasta.name), corte=corte,
+            antes_do_clique=antes_do_clique)
         self.assertFalse([m for m in self.logs if "PRNOTE" in m.upper()])  # hostname nunca vai a log
         self.marcadas = page.locator("#rows input:checked").count()
         self.todos_marcado = page.locator("#todos").is_checked()
@@ -243,7 +255,8 @@ class RemoverNoEndpointTests(unittest.TestCase):
         self.assertEqual(len(abertas), 1)  # sem nova navegação nem nova tentativa
 
     def test_removido_quando_o_portal_tira_a_linha_sozinho(self):
-        resultado, cliques, abertas = self.rodar(["PRNOTE100"], confirmado=True, depois=[], apos_sim=[])
+        with patch.multiple(endpoint_remocao, INTERVALO_CONFERENCIA_MS=300):
+            resultado, cliques, abertas = self.rodar(["PRNOTE100"], confirmado=True, depois=[], apos_sim=[])
         self.assertEqual(resultado["resultado"], "removido")
         self.assertEqual(cliques, ["remover", "label_mdm", "sim"])
         self.assertEqual(len(abertas), 2)  # goto de novo (via about:blank), nunca reload
@@ -251,6 +264,7 @@ class RemoverNoEndpointTests(unittest.TestCase):
 
     def test_removido_so_depois_de_refazer_o_filtro(self):
         with patch.multiple(endpoint_remocao, ESPERA_REMOCAO_MS=2000, INTERVALO_CONFERENCIA_MS=300):
+            # busca 1 com a linha; buscas 2 e 3 vazias (duas seguidas confirmam)
             resultado, cliques, abertas = self.rodar(["PRNOTE100"], confirmado=True, depois=["PRNOTE100"], some_apos=3)
         self.assertEqual(resultado["resultado"], "removido")
         self.assertEqual(cliques, ["remover", "label_mdm", "sim"])  # o Sim e o remover, uma vez cada
@@ -265,6 +279,45 @@ class RemoverNoEndpointTests(unittest.TestCase):
         self.assertEqual(cliques, ["remover", "label_mdm", "sim"])
         self.assertEqual(len(abertas), 2)
         self.assertTrue(any(m.startswith("Remoção não confirmada em") for m in self.logs))
+
+    def test_vazio_passageiro_com_carregador_nao_e_removido(self):
+        with patch.multiple(endpoint_remocao, ESPERA_REMOCAO_MS=2000, INTERVALO_CONFERENCIA_MS=300):
+            resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, depois=[], segundo={"vazio_com_carregador": True})
+        self.assertEqual(resultado["resultado"], "incerto")
+        self.assertEqual(cliques.count("sim"), 1)
+
+    def test_filtro_com_outro_valor_e_incerto(self):
+        with patch.multiple(endpoint_remocao, ESPERA_REMOCAO_MS=2000, INTERVALO_CONFERENCIA_MS=300), \
+                patch.object(endpoint_remocao.grid, "CONFIRMACAO_FILTRO_S", 2):
+            resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, depois=[], segundo={"troca_filtro": True})
+        self.assertEqual(resultado["resultado"], "incerto")
+        self.assertEqual(cliques.count("sim"), 1)
+
+    def test_busca_vazia_isolada_seguida_de_linha_nao_e_removido(self):
+        # Depois do goto: render 1 (carga) com linha, busca 1 vazia, buscas 2 e 3 com a linha.
+        with patch.multiple(endpoint_remocao, ESPERA_REMOCAO_MS=2000, INTERVALO_CONFERENCIA_MS=300):
+            resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, depois=["PRNOTE100"], segundo={"vazio_em": [2]})
+        self.assertEqual(resultado["resultado"], "incerto")
+        self.assertEqual(cliques.count("sim"), 1)
+
+    def test_marcador_que_nao_grava_nao_clica_e_fecha_pelo_cancel(self):
+        def falha():
+            raise RuntimeError("disco cheio")
+
+        resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, antes_do_clique=falha)
+        self.assertEqual(resultado["resultado"], "marcador_nao_gravado")
+        self.assertEqual(cliques, ["remover", "label_mdm", "cancelar:mdm"])
+        self.assertFalse(self.alerta_visivel)
+        self.assertEqual(self.marcadas, 0)
+
+    def test_marcador_e_gravado_antes_do_sim(self):
+        ordem = []
+        with patch.multiple(endpoint_remocao, INTERVALO_CONFERENCIA_MS=300):
+            resultado, cliques, _ = self.rodar(
+                ["PRNOTE100"], confirmado=True, depois=[], apos_sim=[], antes_do_clique=lambda: ordem.append("marcador"))
+        self.assertEqual(resultado["resultado"], "removido")
+        self.assertEqual(ordem, ["marcador"])  # uma vez; sem ele o Sim não é clicado (teste acima)
+        self.assertEqual(cliques, ["remover", "label_mdm", "sim"])
 
     def test_dialogo_nao_reconhecido_fecha_pelo_cancel_e_desmarca(self):
         with patch.object(endpoint_remocao, "ESPERA_CONTEUDO_DIALOGO_MS", 2500):

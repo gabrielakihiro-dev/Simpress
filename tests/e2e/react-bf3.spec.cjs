@@ -1282,6 +1282,11 @@ test.describe("comportamento (só no desktop)", () => {
     await expect.poll(() => chamadasDe(ambiente, "POST", "/api/endpoint/hostnames-removidos").length).toBe(1);
     expect(chamadasDe(ambiente, "POST", "/api/endpoint/hostnames-removidos/remover-no-endpoint")).toHaveLength(1);
     await expect(page.locator("#comparacao-planilhas-conteudo [data-hostname-restore]:visible")).toHaveCount(1);
+    // Desfazer mostra o botão de novo com o rótulo original.
+    ambiente.pendentes = [];
+    await page.locator("#comparacao-planilhas-conteudo [data-hostname-restore]:visible").click();
+    await expect(remover).toHaveText("Remover mais antigo");
+    await expect(remover).toHaveAttribute("aria-label", /^Remover no Endpoint Central o computador mais antigo/);
   });
 
   test("Corrida: resposta antiga de /api/stats não sobrescreve a nova", async ({ page }) => {

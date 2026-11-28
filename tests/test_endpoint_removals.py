@@ -258,8 +258,12 @@ class RemovalWorkflowTests(unittest.TestCase):
     def _remover(self, resultado):
         chamadas = []
 
-        def remover(hostname, confirmado, corte):
+        def remover(hostname, confirmado, corte, antes_do_clique=None, apos_trava=None):
             chamadas.append((hostname, confirmado, corte))
+            if apos_trava is not None:
+                apos_trava()
+            if resultado in ("removido", "incerto") and antes_do_clique is not None:
+                antes_do_clique()  # o clique só acontece depois do marcador
             return {"resultado": resultado, "mensagem": "sintético"}
 
         return remover, chamadas
@@ -279,6 +283,10 @@ class RemovalWorkflowTests(unittest.TestCase):
         outra_unica["unique"]["SN9"] = "host-old"
         outra_duplicada = copy.deepcopy(index)
         outra_duplicada["duplicates"]["SN8"] = [{"hostname": "HOST OLD"}, {"hostname": "HOST-Z"}]
+        sem_serie = copy.deepcopy(index)
+        sem_serie["blank_serials"] = [{"serie": "", "hostname": "host-old"}]
+        removido_em_outra = dataclasses.replace(
+            self.services, load_removals=lambda: [{"serie": "SN-7", "hostname": "HOST-OLD", "removido_em": "x"}])
         casos = [
             (self.services, "SN-9", "HOST-X"),  # par fora das duplicidades
             (self.services, "SN-1", "host new"),  # o hostname vivo nunca é removido
@@ -286,6 +294,9 @@ class RemovalWorkflowTests(unittest.TestCase):
             # o nome antigo também aparece em outra série (única ou duplicada)
             (dataclasses.replace(self.services, read_endpoint_alias_index=lambda: outra_unica), "SN-1", "HOST-OLD"),
             (dataclasses.replace(self.services, read_endpoint_alias_index=lambda: outra_duplicada), "SN-1", "HOST-OLD"),
+            # linha sem série com o mesmo nome e linha de outra série escondida por uma remoção local
+            (dataclasses.replace(self.services, read_endpoint_alias_index=lambda: sem_serie), "SN-1", "HOST-OLD"),
+            (removido_em_outra, "SN-1", "HOST-OLD"),
         ]
         for services, serie, hostname in casos:
             with self.subTest(hostname=hostname), self.assertRaises(DomainConflictError):
@@ -349,16 +360,75 @@ class RemovalWorkflowTests(unittest.TestCase):
         self.assertEqual(self._stored(), [])
         self.assertEqual([item["resultado"] for item in self._pending()], ["removido_sem_gravacao_local"])
 
-    def test_pending_write_failure_is_reported(self):
+    def test_exception_after_the_marker_keeps_the_pair_pending(self):
+        chamadas = []
+
+        def cai_depois_do_clique(hostname, confirmado, corte, antes_do_clique=None, apos_trava=None):
+            chamadas.append(hostname)
+            antes_do_clique()
+            raise RuntimeError("driver morreu depois do Sim")
+
+        with self.assertRaises(DomainConflictError) as raised:
+            endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, cai_depois_do_clique)
+        self.assertIn("confira no Endpoint", raised.exception.detail)
+        self.assertEqual([item["resultado"] for item in self._pending()], ["em_andamento"])
+        with self.assertRaises(DomainConflictError):  # o próximo pedido é recusado sem abrir o Chrome
+            endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, cai_depois_do_clique)
+        self.assertEqual(len(chamadas), 1)
+
+    def test_marker_becomes_incerto_and_the_lock_rereads_pending(self):
+        remover, _ = self._remover("incerto")
+        endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, remover)
+        self.assertEqual([item["resultado"] for item in self._pending()], ["incerto"])
+
+        # Outro pedido passou pela guarda antes da pendência existir: a releitura depois da trava recusa.
+        self.pending.write_text("[]", encoding="utf-8")
+        recusas = []
+
+        def outro_pedido(hostname, confirmado, corte, antes_do_clique=None, apos_trava=None):
+            self.pending.write_text(json.dumps([{"serie": "SN-1", "hostname": "HOST-OLD", "resultado": "incerto"}]))
+            try:
+                apos_trava()
+            except DomainConflictError:
+                recusas.append(True)
+                raise
+            return {"resultado": "cancelado_sem_confirmacao", "mensagem": "sintético"}
+
+        with self.assertRaises(DomainConflictError):
+            endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, outro_pedido)
+        self.assertEqual(recusas, [True])
+
+    def test_reload_failure_after_local_record_is_not_a_missing_record(self):
         remover, _ = self._remover("removido")
+
+        def falha_no_reload():
+            raise RuntimeError("base ocupada")
+
+        broken = dataclasses.replace(self.services, reload_database=falha_no_reload)
+        saida = endpoint_removals.remove_in_endpoint(broken, "SN-1", "HOST-OLD", True, remover)
+        self.assertEqual((saida["resultado"], saida["gravado_local"]), ("removido", True))
+        self.assertNotIn("falhou", saida["mensagem"])
+        self.assertEqual([(item["serie"], item["hostname"]) for item in self._stored()], [("SN-1", "HOST-OLD")])
+        self.assertEqual(self._pending(), [])
+
+    def test_marker_write_failure_never_clicks(self):
+        cliques = []
+
+        def como_a_automacao(hostname, confirmado, corte, antes_do_clique=None, apos_trava=None):
+            try:
+                antes_do_clique()
+            except Exception:
+                return {"resultado": "marcador_nao_gravado", "mensagem": "sintético"}  # fecha pelo Cancel, sem Sim
+            cliques.append("sim")
+            return {"resultado": "removido", "mensagem": "sintético"}
 
         def falha(*_args):
             raise FileTransactionError("disco cheio")
 
         broken = dataclasses.replace(self.services, atomic_file_transaction=falha)
-        saida = endpoint_removals.remove_in_endpoint(broken, "SN-1", "HOST-OLD", True, remover)
-        self.assertEqual((saida["resultado"], saida["gravado_local"]), ("removido", False))
-        self.assertIn("não tente remover no Endpoint de novo", saida["mensagem"])
+        saida = endpoint_removals.remove_in_endpoint(broken, "SN-1", "HOST-OLD", True, como_a_automacao)
+        self.assertEqual((saida["resultado"], saida["gravado_local"]), ("marcador_nao_gravado", False))
+        self.assertEqual(cliques, [])
         self.assertEqual((self._stored(), self._pending()), ([], []))
 
     def test_route_maps_chrome_errors_and_passes_confirmado(self):
@@ -369,17 +439,17 @@ class RemovalWorkflowTests(unittest.TestCase):
 
         recebido = []
 
-        def remover(hostname, confirmado, corte=None):
+        def remover(hostname, confirmado, **_):
             recebido.append(confirmado)
             return {"resultado": "cancelado_sem_confirmacao", "mensagem": "sintético"}
 
-        def ocupado(hostname, confirmado, corte=None):
+        def ocupado(hostname, confirmado, **_):
             raise endpoint_remocao.automation.TravaOcupada("ocupado")
 
-        def invalido(hostname, confirmado, corte=None):
-            raise ValueError("Informe um hostname válido.")
+        def invalido(hostname, confirmado, **_):
+            raise ValueError("erro interno qualquer")  # só a validação do hostname vira 422
 
-        def driver_caiu(hostname, confirmado, corte=None):
+        def driver_caiu(hostname, confirmado, **_):
             raise RuntimeError("driver")
 
         rota = "/api/endpoint/hostnames-removidos/remover-no-endpoint"
@@ -388,7 +458,7 @@ class RemovalWorkflowTests(unittest.TestCase):
             (remover, {"serie": "SN-1", "hostname": "HOST-OLD"}, 200),
             (remover, {"serie": "SN-1", "hostname": "HOST-OLD", "confirmado": "true"}, 422),
             (ocupado, corpo_ok, 409),
-            (invalido, corpo_ok, 422),
+            (invalido, corpo_ok, 503),
             (driver_caiu, corpo_ok, 503),
         ):
             app = FastAPI()
@@ -400,6 +470,15 @@ class RemovalWorkflowTests(unittest.TestCase):
                     self.assertIn("clique em Cancel", resposta.json()["detail"])
         self.assertEqual(recebido, [False])
         self.assertEqual(self._stored(), [])
+
+        # Nome cru do índice inválido (caractere de controle): 422 antes de abrir o Chrome.
+        index = copy.deepcopy(main.read_endpoint_alias_index())
+        index["duplicates"]["SN1"] = [{"hostname": "HOST\x07OLD"}, {"hostname": "HOST-NEW"}]
+        services = dataclasses.replace(self.services, read_endpoint_alias_index=lambda: index)
+        app = FastAPI()
+        app.include_router(create_endpoint_removals_router(services, remover_no_endpoint=remover))
+        self.assertEqual(TestClient(app).post(rota, json=corpo_ok).status_code, 422)
+        self.assertEqual(recebido, [False])
 
     def test_listing_returns_the_stored_pairs(self):
         endpoint_removals.remove_endpoint_hostname(self.services, "SN-1", "HOST-OLD")
