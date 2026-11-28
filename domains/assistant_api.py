@@ -398,6 +398,9 @@ class SimpressApi(SebraeMixin, HistoricoMixin, RegionaisMixin, AutomacaoMixin):
         if isinstance(dados, dict) and "lembretes_agendados" in dados:
             # Os Lembretes ficam fora do Assistente: a contagem do sino não é lida por ele.
             dados = {k: v for k, v in dados.items() if k != "lembretes_agendados"}
+        if isinstance(dados, dict) and "hostnames_atualizados" in dados:
+            # Hostname pode ser nome de pessoa: o aviso do sino fica fora do Assistente.
+            dados = {k: v for k, v in dados.items() if k != "hostnames_atualizados"}
         # The size cut happens after the privacy mask, in the conversation.
         return {"dados": _aparar(dados)}
 
