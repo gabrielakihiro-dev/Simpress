@@ -328,7 +328,7 @@ A prévia também funciona na primeira importação, quando ainda não há inven
 No resultado da comparação:
 
 - **Mudanças de usuário logado** lista os casos em que o novo Endpoint informa um usuário onde havia um usuário digitado à mão, ou deixa de informar um usuário que existia. Nada muda sozinho: o usuário atual continua valendo até você decidir.
-- Em uma duplicidade do Endpoint (a mesma série com dois hostnames), **Remover mais antigo** descarta o hostname mais antigo, depois da confirmação; o outro passa a valer na base e nas próximas exportações. A planilha do Endpoint não é alterada, e **Desfazer** devolve a duplicidade.
+- Em uma duplicidade do Endpoint (a mesma série com dois hostnames), **Remover mais antigo**, depois da confirmação, remove o computador antigo no Endpoint Central pelo Chrome de automação (autorizado em 27/11/2026; não se desfaz pelo cockpit) e, só depois de confirmada a remoção, o outro hostname passa a valer na base e nas próximas exportações. **Desfazer** devolve a duplicidade só no cockpit; não desfaz a remoção no Endpoint Central.
 
 #### Nomes do Microsoft Entra
 

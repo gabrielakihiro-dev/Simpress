@@ -427,6 +427,12 @@ export type DossieUtic = {
   "origem": string;
 };
 
+export type EndpointComputerRemovalPayload = {
+  "serie": string;
+  "hostname": string;
+  "confirmado"?: boolean;
+};
+
 export type EnviarEmailPayload = {
   "conta": string;
   "para"?: string;
@@ -1545,6 +1551,11 @@ export interface Rotas {
   "POST /api/endpoint/hostnames-removidos": {
     consulta: never;
     corpo: HostnameRemovalPayload;
+    resposta: unknown;
+  };
+  "POST /api/endpoint/hostnames-removidos/remover-no-endpoint": {
+    consulta: never;
+    corpo: EndpointComputerRemovalPayload;
     resposta: unknown;
   };
   "POST /api/endpoint/hostnames-removidos/restaurar": {

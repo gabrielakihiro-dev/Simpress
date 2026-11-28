@@ -241,39 +241,105 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     });
   }
 
-  // Discards the oldest duplicated Endpoint hostname (or undoes it). Only the local list of discarded
-  // pairs changes; the remaining hostname is the one the alias base and the next exports use.
+  // "Remover mais antigo" removes the old computer in Endpoint Central (Chrome de automação) and only then records
+  // the pair locally. "Desfazer" only undoes the local record; the removal in Endpoint Central stays.
   function conectarRemocaoHostnames(): void {
     const botoes = document.querySelectorAll<HTMLButtonElement>(
       "#comparacao-planilhas-conteudo [data-hostname-remove], #comparacao-planilhas-conteudo [data-hostname-restore]"
     );
     if (!botoes.length) return;
+    // Pending pairs come from the server (incerto, or removed in Endpoint Central without the local record): the button
+    // turns into "Gravar só no cockpit" and only the local route is called, so the irreversible click never repeats.
+    const marcarPendente = (chave: string): void => {
+      document.querySelectorAll<HTMLElement>("#comparacao-planilhas-conteudo [data-hostname-item]").forEach(item => {
+        if (chaveHostname(item.dataset.hostnameSerie, item.dataset.hostnameNome) !== chave) return;
+        item.dataset.hostnamePendente = "1";
+        const remover = item.querySelector<HTMLElement>("[data-hostname-remove]");
+        if (!remover) return;
+        if (remover.dataset.rotuloOriginal === undefined) {
+          remover.dataset.rotuloOriginal = remover.textContent || "";
+          remover.dataset.dicaOriginal = remover.title;
+          remover.dataset.ariaOriginal = remover.getAttribute("aria-label") || "";
+        }
+        remover.textContent = "Gravar só no cockpit";
+        remover.title = "A remoção no Endpoint Central ficou pendente: confira lá; se o computador sumiu, grave só no cockpit";
+        remover.setAttribute("aria-label", `Gravar só no cockpit a remoção de ${item.dataset.hostnameNome || ""}`);
+      });
+    };
+    const atualizarMarcas = (): Promise<void> => context.apiFetch<{
+      removidos?: { serie?: string; hostname?: string }[]; pendentes?: { serie?: string; hostname?: string }[];
+    } | null>("/api/endpoint/hostnames-removidos", { errorMessage: "Não foi possível consultar os hostnames removidos." })
+      .then(data => {
+        // Rows removed earlier open already marked, so a second click is never offered.
+        (data?.removidos || []).forEach(entry => mostrarEstadoHostname(chaveHostname(entry.serie, entry.hostname), true));
+        (data?.pendentes || []).forEach(entry => marcarPendente(chaveHostname(entry.serie, entry.hostname)));
+      })
+      .catch(error => console.error("Erro ao consultar hostnames removidos:", error));
     const alterar = async (botao: HTMLButtonElement, restaurar: boolean): Promise<void> => {
       const item = botao.closest<HTMLElement>("[data-hostname-item]");
       const serie = item?.dataset.hostnameSerie || "";
       const hostname = item?.dataset.hostnameNome || "";
-      if (!restaurar && !(await app.confirmarAcao({
-        titulo: "Remover hostname mais antigo?",
-        mensagem: `Remover ${hostname} (série ${serie || "sem série"})? A planilha do Endpoint não é alterada; o outro hostname passa a valer na base e nas próximas exportações. Dá para desfazer.`,
-        confirmar: "Remover hostname",
+      const chave = chaveHostname(serie, hostname);
+      const local = restaurar || item?.dataset.hostnamePendente === "1";
+      if (!restaurar && !(await app.confirmarAcao(local ? {
+        titulo: "Gravar só no cockpit?",
+        mensagem: `A remoção de ${hostname} no Endpoint Central ficou pendente. Confira no Endpoint: se o computador sumiu de lá, grave só no cockpit (o Endpoint não é acionado de novo).`,
+        confirmar: "Gravar no cockpit",
+      } : {
+        titulo: "Remover no Endpoint Central?",
+        mensagem: `Remover o computador ${hostname} (série ${serie || "sem série"}) no Endpoint Central? Isso não se desfaz pelo cockpit. Depois da remoção, o outro hostname passa a valer na base e nas próximas exportações.`,
+        confirmar: "Remover no Endpoint",
       }))) return;
       botao.disabled = true;
       botao.setAttribute("aria-busy", "true");
       try {
-        const data = await context.apiFetch<{ mensagem?: string }>(
-          `/api/endpoint/hostnames-removidos${restaurar ? "/restaurar" : ""}`,
+        if (local) {
+          const data = await context.apiFetch<{ mensagem?: string }>(
+            `/api/endpoint/hostnames-removidos${restaurar ? "/restaurar" : ""}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ serie, hostname }),
+              errorMessage: restaurar ? "Não foi possível desfazer a remoção." : "Não foi possível gravar a remoção.",
+            }
+          );
+          if (item) delete item.dataset.hostnamePendente;
+          // Gravado no cockpit: o botão volta ao rótulo original (aparece de novo se o usuário desfizer).
+          item?.querySelectorAll<HTMLElement>("[data-hostname-remove]").forEach(remover => {
+            if (remover.dataset.rotuloOriginal === undefined) return;
+            remover.textContent = remover.dataset.rotuloOriginal;
+            remover.title = remover.dataset.dicaOriginal || "";
+            remover.setAttribute("aria-label", remover.dataset.ariaOriginal || "");
+            delete remover.dataset.rotuloOriginal;
+            delete remover.dataset.dicaOriginal;
+            delete remover.dataset.ariaOriginal;
+          });
+          mostrarEstadoHostname(chave, !restaurar);
+          app.atualizarIndicadoresPosSalvamento();
+          app.showToast(data.mensagem || (restaurar ? "Hostname restaurado." : "Hostname removido."), "success");
+          return;
+        }
+        app.showToast("Removendo no Endpoint Central pelo Chrome de automação; faça o login se ele pedir.", "info");
+        const data = await context.apiFetch<{ resultado?: string; gravado_local?: boolean; mensagem?: string }>(
+          "/api/endpoint/hostnames-removidos/remover-no-endpoint",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ serie, hostname }),
-            errorMessage: restaurar ? "Não foi possível desfazer a remoção." : "Não foi possível remover o hostname.",
+            body: JSON.stringify({ serie, hostname, confirmado: true }),
+            errorMessage: "Não foi possível remover no Endpoint Central.",
           }
         );
-        mostrarEstadoHostname(chaveHostname(serie, hostname), !restaurar);
-        app.atualizarIndicadoresPosSalvamento();
-        app.showToast(data.mensagem || (restaurar ? "Hostname restaurado." : "Hostname removido."), "success");
+        if (data.resultado === "removido" && data.gravado_local) {
+          mostrarEstadoHostname(chave, true);
+          app.atualizarIndicadoresPosSalvamento();
+          app.showToast(data.mensagem || "Computador removido no Endpoint Central.", "success");
+        } else {
+          void atualizarMarcas();
+          app.showToast(data.mensagem || "O computador não foi removido no Endpoint Central.", data.resultado === "incerto" || data.resultado === "removido" ? "warning" : "error");
+        }
       } catch (error) {
         console.error("Erro ao alterar hostname duplicado do Endpoint:", error);
+        if (!local) void atualizarMarcas(); // 409 de par pendente: o botão passa a gravar só no cockpit
         app.showToast(mensagemDoErro(error) || "Não foi possível concluir a operação.", "error");
       } finally {
         botao.disabled = false;
@@ -281,12 +347,7 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
       }
     };
     botoes.forEach(botao => botao.addEventListener("click", () => alterar(botao, botao.hasAttribute("data-hostname-restore"))));
-    // Rows removed earlier open already marked, so a second click is never offered.
-    context.apiFetch<{ removidos?: { serie?: string; hostname?: string }[] } | null>(
-      "/api/endpoint/hostnames-removidos", { errorMessage: "Não foi possível consultar os hostnames removidos." },
-    )
-      .then(data => (data?.removidos || []).forEach(entry => mostrarEstadoHostname(chaveHostname(entry.serie, entry.hostname), true)))
-      .catch(error => console.error("Erro ao consultar hostnames removidos:", error));
+    void atualizarMarcas();
   }
 
   const TEXTOS_DECISAO_PENDENCIA: Record<string, TextoDecisao | undefined> = {

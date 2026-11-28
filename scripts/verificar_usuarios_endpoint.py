@@ -413,15 +413,17 @@ def _valor_do_campo(page: "Page", cabecalho: dict) -> str:
         return ""  # a caixa sumiu entre a contagem e a leitura (barra fechada por um clique).
 
 
-def _preencher_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str) -> None:
+def _preencher_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str, modo_todos: bool = True) -> None:
     """Abre a barra de pesquisa pela lupa da barra de ferramentas (única da tela) e digita na caixa da coluna.
 
     O cabeçalho é lido só depois de a barra abrir: ao aparecer, ela pode deslocar as colunas, e uma posição
     lida antes levaria o valor para a caixa da coluna vizinha (por exemplo, número de série em Usuários logados).
-    Cada tentativa confere antes a visão da grade: um clique do usuário no meio fecha a barra ou troca a visão."""
+    Cada tentativa confere antes a visão da grade: um clique do usuário no meio fecha a barra ou troca a visão.
+    ``modo_todos=False`` é para grades sem a visão "Todos os computadores" (ex.: computadores gerenciados do SoM)."""
     def _etapa() -> None:
         try:
-            garantir_modo_todos(page, automacao)
+            if modo_todos:
+                garantir_modo_todos(page, automacao)
             if not _caixas_de_filtro(page).count():
                 page.locator("button[id$='_searchButton']").filter(visible=True).first.click()
                 automacao.aguardar_estado(_caixas_de_filtro(page).first, "visible", 15000)
@@ -472,7 +474,9 @@ def _digitar(campo: "Locator", valor: str) -> None:
     campo.press("Enter", timeout=ESPERA_CAMPO_MS)
 
 
-def _aguardar_grade_estavel(page: "Page", automacao: ModuleType, aceitar: Callable[[dict], bool], limite_s: float) -> dict | None:
+def _aguardar_grade_estavel(
+    page: "Page", automacao: ModuleType, aceitar: Callable[[dict], bool], limite_s: float, modo_todos: bool = True,
+) -> dict | None:
     """Espera ``aceitar(grade)`` ficar verdadeiro em duas leituras seguidas, com a tela fora do carregamento."""
     fim = time.time() + limite_s
     anterior = None
@@ -480,7 +484,7 @@ def _aguardar_grade_estavel(page: "Page", automacao: ModuleType, aceitar: Callab
         automacao.verificar_cancelamento()
         grade = ler_grade(page)
         # Em outra visão (ex.: 'Computadores verificados') um "não encontrado" seria falso: nunca confirma.
-        if not grade["carregando"] and modo_todos_ativo(page) and aceitar(grade):
+        if not grade["carregando"] and (not modo_todos or modo_todos_ativo(page)) and aceitar(grade):
             if anterior is not None:
                 return grade
             anterior = grade
@@ -490,12 +494,12 @@ def _aguardar_grade_estavel(page: "Page", automacao: ModuleType, aceitar: Callab
     return None
 
 
-def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str) -> dict:
+def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str, modo_todos: bool = True) -> dict:
     """Filtra a coluna e só devolve a grade quando ela confirma: valor no campo e linhas que o contêm
     (ou grade vazia confirmada). Sem confirmação levanta ``RotinaErro``; nada é decidido."""
     alvo = normalizar(valor)
     for tentativa in (1, 2):
-        _preencher_filtro(page, automacao, coluna, valor)
+        _preencher_filtro(page, automacao, coluna, valor, modo_todos)
 
         def confirmada(g: dict) -> bool:
             # A grade rola na horizontal ao focar uma coluna fora da tela: posições relidas a cada leitura.
@@ -506,7 +510,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
                 return all(alvo in normalizar(valor_da_coluna(linha, cab)) for linha in g["linhas"])
             return g["vazia"]
 
-        confirmado = _aguardar_grade_estavel(page, automacao, confirmada, CONFIRMACAO_FILTRO_S)
+        confirmado = _aguardar_grade_estavel(page, automacao, confirmada, CONFIRMACAO_FILTRO_S, modo_todos)
         if confirmado is not None:
             return confirmado
         automacao.log(ORIGEM, f"[AVISO] Filtro '{coluna}' não confirmado (tentativa {tentativa}/2).")

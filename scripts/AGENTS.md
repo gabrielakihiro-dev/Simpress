@@ -15,6 +15,7 @@ Rotinas e automação do Chrome. Valem junto com o `AGENTS.md` da raiz; texto in
 
 - PowerShell no Endpoint insere o comando e NUNCA envia Enter (só `locator.fill()` em `#remotePowershellInputField`); comando vazio, com mais de 2000 caracteres ou com caractere de controle é rejeitado; o retorno traz `enter_enviado: false`; o log guarda só tamanho e modo, nunca o texto. Doc: `docs/operacao/automacao-chrome.md`.
 - Consulta ao vivo lê só `Usuário do último logon` do equipamento selecionado; sem escrita no Endpoint.
+- Remover no Endpoint (`domains/endpoint_remocao.py`, autorizado em 27/11/2026): só com `confirmado: true`; `SIMPRESS_ENDPOINT_SEM_REMOCAO=1` recusa; exige linha única e exata; clique final nunca se repete (`incerto` fica pendente); `goto`, nunca `reload`; timeout = `incerto`; grava local só depois de `removido`. Doc: `docs/operacao/automacao-chrome.md`.
 - `staged_computers_endpoint.py` só lê, em aba própria, e o resultado vira só anotação da linha. Doc: `docs/operacao/alertas-os-divergencias.md`.
 
 ## SharePoint e SoftExpert
