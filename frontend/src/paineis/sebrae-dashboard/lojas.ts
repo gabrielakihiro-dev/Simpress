@@ -49,3 +49,14 @@ export interface EstadoFechar {
 }
 export const criarLojaFechar = () => criarLoja<EstadoFechar>({ status: "", ocupado: false, itens: [], versao: 0 });
 export type LojaFechar = ReturnType<typeof criarLojaFechar>;
+
+/** Avisos dos destaques: o anúncio de marcar/tirar (#sebrae-destaque-anuncio) e o resumo da aba (#sebrae-destaques-resumo), regiões role=status. */
+export interface EstadoDestaques {
+  anuncio: string;
+  resumo: string;
+  /** Contam as chamadas: 0 = nunca (o partial fica como veio); cada uma põe um nó de texto novo, como o replaceChildren/textContent faziam. */
+  versaoAnuncio: number;
+  versaoResumo: number;
+}
+export const criarLojaDestaques = () => criarLoja<EstadoDestaques>({ anuncio: "", resumo: "", versaoAnuncio: 0, versaoResumo: 0 });
+export type LojaDestaques = ReturnType<typeof criarLojaDestaques>;

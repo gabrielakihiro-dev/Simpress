@@ -6,7 +6,7 @@
 import { baixarDaApi } from "../../comum/baixar-api.ts";
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
 import { criarLojaLeitura } from "./leitura-loja.ts";
-import { criarLojaAbas, criarLojaAvisos, criarLojaFechar, criarLojaRascunho, type ItemRascunho } from "./lojas.ts";
+import { criarLojaAbas, criarLojaAvisos, criarLojaDestaques, criarLojaFechar, criarLojaRascunho, type ItemRascunho } from "./lojas.ts";
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
@@ -43,6 +43,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   const abasTela = context.lojaAbas ?? criarLojaAbas();
   // Resultado do Atualizar/Fechar: o DOM nasce em fechar.tsx a partir desta loja.
   const fecharTela = context.lojaFechar ?? criarLojaFechar();
+  const destaquesTela = context.lojaDestaques ?? criarLojaDestaques();
 
   if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
     if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
@@ -1337,9 +1338,16 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     return selo;
   }
 
-  /** Região `aria-live` fixa (fora da seção, que pode estar escondida): um nó novo a cada aviso para o leitor de tela repetir o texto. */
+  /** Região `aria-live` fixa (fora da seção, que pode estar escondida): um nó novo a cada aviso para o leitor de tela repetir o texto (destaques.tsx). */
   function anunciarDestaque(texto: string) {
-    el("sebrae-destaque-anuncio")?.replaceChildren(document.createTextNode(texto));
+    const atual = destaquesTela.ler();
+    destaquesTela.atualizar({ ...atual, anuncio: texto, versaoAnuncio: atual.versaoAnuncio + 1 });
+  }
+
+  /** Texto de #sebrae-destaques-resumo (destaques.tsx); cada chamada reescreve a região, como o textContent fazia. */
+  function resumoDestaques(texto: string) {
+    const atual = destaquesTela.ler();
+    destaquesTela.atualizar({ ...atual, resumo: texto, versaoResumo: atual.versaoResumo + 1 });
   }
 
   function atualizarBotaoDestaque(botao: ElementoSebrae, ligado: boolean) {
@@ -1814,10 +1822,10 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         estado.destaques[numero] = { em: reg.destaque_em || "", observacao: typeof reg.observacao === "string" ? reg.observacao : undefined };
         sincronizarDestaque(numero);
       });
-      definirTexto("sebrae-destaques-resumo", "");
+      resumoDestaques("");
       desenharDestaques();
     } catch (falha) { const error = falha as ErroApi;
-      if (consulta === estado.consulta) definirTexto("sebrae-destaques-resumo", error.message);
+      if (consulta === estado.consulta) resumoDestaques(error.message);
     }
   }
 

@@ -1125,6 +1125,7 @@ test("destaque: marcar e tirar anuncia o resultado, acende e apaga a aba Destaqu
   await abrirItemAntigo(original); // o mesmo helper serve ao details interno do finalizado
   await original.locator("[data-sebrae-destaque]").click();
   await expect(painel.locator("#sebrae-destaque-anuncio")).toHaveText("Destaque marcado.");
+  await painel.locator("#sebrae-destaque-anuncio").evaluate(no => { window.__noAnuncio = no.firstChild; });
   await expect(contagem).toHaveText("1");
   await expect(contagem).toHaveAttribute("data-status", "alerta");
   await expect(abaDestaques).not.toHaveAttribute("data-zero", /.*/);
@@ -1137,6 +1138,8 @@ test("destaque: marcar e tirar anuncia o resultado, acende e apaga a aba Destaqu
   await daSecao.focus();
   await daSecao.click();
   await expect(painel.locator("#sebrae-destaque-anuncio")).toHaveText("Destaque removido.");
+  // um nó de texto novo a cada anúncio, para o leitor de tela repetir (destaques.tsx)
+  expect(await painel.locator("#sebrae-destaque-anuncio").evaluate(no => no.childNodes.length === 1 && no.firstChild.nodeType === 3 && no.firstChild !== window.__noAnuncio)).toBe(true);
   await expect(abaDestaques).toHaveAttribute("data-zero", "");
   await expect(contagem).not.toHaveAttribute("data-status", /.*/);
   const foco = await focoAtual(page);
@@ -1144,6 +1147,16 @@ test("destaque: marcar e tirar anuncia o resultado, acende e apaga a aba Destaqu
   const naoPerdeu = await page.evaluate(() => { const no = document.activeElement; return no !== document.body && no.getClientRects().length > 0; });
   expect(naoPerdeu).toBe(true); // o foco está num elemento visível
   await expect(abaDestaques).toBeFocused(); // o original está num painel escondido: o foco vai à aba
+});
+
+test("destaques: falha do GET aparece no resumo da aba Destaques; a lista não cai", async ({ page, request }) => {
+  await page.route("**/api/sebrae/observacoes", rota => rota.fulfill({ status: 500, json: { detail: "Sem resposta do servidor de observações." } }));
+  const { painel } = await abrirPainel(page, request);
+  await painel.locator("#sebrae-aba-destaques").click();
+  const resumo = painel.locator("#sebrae-destaques-resumo");
+  await expect(resumo).toHaveText("Sem resposta do servidor de observações.");
+  await expect(resumo).toBeVisible(); // role=status com texto (o :empty esconde quando vazio)
+  await expect(painel.locator("#sebrae-novos-contagem")).not.toHaveText("0"); // as listas seguem de pé
 });
 
 test("destaque: último destaque só no servidor (sem cartão original) leva o foco à aba Destaques", async ({ page, request }) => {
