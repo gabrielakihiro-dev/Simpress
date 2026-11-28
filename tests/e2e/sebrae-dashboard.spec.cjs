@@ -1125,6 +1125,7 @@ test("destaque: marcar e tirar anuncia o resultado, acende e apaga a aba Destaqu
   await abrirItemAntigo(original); // o mesmo helper serve ao details interno do finalizado
   await original.locator("[data-sebrae-destaque]").click();
   await expect(painel.locator("#sebrae-destaque-anuncio")).toHaveText("Destaque marcado.");
+  await painel.locator("#sebrae-destaque-anuncio").evaluate(no => { window.__noAnuncio = no.firstChild; });
   await expect(contagem).toHaveText("1");
   await expect(contagem).toHaveAttribute("data-status", "alerta");
   await expect(abaDestaques).not.toHaveAttribute("data-zero", /.*/);
@@ -1137,6 +1138,8 @@ test("destaque: marcar e tirar anuncia o resultado, acende e apaga a aba Destaqu
   await daSecao.focus();
   await daSecao.click();
   await expect(painel.locator("#sebrae-destaque-anuncio")).toHaveText("Destaque removido.");
+  // um nó de texto novo a cada anúncio, para o leitor de tela repetir (destaques.tsx)
+  expect(await painel.locator("#sebrae-destaque-anuncio").evaluate(no => no.childNodes.length === 1 && no.firstChild.nodeType === 3 && no.firstChild !== window.__noAnuncio)).toBe(true);
   await expect(abaDestaques).toHaveAttribute("data-zero", "");
   await expect(contagem).not.toHaveAttribute("data-status", /.*/);
   const foco = await focoAtual(page);

@@ -333,7 +333,7 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
     "sebrae-leitura", "sebrae-leitura-hora", "sebrae-leitura-lidos", "sebrae-leitura-falhas", "btn-sebrae-falhas", "sebrae-falhas-popover", "sebrae-leitura-sem-utic",
     "sebrae-rascunho", "sebrae-rascunho-status", "sebrae-rascunho-detalhes", "sebrae-rascunho-resumo", "sebrae-rascunho-itens",
     ...["novos", "antigos", "destaques", "finalizados"].flatMap(aba => [`sebrae-aba-${aba}`, `sebrae-${aba}-contagem`]), "sebrae-filtro-resultado",
-    "sebrae-fechar", "sebrae-fechar-status", "sebrae-fechar-lista"]) { // chips, rascunho, sub-abas e Fechar (montar.tsx do sebrae-dashboard) só montam com todos
+    "sebrae-fechar", "sebrae-fechar-status", "sebrae-fechar-lista", "sebrae-destaque-anuncio", "sebrae-destaques-resumo"]) { // chips, rascunho, sub-abas, Fechar e avisos dos destaques (montar.tsx do sebrae-dashboard) só montam com todos
     assert.equal(painel.split(`id="${id}"`).length - 1, 1, `${id} no painel`);
     assert.doesNotMatch(cartao, new RegExp(`id="${id}"`), `${id} fora do cartão`);
   }

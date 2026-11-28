@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { criarDashboardSebrae: createSebraeDashboard } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
 const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
-const { criarLojaAbas } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
+const { criarLojaAbas, criarLojaDestaques } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
 
 // Número, aria-label e data-zero das sub-abas, selo de Destaques e resultado do filtro são desenhados pelo React (abas.tsx)
 // a partir desta loja; os harnesses guardam a do teste em andamento (os testes do arquivo rodam um por vez).
@@ -13,6 +13,10 @@ const zero = aba => abaTela(aba).n === 0; // data-zero no botão
 const contagem = aba => String(abaTela(aba).n); // texto de #sebrae-<aba>-contagem
 const alertaDestaques = () => abaTela("destaques").n > 0; // data-status="alerta" em #sebrae-destaques-contagem
 const resultadoFiltro = () => lojaAbasAtual.ler().resultado; // texto de #sebrae-filtro-resultado
+// O anúncio de marcar/tirar e o resumo da aba Destaques são desenhados pelo React (destaques.tsx) a partir desta loja.
+let lojaDestaquesAtual = null;
+const novaLojaDestaques = () => (lojaDestaquesAtual = criarLojaDestaques());
+const destaquesTela = () => lojaDestaquesAtual.ler();
 
 const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos,
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
@@ -442,7 +446,7 @@ async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, ch
   });
   const app = { apiFetch, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel, lojaAbas: novaLojaAbas() });
+  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel, lojaAbas: novaLojaAbas(), lojaDestaques: novaLojaDestaques() });
   await feature.carregarNovosSebrae();
   return { doc, el, feature, app };
 }
@@ -1891,7 +1895,7 @@ test("falha do GET de destaques não derruba a tela: os destaques das listas fic
   await esvaziarFila();
   assert.equal(zero("destaques"), false);
   assert.equal(contagem("destaques"), "1");
-  assert.equal(el["sebrae-destaques-resumo"].textContent, "Sem resposta");
+  assert.equal(destaquesTela().resumo, "Sem resposta"); // texto de #sebrae-destaques-resumo
 });
 
 // ---- Destaque: anúncio, foco, corrida de PUT × recarga ----
@@ -1901,17 +1905,15 @@ const respostaDestaque = (url, opcoes) => { const ligado = JSON.parse(opcoes.bod
 
 test("marcar e tirar o destaque anunciam o resultado na região aria-live, a cada vez com um nó novo", async () => {
   const { el } = await renderizarCartoes(CARGA_CARTOES);
-  const anuncio = el["sebrae-destaque-anuncio"];
   const [botao] = botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378");
-  assert.equal(anuncio.textContent, "");
+  assert.deepEqual([destaquesTela().anuncio, destaquesTela().versaoAnuncio], ["", 0]);
   botao.click();
   await esvaziarFila();
-  assert.equal(anuncio.textContent, "Destaque marcado.");
-  const primeiro = anuncio.children[0];
+  assert.deepEqual([destaquesTela().anuncio, destaquesTela().versaoAnuncio], ["Destaque marcado.", 1]);
   botoesDestaque(el["sebrae-destaques-lista"], "UTIC-2026-1378")[0].click();
   await esvaziarFila();
-  assert.equal(anuncio.textContent, "Destaque removido.");
-  assert.notEqual(anuncio.children[0], primeiro);
+  // versão nova = key nova em destaques.tsx = nó de texto novo, mesmo que o texto se repita
+  assert.deepEqual([destaquesTela().anuncio, destaquesTela().versaoAnuncio], ["Destaque removido.", 2]);
 });
 
 test("tirar o último destaque pelo cartão da aba Destaques com o original num details fechado leva o foco à aba Destaques, nunca ao body", async () => {
@@ -2142,7 +2144,7 @@ async function montarVisao() {
   };
   const app = { apiFetch, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel, lojaAbas: novaLojaAbas() });
+  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel, lojaAbas: novaLojaAbas(), lojaDestaques: novaLojaDestaques() });
   await feature.carregarNovosSebrae();
   await esvaziarFila(); await esvaziarFila();
   return {

@@ -3,7 +3,7 @@
 // ficam como Registro, como em cobertura/tipos.ts. Estado, visão, contexto e modelo têm tipo próprio.
 import type { ApiFetchOptions } from "../../api";
 import type { LojaLeitura } from "./leitura-loja";
-import type { LojaAbas, LojaAvisos, LojaFechar, LojaRascunho } from "./lojas";
+import type { LojaAbas, LojaAvisos, LojaDestaques, LojaFechar, LojaRascunho } from "./lojas";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Os antigos em aberto (`abertos[]`) trazem `os_nova` e, no lugar dele, `os_sem_relacao` (nunca os dois com valor). */
@@ -165,6 +165,7 @@ export interface ContextoSebraeDashboard {
   lojaAbas?: LojaAbas;
   /** Loja do resultado do Atualizar/Fechar (fechar.tsx); mesma regra da lojaLeitura. */
   lojaFechar?: LojaFechar;
+  lojaDestaques?: LojaDestaques;
 }
 
 export interface EstadoSebrae {
