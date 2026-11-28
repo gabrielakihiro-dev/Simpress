@@ -170,7 +170,8 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   await expect(andamento.getByRole("region", { name: "Andamento registrado da série DEMO-SN-001" })).toBeVisible();
   await expect(andamento).toContainText("Ordens no Oracle");
   await expect(andamento).toContainText("7285070");
-  await expect(andamento.getByRole("heading", { name: "Andamento registrado" })).toBeVisible();
+  await expect(andamento.getByRole("heading", { name: "Andamento registrado" })).toHaveCount(0);
+  await expect(andamento.locator("textarea.annotation-field")).toHaveCount(0);
   await expect(page.locator("#modal-acompanhamento-chamados")).toHaveCount(0);
 });
 
@@ -326,7 +327,7 @@ test("Chamados filtra a tabela de OS por Relação e busca, não lista séries s
   await expect(visible.locator("input.ticket-os-link-input").first()).toHaveValue("4321");
 });
 
-test("Chamados só pede a linha do tempo ao expandir o Andamento da série", async ({ page }) => {
+test("Chamados expande o Andamento da série sem pedir linha do tempo", async ({ page }) => {
   const timelineRequests = [];
   await installSummaryRoutes(page, { onReportRequest: route => route.fulfill({ json: reportComRelacoes() }) });
   await page.route("**/api/operacoes/chamados/linha-do-tempo/**", route => {
@@ -347,11 +348,10 @@ test("Chamados só pede a linha do tempo ao expandir o Andamento da série", asy
   const detail = page.locator('tr[data-andamento="REL-CONF-1"]');
   await expect(detail).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-controls", await detail.getAttribute("id"));
-  await expect(detail).toContainText("Andamento registrado");
-  await expect(detail).toContainText("status: Aberta → Encerrada");
-  expect(timelineRequests).toHaveLength(1);
-  expect(timelineRequests[0].pathname).toBe("/api/operacoes/chamados/linha-do-tempo/REL-CONF-1");
-  expect(timelineRequests[0].searchParams.get("snapshot_id")).toBe("snap-1");
+  await expect(detail).toContainText("Ordens no Oracle");
+  await expect(detail.getByRole("heading", { name: "Andamento registrado" })).toHaveCount(0);
+  await expect(detail.locator("textarea")).toHaveCount(0);
+  expect(timelineRequests).toHaveLength(0);
 
   // Filtrar por outra série esconde a linha de andamento junto com a série.
   await page.locator("#cockpit-tickets-relation").selectOption("somente_oracle");
@@ -364,7 +364,7 @@ test("Chamados só pede a linha do tempo ao expandir o Andamento da série", asy
   await expect(page.locator("tr[data-andamento]")).toHaveCount(0);
   await toggle.click();
   await expect(page.locator('tr[data-andamento="REL-CONF-1"]')).toBeVisible();
-  await expect.poll(() => timelineRequests.length).toBe(2);
+  expect(timelineRequests).toHaveLength(0);
 });
 
 test("OS deste equipamento abre Chamados já filtrado pela série", async ({ page }, testInfo) => {
