@@ -275,7 +275,7 @@ def endpoint_alias_review_items(
             "serie": rows[0].get("serie") or serial_key,
             "computador": ", ".join(row.get("hostname", "") for row in rows if row.get("hostname")),
             "motivo": (
-                f"Série duplicada no endpoint; aplicado o hostname da verificação mais recente ({resolved[serial_key]})."
+                "Série duplicada no endpoint; aplicado o hostname da verificação mais recente."
                 if serial_key in resolved
                 else "Série duplicada no endpoint; nenhum hostname foi escolhido."
             ),

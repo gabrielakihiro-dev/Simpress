@@ -1393,8 +1393,15 @@ def _ambiguous_comparison_record(
     entity: Dict[str, Any],
     endpoint_records: List[Dict[str, Any]],
     as_of: datetime,
+    resolved_by_recency: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    """Ambiguous item with the latest Endpoint verification and, for duplicates, each Endpoint row."""
+    """Ambiguous item with the latest Endpoint verification and, for duplicates, each Endpoint row.
+
+    ``aplicado`` marks the row whose hostname the alias index applied (same rule as the export).
+    """
+    applied_key = normalize_reference_value((resolved_by_recency or {}).get(
+        endpoint_records[0]["serial_key"] if endpoint_records else "", ""
+    ))
     verified_by_node = {
         record["node"]: _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
         for record in endpoint_records
@@ -1418,6 +1425,7 @@ def _ambiguous_comparison_record(
                 ),
                 "linha_endpoint": record["row_number"],
                 "mais_antigo": record["node"] in oldest_nodes,
+                "aplicado": bool(applied_key) and record["alias_key"] == applied_key,
             }
             for record in endpoint_records
             for node_verified in (verified_by_node[record["node"]],)
@@ -1430,6 +1438,7 @@ def _classify_comparison_components(
     nodes: Dict[_ComparisonNode, Dict[str, Any]],
     ambiguous_roles_by_node: Dict[_ComparisonNode, set],
     as_of: datetime,
+    resolved_by_recency: Optional[Dict[str, str]] = None,
 ) -> Tuple[List[_ComparisonEntity], Dict[str, List[Dict[str, Any]]], List[Dict[str, Any]]]:
     """Classifies each component as present, missing or ambiguous in each source.
 
@@ -1464,7 +1473,7 @@ def _classify_comparison_components(
 
         if "ambíguo" in source_status.values():
             ambiguous_records.append(
-                _ambiguous_comparison_record(entity, records_by_source["endpoint"], as_of)
+                _ambiguous_comparison_record(entity, records_by_source["endpoint"], as_of, resolved_by_recency)
             )
     return entities, missing_by_source, ambiguous_records
 
@@ -1593,8 +1602,13 @@ def compare_uploaded_workbooks(
         _nodes_by_key(nodes, "alias_key"), nodes, union_find, issues
     )
 
+    from domains.effective_alias import build_endpoint_alias_index  # import tardio: effective_alias importa este módulo
+
+    resolved_by_recency = build_endpoint_alias_index(
+        endpoint_table.get("records", []), removed_endpoint_hostnames
+    )["resolved_by_recency"]
     entities, missing_by_source, ambiguous_records = _classify_comparison_components(
-        _comparison_components(nodes, union_find), nodes, ambiguous_roles_by_node, as_of
+        _comparison_components(nodes, union_find), nodes, ambiguous_roles_by_node, as_of, resolved_by_recency
     )
 
     synchronized_count = sum(

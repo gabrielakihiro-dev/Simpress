@@ -77,6 +77,17 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual({row["computador"]: row["mais_antigo"] for row in rows}, {"PRNOTE-OLD": True, "PRNOTE-NEW": False})
         self.assertTrue(all(row["ultima_verificacao"] for row in rows))
 
+    def test_ambiguous_record_marks_the_applied_hostname_only_when_resolved(self):
+        result = compare_uploaded_workbooks(source_table(self._records()), source_table([]), {}, as_of=REFERENCE)
+        rows = result["registros_ambiguos"][0]["registros_endpoint"]
+        self.assertEqual({row["computador"]: row["aplicado"] for row in rows}, {"PRNOTE-OLD": False, "PRNOTE-NEW": True})
+
+        same = REFERENCE - timedelta(days=3)
+        tied = [endpoint_record("SN-1", "PRNOTE-A", same), endpoint_record("SN-1", "PRNOTE-B", same)]
+        result = compare_uploaded_workbooks(source_table(tied), source_table([]), {}, as_of=REFERENCE)
+        rows = result["registros_ambiguos"][0]["registros_endpoint"]
+        self.assertFalse(any(row["aplicado"] for row in rows))
+
     def test_no_button_when_dates_are_missing_tied_or_hostnames_repeat(self):
         same = REFERENCE - timedelta(days=3)
         cases = {

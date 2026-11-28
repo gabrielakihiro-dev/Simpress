@@ -74,6 +74,7 @@ interface RegistroEndpoint {
   computador?: string;
   ultima_verificacao?: string;
   mais_antigo?: boolean;
+  aplicado?: boolean;
 }
 interface ItemAmbiguidade extends ItemBase {
   tipo?: string;
@@ -520,11 +521,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
       return escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—");
     }
     const classeBotao = "px-2 py-1 rounded-md border text-xs font-semibold";
-    // O back-end aplica o hostname da verificação mais recente (invall_alias_status aplicado_mais_recente); marca só se for único e todos tiverem horário.
-    const instantes = registros.map(registro => Date.parse(registro.ultima_verificacao || ""));
-    const maisRecente = Math.max(...instantes);
-    const indiceAplicado = instantes.every(Number.isFinite) && instantes.filter(instante => instante === maisRecente).length === 1 ? instantes.indexOf(maisRecente) : -1;
-    return `<ul class="space-y-3 min-w-[15rem]">${registros.map((registro, indice) => {
+    return `<ul class="space-y-3 min-w-[15rem]">${registros.map(registro => {
       const hostname = registro.computador || "";
       const horario = registro.ultima_verificacao ? formatarHorarioHistorico(registro.ultima_verificacao) : "—";
       const acoes = permitirRemocao && registro.mais_antigo === true
@@ -536,7 +533,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
           <span class="font-mono text-fg-secondary break-all">${escapeHtml(hostname || "—")}</span>
           <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span class="whitespace-nowrap text-fg-subtle">${escapeHtml(horario)}</span>
-            ${indice === indiceAplicado ? '<span data-hostname-aplicado class="text-xs text-emerald-300">Aplicado (verificação mais recente)</span>' : ""}
+            ${registro.aplicado === true ? '<span data-hostname-aplicado class="text-xs text-emerald-300">Aplicado (verificação mais recente)</span>' : ""}
             ${acoes}
           </span>
         </li>`;

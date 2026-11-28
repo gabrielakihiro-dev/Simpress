@@ -813,12 +813,14 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     const linhasDe = (categoria: string | undefined): HTMLElement[] => [...content.querySelectorAll<HTMLElement>("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")]
       .filter(candidate => !categoria || candidate.dataset.comparisonCategory === categoria);
     // Procura em todas as linhas, inclusive as de sub-abas ocultas: a aba só se abre depois de achar a linha.
-    const achada = acharLinhaComparacao(linhasDe(target.category), target);
+    // The Home category may not hold the row in this event (e.g. a divergence listed under another key): retry by serial/hostname alone.
+    const achada = acharLinhaComparacao(linhasDe(target.category), target)
+      || (target.category ? acharLinhaComparacao(linhasDe(""), { ...target, category: "" }) : null);
     if (!achada) {
-      // The Home category may not hold the row in this event (e.g. a divergence listed under another key): retry by serial/hostname alone.
-      if (target.category) { navegarParaLinhaComparacao({ ...target, category: "" }); return; }
       // Linha não encontrada: o usuário vê a lista (Divergências), como antes da Visão Geral, e não o bento (23/11/2026).
-      if (!abaDesabilitada("divergencias")) selecionarAbaResumo("divergencias");
+      // Com categoria pedida, a aba dela (ex.: "apelidos" para registros_ambiguos); sem ela, Divergências.
+      const abaFallback = (target.category && renderer.abaDaCategoria(target.category)) || "divergencias";
+      if (!abaDesabilitada(abaFallback)) selecionarAbaResumo(abaFallback);
       return;
     }
     const categoria = achada.dataset.comparisonCategory;

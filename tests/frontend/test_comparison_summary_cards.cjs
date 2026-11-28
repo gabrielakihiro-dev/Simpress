@@ -226,14 +226,16 @@ test("Duplicidades e ambiguidades (27/11/2026): ficam no topo de Apelidos, fora 
   assert.equal(renderer.TIPOS_DIVERGENCIAS.some(tipo => tipo.categorias.includes("correspondencias_ambiguas")), false);
 });
 
-test("duplicidade marca o hostname da verificação mais recente como aplicado, só quando é único", () => {
-  const registros = (a, b) => [
-    { serie: "SER-D", computador: "PRNOTE-NOVO", ultima_verificacao: a },
-    { serie: "SER-D", computador: "PRNOTE-VELHO", ultima_verificacao: b },
+test("duplicidade mostra o selo só no registro que o back-end marcou como aplicado", () => {
+  const registros = (a, b, aplicado = true) => [
+    { serie: "SER-D", computador: "PRNOTE-NOVO", ultima_verificacao: a, aplicado },
+    { serie: "SER-D", computador: "PRNOTE-VELHO", ultima_verificacao: b, aplicado: false },
   ];
   const html = renderizar({ ...COMPARACAO_COMPLETA, registros_ambiguos: [{ serie: "SER-D", computador: "PRNOTE-NOVO / PRNOTE-VELHO", fontes: {}, registros_endpoint: registros("2026-10-17T10:00:00-03:00", "2026-09-02T10:00:00-03:00") }] });
   assert.equal(html.split("Aplicado (verificação mais recente)").length - 1, 1);
   assert.match(html, /data-hostname-nome="PRNOTE-NOVO">.*?data-hostname-aplicado/s);
-  const empate = renderizar({ ...COMPARACAO_COMPLETA, registros_ambiguos: [{ serie: "SER-D", fontes: {}, registros_endpoint: registros("2026-10-17T10:00:00-03:00", "2026-10-17T10:00:00-03:00") }] });
+  const empate = renderizar({ ...COMPARACAO_COMPLETA, registros_ambiguos: [{ serie: "SER-D", fontes: {}, registros_endpoint: registros("2026-10-17T10:00:00-03:00", "2026-10-17T10:00:00-03:00", false) }] });
   assert.doesNotMatch(empate, /Aplicado \(verificação mais recente\)/);
+  const antigo = renderizar({ ...COMPARACAO_COMPLETA, registros_ambiguos: [{ serie: "SER-D", fontes: {}, registros_endpoint: [{ computador: "A" }, { computador: "B" }] }] });
+  assert.doesNotMatch(antigo, /Aplicado \(verificação mais recente\)/);
 });

@@ -54,7 +54,7 @@ const eventoA = () => ({
       tipo: "Hostname duplicado", chave: "BRJ100GGGG", serie: "BRJ100GGGG", fontes: [{ fonte: "endpoint", quantidade: 2 }],
       mensagem: "Duas linhas no Endpoint para a mesma série.",
       registros_endpoint: [
-        { serie: "BRJ100GGGG", computador: "PRNOTE108", ultima_verificacao: "2026-10-17T10:00:00-03:00", mais_antigo: false },
+        { serie: "BRJ100GGGG", computador: "PRNOTE108", ultima_verificacao: "2026-10-17T10:00:00-03:00", mais_antigo: false, aplicado: true },
         { serie: "BRJ100GGGG", computador: "PRNOTE109", ultima_verificacao: "2026-09-02T10:00:00-03:00", mais_antigo: true },
       ],
       anotacao_id: "ambigua-1",

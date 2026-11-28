@@ -1296,6 +1296,7 @@ class ExplainDivergenceTests(unittest.TestCase):
             "serie_nao_encontrada": ("ausente_no_endpoint", "ausente"),
             "hostname_vazio": ("hostname_vazio_no_endpoint", "presente"),
             "serie_invall_duplicada": ("serie_duplicada_no_endpoint", "presente"),
+            "aplicado_mais_recente": ("serie_duplicada_mais_recente_aplicada", "presente"),
             "serie_detalhes_duplicada": ("serie_duplicada_na_simpress", "desconhecida"),
             "indisponivel": ("endpoint_indisponivel", "desconhecida"),
         }

@@ -361,7 +361,8 @@ class ResolvedByRecencyTests(unittest.TestCase):
     def test_review_item_names_the_chosen_hostname(self):
         index = endpoint_index(dup(("PRNOTEOLD", self.OLD), ("PRNOTENEW", self.NEW)) + dup(("A", self.NEW), ("B", self.NEW), serial="SN8"))
         motivos = {item["serie"]: item["motivo"] for item in effective_alias.endpoint_alias_review_items(index)}
-        self.assertIn("verificação mais recente (PRNOTENEW)", motivos["SN9"])
+        self.assertIn("verificação mais recente.", motivos["SN9"])
+        self.assertNotIn("PRNOTENEW", motivos["SN9"])
         self.assertIn("nenhum hostname foi escolhido", motivos["SN8"])
 
     def test_export_uses_resolved_hostname(self):
