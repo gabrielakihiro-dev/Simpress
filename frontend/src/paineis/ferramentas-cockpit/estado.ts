@@ -287,8 +287,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
   }
 
   // Conteúdo da linha "Andamento" de uma série (callback aoExpandirSerie da tabela de OS).
-  // opcoes (janela Chamado × OS): { snapshotId, somenteLeitura } = relatório próprio e anotações só leitura.
-  function renderTicketDetail(record: Qualquer, target: Qualquer, opcoes: Registro = {}) {
+  function renderTicketDetail(record: Qualquer, target: Qualquer) {
     if (!record) return renderEmpty(target, "Série não encontrada na importação atual.");
     const { oracle, simpress } = ticketOrders(record);
     const oracleRecords = Array.isArray(record.oracle) ? record.oracle : [];
@@ -305,120 +304,17 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       ["Status Simpress", (Array.isArray(simpressRecord.status) ? simpressRecord.status : []).filter(Boolean).join(" / ")],
       ...ticketExtraFields(record),
     ]);
-    const note = element("p", "ck-nota", "Os dados vêm da importação mais recente. A próxima ação de cada versão pode ser registrada na linha do tempo.");
-    const timeline = element("section", "ck-det-bloco");
-    timeline.append(element("h3", "", "Andamento registrado"));
-    const events = element("div", "");
-    timeline.append(events);
+    const note = element("p", "ck-nota", "Os dados vêm da importação mais recente.");
     const dados = element("div", "ck-os-andamento__dados");
     dados.append(relation, fields, note);
-    const tempo = element("div", "ck-os-andamento__tempo");
-    tempo.append(timeline);
     const painel = element("div", "ck-os-andamento");
-    painel.append(dados, tempo);
+    painel.append(dados);
     target.replaceChildren(painel);
-    loadTicketTimeline(record, events, opcoes);
   }
 
   function expandTicketSeries(serie: Qualquer, target: Qualquer) {
     const records = Array.isArray(ticketData?.chamados) ? ticketData.chamados : [];
     renderTicketDetail(records.find(record => String(record.serie || "") === serie), target);
-  }
-
-  function timelineValue(value: Qualquer) {
-    return Array.isArray(value) ? value.filter(Boolean).join(", ") : String(value ?? "");
-  }
-
-  // PUT do autosave pelo apiFetch (evento simpress:servidor-offline). O autosave espera uma resposta com ok/status/json:
-  // o erro HTTP volta nesse formato (409 não repete, 5xx repete) e a falha de rede passa intacta, sem status.
-  async function enviarAnotacaoChamado({ eventId, itemId, annotation, revisionId, baseRevisions, resolveConflict }: Qualquer) {
-    try {
-      return await apiFetch<Response>(
-        `/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(eventId)}/${encodeURIComponent(itemId)}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ anotacao: annotation, revisao_id: revisionId, base_revisoes: baseRevisions, resolver_conflito: resolveConflict }),
-          responseType: "response",
-        },
-      );
-    } catch (erro: Qualquer) {
-      if (typeof erro?.status !== "number") throw erro;
-      return { ok: false, status: erro.status, json: async () => erro.data };
-    }
-  }
-
-  function renderTicketTimeline(target: Qualquer, events: Qualquer, somenteLeitura = false) {
-    if (!events.length) return renderEmpty(target, "Não há versões anteriores para esta série.");
-    const list = element("ol", "ck-tempo");
-    events.forEach((event: Qualquer) => {
-      const item = element("li", "ck-tempo__item");
-      const body = element("div", "ck-tempo__corpo");
-      item.append(element("span", "ck-tempo__marca"), body);
-      body.append(element("strong", "ck-tempo__titulo", event.tipo || "Atualização"));
-      body.append(element("time", "ck-tempo__meta", event.atualizado_em || "Data indisponível"));
-      const changes = Array.isArray(event.mudancas) ? event.mudancas : [];
-      if (changes.length) body.append(element("p", "ck-tempo__meta", changes.map((change: Qualquer) =>
-        `${change.campo || "Campo"}: ${timelineValue(change.anterior) || "(vazio)"} → ${timelineValue(change.atual) || "(vazio)"}`,
-      ).join(" · ")));
-      body.append(ticketAnnotationField(event, somenteLeitura));
-      list.append(item);
-    });
-    target.replaceChildren(list);
-  }
-
-  // Anotação por versão da linha do tempo (próxima ação ou o que já foi feito), salva sozinha com o limite de 2.000 caracteres.
-  function ticketAnnotationField(event: Qualquer, somenteLeitura = false) {
-    const field = element("label", "ck-chamados-anotacao");
-    field.append(element("span", "ck-chamados-anotacao__rotulo", "Próxima ação ou o que já foi feito"));
-    const textarea = element("textarea", "annotation-field");
-    textarea.rows = 2;
-    textarea.maxLength = 2000;
-    textarea.value = event.anotacao || "";
-    textarea.placeholder = "Ex.: cobrar atualização do parceiro, OS concluída...";
-    textarea.dataset.annotationVersion = JSON.stringify({
-      anotacao_revisoes: event.anotacao_revisoes || [],
-      anotacao_conflito: Boolean(event.anotacao_conflito),
-      anotacao_conflitos: event.anotacao_conflitos || [],
-      anotacao_bases_ausentes: event.anotacao_bases_ausentes || [],
-      anotacao_integridade_invalida: Boolean(event.anotacao_integridade_invalida),
-    });
-    const status = element("span", `annotation-status${event.anotacao ? " is-saved" : ""}`, event.anotacao ? "Anotação salva" : "");
-    status.setAttribute("aria-live", "polite");
-    const retry = element("button", "annotation-retry", "Tentar sincronizar novamente");
-    retry.type = "button";
-    retry.hidden = true;
-    retry.setAttribute("aria-label", "Tentar novamente a sincronização desta anotação");
-    field.append(textarea, status, retry);
-    const autosave = globalThis.HistoryAnnotationAutosave;
-    if (!somenteLeitura && autosave && event.snapshot_id && event.item_id) {
-      autosave.attachAnnotationAutosave({
-        textarea, status, retryButton: retry, eventId: event.snapshot_id, itemId: event.item_id,
-        send: enviarAnotacaoChamado,
-      });
-    } else {
-      textarea.readOnly = true;
-    }
-    return field;
-  }
-
-  async function loadTicketTimeline(record: Qualquer, target: Qualquer, opcoes: Registro = {}) {
-    const serial = String(record.serie || "");
-    const proprio = "snapshotId" in opcoes;
-    const snapshotId = String((proprio ? opcoes.snapshotId : ticketData?.snapshot_id) || "");
-    renderEmpty(target, "Carregando histórico da série…");
-    if (!serial || !snapshotId) return renderEmpty(target, "O histórico desta série não está disponível nesta importação.");
-    // Cada linha aberta tem o próprio destino; recolher/recriar a tabela o desconecta e descarta a resposta.
-    const stale = () => !target.isConnected || (!proprio && activeTool !== "chamados");
-    try {
-      const params = new URLSearchParams({ snapshot_id: snapshotId });
-      const data = await apiFetch(`/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(serial)}?${params}`, {
-        errorMessage: "Não foi possível carregar o histórico desta série.",
-      });
-      if (!stale()) renderTicketTimeline(target, Array.isArray(data.eventos) ? data.eventos : [], opcoes.somenteLeitura);
-    } catch (error: Qualquer) {
-      if (!stale()) renderError(target, error, "Não foi possível carregar o histórico desta série.");
-    }
   }
 
   // KPIs só da sub-aba Abertas: "OS abertas" e, das séries com pelo menos uma OS aberta, quantas estão em cada relação do relatório.
@@ -2406,7 +2302,7 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
       aoCarregar: (report: Qualquer) => { relatorio = report; },
       aoExpandirSerie: (serieLinha: Qualquer, cell: Qualquer) => renderTicketDetail(
         (Array.isArray(relatorio?.chamados) ? relatorio.chamados : []).find((record: Qualquer) => String(record.serie || "") === serieLinha),
-        cell, { snapshotId: relatorio?.snapshot_id || "", somenteLeitura: true }),
+        cell),
     });
     linkF6.hidden = false;
     // Vai para a aba OS com a grafia da linha (série/OS como no relatório), senão com a pedida.
