@@ -310,6 +310,8 @@ const assentar = page => page.evaluate(() => new Promise(resolve => setTimeout(r
 // A página pede /api/stats de novo depois de remover ou restaurar um hostname duplicado (único gatilho de usuário
 // fora do carregamento); o botão visível alterna entre "Remover mais antigo" e "Desfazer".
 async function alternarHostname(page, ambiente) {
+  // Duplicidades ficam no topo da sub-aba Apelidos (27/11/2026); fora dela os botões estão ocultos.
+  await irParaAba(page, "apelidos");
   const antes = chamadasDe(ambiente, "GET", "/api/stats").length;
   const remover = page.locator("#comparacao-planilhas-conteudo [data-hostname-remove]:visible");
   if (await remover.count()) {
