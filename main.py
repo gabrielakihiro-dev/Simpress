@@ -77,6 +77,7 @@ from core.config import (
     MANUAL_USERS_FILE,
     MODIFIED_APELIDOS_FILE,
     REMOVED_ENDPOINT_HOSTNAMES_FILE,
+    ENDPOINT_REMOVAL_PENDING_FILE,
     MONTHLY_REPORT_CHECK_SECONDS,
     MONTHLY_REPORT_FIRST_CHECK_SECONDS,
     MONTHLY_REPORTS_DIR,
@@ -432,6 +433,13 @@ def load_removed_endpoint_hostnames() -> List[Dict[str, Any]]:
         if not REMOVED_ENDPOINT_HOSTNAMES_FILE.exists():
             return []
         return _read_json_history(REMOVED_ENDPOINT_HOSTNAMES_FILE, "hostnames removidos")
+
+
+def load_endpoint_removal_pending() -> List[Dict[str, Any]]:
+    with MODIFIED_APELIDOS_LOCK:
+        if not ENDPOINT_REMOVAL_PENDING_FILE.exists():
+            return []
+        return _read_json_history(ENDPOINT_REMOVAL_PENDING_FILE, "remoções pendentes no Endpoint")
 
 
 def removed_endpoint_hostname_keys() -> frozenset:
@@ -1550,6 +1558,8 @@ _endpoint_removal_services = endpoint_removals.EndpointRemovalServices(
     atomic_file_transaction=lambda root, targets: AtomicFileTransaction(root, targets),
     read_endpoint_alias_index=lambda: read_endpoint_alias_index(),
     reload_database=lambda: load_database(),
+    pending_file=lambda: ENDPOINT_REMOVAL_PENDING_FILE,
+    load_pending=lambda: load_endpoint_removal_pending(),
     external_errors=(HTTPException,),
 )
 app.include_router(create_endpoint_removals_router(_endpoint_removal_services))

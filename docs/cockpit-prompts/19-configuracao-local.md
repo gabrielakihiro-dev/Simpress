@@ -302,7 +302,7 @@ Fica de fora (tupla `FORA`, com motivo):
 - `data/state/config_backups/`: cópias antigas de contas, com segredo possível.
 - `config/pacote_local.json`: aponta a pasta do próprio pacote.
 - `.transactions/` e `.atomic-transactions`: gravação em andamento.
-- Marcas de ações irreversíveis (envios, finalizações, agendamentos): chamados Sebrae em andamento, finalizações, agendamentos, fechamentos, o estado do Dashboard e do SharePoint (`sebrae_*`, `dashboard_agendamento.json`, `inventory_update_idempotency.json`), `ux_chamados_historico.json`, `ux_tickets_historico.json`, `os_marcas_finalizacao.json`, `outlook_email_modelos.json`. Restaurar uma versão antiga repetiria um envio ou uma finalização.
+- Marcas de ações irreversíveis (envios, finalizações, agendamentos): chamados Sebrae em andamento, finalizações, agendamentos, fechamentos, o estado do Dashboard e do SharePoint (`sebrae_*`, `dashboard_agendamento.json`, `inventory_update_idempotency.json`), `ux_chamados_historico.json`, `ux_tickets_historico.json`, `os_marcas_finalizacao.json`, `outlook_email_modelos.json`, `endpoint_remocoes_pendentes.json` (remoção no Endpoint Central incerta). Restaurar uma versão antiga repetiria um envio ou uma finalização.
 - Travas (`automacao_chrome.lock`, `.cancelar`, `**/.*.lock`) e caixas de entrada (`entrada_automatica`, `entrada_chamados`, `entrada_usuarios_entra`): pertencem ao processo que está rodando.
 - `assistente_conversas.json`, `_backups` das importações, relatórios mensais e a pasta compartilhada das anotações do histórico (`anotacoes_historico/` na raiz, ou `Aplicativos\Simpress\AnotacoesHistorico` no OneDrive). Motivo da pasta compartilhada: é sincronizada e outros técnicos a leem; o pacote nunca grava lá.
 

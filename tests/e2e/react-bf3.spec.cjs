@@ -249,7 +249,7 @@ async function preparar(page, { tema = "light", ...inicial } = {}) {
       ambiente.removidos.push({ serie, hostname });
       return responder(route, { json: { sucesso: true } });
     }
-    return responder(route, { json: { removidos: ambiente.removidos } });
+    return responder(route, { json: { removidos: ambiente.removidos, pendentes: ambiente.pendentes || [] } });
   });
   // Remoção no Endpoint Central (sintética): grava o par só quando o resultado é "removido" com gravação local.
   await page.route("**/api/endpoint/hostnames-removidos/remover-no-endpoint", route => {
@@ -1259,6 +1259,27 @@ test.describe("comportamento (só no desktop)", () => {
     expect(corpoDe(chamadasDe(ambiente, "POST", rota)[0])).toMatchObject({ hostname, confirmado: true });
     await expect(remover).toBeVisible();
     await expect(page.locator("#comparacao-planilhas-conteudo [data-hostname-restore]:visible")).toHaveCount(0);
+  });
+
+  test("Remover mais antigo pendente vira Gravar só no cockpit e chama só a rota local", async ({ page }) => {
+    const ambiente = await preparar(page);
+    await abrirResumo(page, { aba: "apelidos" });
+    const remover = page.locator("#comparacao-planilhas-conteudo [data-hostname-remove]:visible");
+    const item = remover.locator("xpath=ancestor::*[@data-hostname-item][1]");
+    const serie = await item.getAttribute("data-hostname-serie");
+    const hostname = await item.getAttribute("data-hostname-nome");
+    // O servidor passa a informar o par como pendente (remoção incerta no Endpoint); a tela relê a lista.
+    ambiente.pendentes = [{ serie, hostname, resultado: "incerto", em: "2026-11-27T10:00:00-03:00" }];
+    ambiente.remocaoEndpoint = { resultado: "incerto", gravado_local: false, pendente: true, mensagem: "Confira no Endpoint." };
+    await remover.click();
+    await confirmar(page);
+    await expect(remover).toHaveText("Gravar só no cockpit");
+    await remover.click();
+    await expect(page.locator("#mensagem-confirmar-acao")).toContainText("ficou pendente");
+    await confirmar(page);
+    await expect.poll(() => chamadasDe(ambiente, "POST", "/api/endpoint/hostnames-removidos").length).toBe(1);
+    expect(chamadasDe(ambiente, "POST", "/api/endpoint/hostnames-removidos/remover-no-endpoint")).toHaveLength(1);
+    await expect(page.locator("#comparacao-planilhas-conteudo [data-hostname-restore]:visible")).toHaveCount(1);
   });
 
   test("Corrida: resposta antiga de /api/stats não sobrescreve a nova", async ({ page }) => {

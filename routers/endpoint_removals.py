@@ -21,7 +21,7 @@ class EndpointComputerRemovalPayload(HostnameRemovalPayload):
 
 def create_endpoint_removals_router(
     services: EndpointRemovalServices,
-    remover_no_endpoint: Callable[[str, bool], Dict[str, Any]] = endpoint_remocao.remover_computador,
+    remover_no_endpoint: Callable[..., Dict[str, Any]] = endpoint_remocao.remover_computador,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -40,17 +40,20 @@ def create_endpoint_removals_router(
         """Remove o computador antigo no Endpoint Central (Chrome de automação) e só então grava o par local."""
         automacao = endpoint_remocao.automation
 
-        def remover(hostname: str, confirmado: bool) -> Dict[str, Any]:
+        def remover(hostname: str, confirmado: bool, corte: str) -> Dict[str, Any]:
+            aba = " Se a aba do Endpoint ficou com o diálogo de remoção aberto, clique em Cancel."
             try:
-                return remover_no_endpoint(hostname, confirmado)
+                return remover_no_endpoint(hostname, confirmado, corte=corte)
             except automacao.TravaOcupada:
                 raise HTTPException(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
             except automacao.RotinaEncerrada as erro:
-                raise HTTPException(409, str(erro)) from None
+                raise HTTPException(409, f"{erro}{aba}") from None
+            except ValueError as erro:
+                raise HTTPException(422, str(erro)) from None
             except Exception:
                 # Erros antes do clique final (depois dele a rotina devolve ``incerto``): nada foi removido.
                 raise HTTPException(
-                    503, "Não foi possível remover no Endpoint. Confira o Chrome de automação (porta 9333) e o login no Endpoint."
+                    503, f"Não foi possível remover no Endpoint. Confira o Chrome de automação (porta 9333) e o login no Endpoint.{aba}"
                 ) from None
 
         return endpoint_removals.remove_in_endpoint(

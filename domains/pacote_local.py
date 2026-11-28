@@ -127,6 +127,8 @@ FORA: tuple[str, ...] = (
     "data/state/sebrae_antigos_resultado.json",
     "data/state/sebrae_antigos_softexpert.json",
     "data/state/sebrae_backups",
+    # Remoção no Endpoint Central incerta: restaurar uma versão antiga liberaria repetir o clique irreversível.
+    "data/state/endpoint_remocoes_pendentes.json",
     "data/state/endpoint_hostnames_atualizados.json",  # derivado: a próxima importação do InvAll o recria
     "data/state/inventory_update_idempotency.json",  # controle interno contra importação repetida
     "data/state/assinatura_tecnico.svg",  # a allowlist leva só .json e .xlsx

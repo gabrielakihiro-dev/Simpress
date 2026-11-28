@@ -88,6 +88,8 @@ ENTRA_USERS_FILE = STATE_DIR / "usuarios_entra_pr.json"
 MANUAL_PERSON_NAMES_FILE = STATE_DIR / "nomes_pessoas_manuais.json"
 ENTRA_INBOX_DIR = STATE_DIR / "entrada_usuarios_entra"
 REMOVED_ENDPOINT_HOSTNAMES_FILE = STATE_DIR / "hostnames_removidos" / "hostnames_removidos.json"
+# Remoções no Endpoint Central com resultado incerto (ou sem gravação local): bloqueiam um novo clique irreversível.
+ENDPOINT_REMOVAL_PENDING_FILE = STATE_DIR / "endpoint_remocoes_pendentes.json"
 ALIAS_HISTORY_FILE = STATE_DIR / "historico_alteracoes.json"
 # Aviso do sino "hostnames atualizados": regravado a cada importação do InvAll.
 ENDPOINT_HOSTNAMES_ATUALIZADOS_FILE = STATE_DIR / "endpoint_hostnames_atualizados.json"

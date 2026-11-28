@@ -8,7 +8,10 @@ Endpoint Central a partir do botão "Remover mais antigo", com os passos abaixo.
    ``1 - 1`` no rodapé (o portal mostra ``1 - N de Total de registros``, sem o total; o link não é clicado) e uma
    única linha de nome igual (só maiúsculas e espaços normalizados). Senão para sem clicar: ``nao_encontrado`` ou
    ``ambiguo``.
-3. ``check()`` no checkbox da linha; confere um "selecionar todos" visível e um único checkbox de linha marcado (o
+3. Antes de marcar, o "Horário do último contato" da linha precisa ser anterior, por dia, ao ``corte`` (última
+   verificação do hostname mais recente): o SoM não tem série e o nome pode ter sido reaproveitado. ``--``, data
+   ilegível ou sem ``corte``: ``contato_recente``, sem clicar nada.
+   ``check()`` no checkbox da linha; confere um "selecionar todos" visível e um único checkbox de linha marcado (o
    portal marca o "selecionar todos" sozinho quando a única linha da faixa ``1 - 1`` é marcada).
 4. "Remover computador(es)"; no diálogo "Esta ação resulta em": contagem de selecionados = 1 e "Remove MDM
    enrollment Profile" marcado com um único clique no label (só se estiver desmarcado; o input é invisível).
@@ -16,8 +19,11 @@ Endpoint Central a partir do botão "Remover mais antigo", com os passos abaixo.
    Toda saída antes do "Sim" captura, fecha o ``[role=alertdialog]`` só pelo Cancel/Cancelar e desmarca a linha.
 5. "Sim, prosseguir" só com ``confirmado is True`` e ``SIMPRESS_ENDPOINT_SEM_REMOCAO`` diferente de ``1``; senão
    captura o diálogo (pasta temporária), clica "Cancel" e devolve ``cancelado_sem_confirmacao`` ou
-   ``recusado_por_configuracao``. O "Sim" é um único clique, nunca repetido; timeout ou erro depois dele é ``incerto``.
-6. ``removido`` só depois de novo ``goto`` (via ``about:blank``; nunca ``reload``) e refiltro com 0 linhas; ainda aparece: ``incerto``.
+   ``recusado_por_configuracao``. O "Sim" é um único clique, nunca repetido; timeout, erro ou "pare" depois dele é
+   ``incerto``. A captura é só do diálogo (as 20 mais recentes ficam na pasta).
+6. Depois do "Sim", espera na mesma página (até 15 s, sem clicar; sai assim que a linha some) o carregamento sumir e a linha sair; ``removido``
+   só depois de novo ``goto`` (via ``about:blank``; nunca ``reload``) e refiltro com 0 linhas (refeito a cada 5 s por até
+   15 s, no máximo 3 buscas); ainda aparece: ``incerto``.
 
 Log só com etapa e resultado: nunca hostname, usuário, senha nem motivo.
 """
@@ -33,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from core.config import local_setting
+from domains.inventory_comparison import _parse_verification_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +64,17 @@ _CANCELAR = re.compile(r"^\s*(?:Cancelar|Cancel)\s*$", re.I)  # o portal mostra 
 _ALERTA = "[role=alertdialog]"
 ESPERA_FECHAR_ALERTA_MS = 10_000
 ESPERA_CONTEUDO_DIALOGO_MS = 15_000
+# Depois do "Sim": o portal demora para remover e atualiza a tela sozinho; a conferência refaz só o filtro.
+ESPERA_REMOCAO_MS = 15_000
+INTERVALO_PORTAL_MS = 1_000
+ESPERA_CONFERENCIA_MS = 15_000
+INTERVALO_CONFERENCIA_MS = 5_000
+BUSCAS_CONFERENCIA = 3
+_CARREGANDO = ", ".join(
+    f"[class*={nome}]:visible" for nome in ("loader", "loading", "spinner", "mask")
+)
+CAPTURAS_MANTIDAS = 20
+COLUNA_CONTATO = "horario do ultimo contato"
 _SIM = re.compile(r"Sim,?\s*prosseguir", re.I)
 
 MENSAGENS = {
@@ -69,6 +87,10 @@ MENSAGENS = {
     "motivo_obrigatorio": "O Endpoint Central pediu um motivo obrigatório; cancelei sem remover.",
     "cancelado_sem_confirmacao": "Simulação: o diálogo foi conferido e cancelado sem remover (falta a confirmação).",
     "recusado_por_configuracao": f"A remoção real está desativada ({VAR_SEM_REMOCAO}); o diálogo foi cancelado sem remover.",
+    "contato_recente": (
+        "O computador falou com o Endpoint Central no dia da última verificação do hostname mais recente ou depois "
+        "(ou a data não pôde ser lida): o nome pode ter sido reaproveitado. Confira no Endpoint; nada foi removido."
+    ),
 }
 
 
@@ -132,19 +154,6 @@ def _filtrar(page: Any, automacao: Any, hostname: str) -> tuple[dict[str, Any], 
     return grade, [grid.valor_da_coluna(linha, cabecalho) for linha in grade["linhas"]]
 
 
-class _SemCancelamento:
-    """Depois do clique final o pedido de cancelamento não interrompe a conferência (só o resultado ``incerto``)."""
-
-    def __init__(self, base: Any) -> None:
-        self._base = base
-
-    def __getattr__(self, nome: str) -> Any:
-        return getattr(self._base, nome)
-
-    def verificar_cancelamento(self, detalhe: str = "") -> None:
-        return None
-
-
 def _abrir_lista(page: Any, automacao: Any) -> None:
     url = url_som(automacao)
     page.goto(url, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
@@ -183,7 +192,7 @@ def _fechar_alertas(page: Any) -> bool:
 
 def _sair_sem_remover(page: Any, automacao: Any, caixa: Any, pasta: Path | None, resultado: str) -> dict[str, Any]:
     """Saída antes do "Sim": captura, fecha o diálogo pelo Cancel, espera sumir e desmarca a linha."""
-    captura = _capturar(page, pasta)
+    captura = _capturar(page.locator(_ALERTA).filter(visible=True), pasta)
     fechado = _fechar_alertas(page)
     _desmarcar(caixa)
     saida = _resultado(automacao, resultado, captura=captura)
@@ -193,12 +202,18 @@ def _sair_sem_remover(page: Any, automacao: Any, caixa: Any, pasta: Path | None,
     return saida
 
 
-def _capturar(page: Any, pasta: Path | None) -> str:
+def _capturar(alertas: Any, pasta: Path | None) -> str:
+    """Só o diálogo (a página tem colunas com nome e usuário fora da tela); guarda as últimas capturas."""
     destino = Path(pasta or Path(tempfile.gettempdir()) / "simpress_endpoint_remocao")
     try:
+        if alertas.count() != 1:
+            return ""
         destino.mkdir(parents=True, exist_ok=True)
         arquivo = destino / f"dialogo-remocao-{datetime.now():%Y%m%d-%H%M%S-%f}.png"
-        page.screenshot(path=str(arquivo))
+        alertas.first.screenshot(path=str(arquivo), timeout=10000)
+        antigas = sorted(destino.glob("dialogo-remocao-*.png"), key=lambda item: item.stat().st_mtime, reverse=True)
+        for velha in antigas[CAPTURAS_MANTIDAS:]:
+            velha.unlink(missing_ok=True)
         return str(arquivo)
     except Exception as erro:
         logger.debug("Não foi possível capturar o diálogo do Endpoint (%s).", type(erro).__name__)
@@ -261,8 +276,20 @@ def _desmarcar(caixa: Any) -> None:
         logger.debug("Não foi possível desmarcar a linha do Endpoint (%s).", type(erro).__name__)
 
 
+def contato_anterior_ao_corte(contato: Any, corte: Any) -> bool:
+    """Último contato estritamente anterior, por dia, à última verificação do hostname mais recente.
+
+    O SoM não tem coluna de série: um nome reaproveitado por outro computador teria contato recente. Data vazia
+    (``--``), ilegível ou sem corte: False (não remove).
+    """
+    momento = _parse_verification_datetime(str(contato or "").strip(), None)
+    limite = _parse_verification_datetime(corte, None) if corte else None
+    return momento is not None and limite is not None and momento.date() < limite.date()
+
+
 def remover_na_pagina(
     page: Any, automacao: Any, hostname: str, confirmado: bool = False, pasta_captura: Path | None = None,
+    *, corte: str | None = None,
 ) -> dict[str, Any]:
     """Executa os passos do docstring do módulo na aba ``page``; nunca fecha abas."""
     hostname = validar_hostname(hostname)
@@ -280,20 +307,25 @@ def remover_na_pagina(
     linha = page.locator(_LINHA).filter(visible=True)
     if linha.count() != 1 or _nome(linha.first.locator("a.anchor-text").first.inner_text(timeout=10000)) != _nome(hostname):
         return _resultado(automacao, "ambiguo")
+    if not contato_anterior_ao_corte(
+        grid.valor_da_coluna(grade["linhas"][0], grid.achar_cabecalho(grade, COLUNA_CONTATO)), corte
+    ):
+        return _resultado(automacao, "contato_recente")
     caixa = linha.first.locator("input[type=checkbox]").first
-    caixa.check(timeout=10000)
-    todos = page.locator(_CHECK_TODOS).filter(visible=True)
-    marcados = page.locator(f"{_LINHA} input[type=checkbox]:checked").count()
-    # Com a faixa 1 - 1 já exigida, o "selecionar todos" marcado sozinho é esperado; a trava real é a contagem 1 do diálogo.
-    if todos.count() != 1 or marcados != 1:
+    try:
+        caixa.check(timeout=10000)
+        todos = page.locator(_CHECK_TODOS).filter(visible=True)
+        marcados = page.locator(f"{_LINHA} input[type=checkbox]:checked").count()
+        botao = page.locator("button, a, [role=button]").filter(has_text=_BOTAO_REMOVER).filter(visible=True)
+        # Com a faixa 1 - 1 já exigida, o "selecionar todos" marcado sozinho é esperado; a trava real é a contagem 1 do diálogo.
+        selecao_ok = todos.count() == 1 and marcados == 1 and botao.count() == 1
+    except BaseException:
+        _desmarcar(caixa)
+        raise
+    if not selecao_ok:
         _desmarcar(caixa)
         return _resultado(automacao, "grade_inesperada")
-
     automacao.log(ORIGEM, "Abrindo o diálogo de remoção.")
-    botao = page.locator("button, a, [role=button]").filter(has_text=_BOTAO_REMOVER).filter(visible=True)
-    if botao.count() != 1:
-        _desmarcar(caixa)
-        return _resultado(automacao, "grade_inesperada")
     # Daqui até o "Sim", toda saída fecha o diálogo pelo Cancel e desmarca a linha (nunca o deixa aberto).
     alertas = page.locator(_ALERTA).filter(has_text=_TEXTO_DIALOGO).filter(visible=True)
     mdm: Any = None
@@ -343,10 +375,14 @@ def _confirmar_remocao(
         return _sair_sem_remover(page, automacao, caixa, pasta, "recusado_por_configuracao")
 
     automacao.log(ORIGEM, "Confirmando a remoção (clique único).")
-    seguro = _SemCancelamento(automacao)
+    inicio = time.monotonic()
     try:
         sim.click(timeout=10000)  # irreversível: um único clique, fora de qualquer etapa que refaça
         dialogo.wait_for(state="hidden", timeout=ESPERA_DIALOGO_FECHAR_MS)
+        automacao.log(ORIGEM, f"Diálogo fechou em {time.monotonic() - inicio:.0f} s.")
+        # O portal demora para remover e atualiza a grade sozinho: sair agora poderia abortar a remoção.
+        atualizou = _aguardar_portal(page, automacao, hostname)
+        automacao.log(ORIGEM, f"Grade {'atualizada' if atualizou else 'sem atualização'} em {time.monotonic() - inicio:.0f} s.")
         url = url_som(automacao)
         # Nunca reload. goto para a mesma URL com "#" só troca o fragmento e não relê a grade: passa por
         # about:blank para o mesmo endereço abrir como documento novo.
@@ -354,18 +390,55 @@ def _confirmar_remocao(
         page.goto(url, wait_until="domcontentloaded", timeout=automacao.CARREGAMENTO_MS)
         if not automacao.endpoint_logado(page):
             return _resultado(automacao, "incerto")
-        grade, nomes = _filtrar(page, seguro, hostname)
-        if "agent/som/computers" not in str(page.url):  # o portal levou a outra tela: a lista vazia não prova nada
-            return _resultado(automacao, "incerto")
+        # Só o filtro é refeito (caixa e lupa da grade); o diálogo e o botão de remover nunca são tocados de novo.
+        fim = time.monotonic() + ESPERA_CONFERENCIA_MS / 1000
+        for busca in range(1, BUSCAS_CONFERENCIA + 1):
+            grade, nomes = _filtrar(page, automacao, hostname)  # "pare" aqui cai no except: incerto
+            url_atual = str(page.url)
+            if "agent/som/computers" not in url_atual or "managedStatus=true" not in url_atual:  # outra tela: vazio não prova nada
+                return _resultado(automacao, "incerto")
+            if not nomes and grade.get("vazia"):
+                automacao.log(ORIGEM, f"Remoção confirmada em {time.monotonic() - inicio:.0f} s.")
+                return _resultado(automacao, "removido")
+            if busca == BUSCAS_CONFERENCIA or time.monotonic() >= fim:
+                break
+            page.wait_for_timeout(INTERVALO_CONFERENCIA_MS)
+        automacao.log(ORIGEM, f"Remoção não confirmada em {time.monotonic() - inicio:.0f} s.")
+        return _resultado(automacao, "incerto")
     except (Exception, automacao.RotinaCancelada) as erro:
         logger.debug("Conferência da remoção no Endpoint interrompida (%s).", type(erro).__name__)
         return _resultado(automacao, "incerto")
-    if not nomes and grade.get("vazia"):
-        return _resultado(automacao, "removido")
-    return _resultado(automacao, "incerto")
 
 
-def remover_computador(hostname: str, confirmado: bool = False, pasta_captura: Path | None = None) -> dict[str, Any]:
+def _aguardar_portal(page: Any, automacao: Any, hostname: str) -> bool:
+    """Na mesma página, sem clicar: espera o carregamento sumir e a linha sair (ou a grade mudar). False no prazo."""
+    carregando = page.locator(_CARREGANDO)
+
+    def retrato() -> tuple[tuple[str, ...], tuple[int, int] | None]:
+        grade = grid.ler_grade(page)
+        cabecalho = grid.achar_cabecalho(grade, grid.COLUNA_NOME)
+        return tuple(_nome(grid.valor_da_coluna(linha, cabecalho)) for linha in grade["linhas"]), _faixa(page)
+
+    antes = retrato()
+    fim = time.monotonic() + ESPERA_REMOCAO_MS / 1000
+    while time.monotonic() < fim:
+        page.wait_for_timeout(INTERVALO_PORTAL_MS)
+        automacao.verificar_cancelamento()  # "pare" durante a espera: incerto (o clique já aconteceu)
+        try:
+            if carregando.count():
+                continue
+            agora = retrato()
+        except Exception as erro:
+            logger.debug("Leitura da grade do Endpoint falhou durante a espera (%s).", type(erro).__name__)
+            continue
+        if _nome(hostname) not in agora[0] or agora != antes:
+            return True
+    return False
+
+
+def remover_computador(
+    hostname: str, confirmado: bool = False, pasta_captura: Path | None = None, *, corte: str | None = None,
+) -> dict[str, Any]:
     """Abre uma aba nova no Chrome de automação e remove o computador ``hostname`` (ver docstring do módulo)."""
     hostname = validar_hostname(hostname)
     with automation.trava_execucao("remover_endpoint"):
@@ -380,4 +453,4 @@ def remover_computador(hostname: str, confirmado: bool = False, pasta_captura: P
             if not browser.contexts:
                 raise automation.RotinaErro("Chrome sem contexto de navegação.")
             page = browser.contexts[0].new_page()  # aba própria; fica aberta para o usuário conferir
-            return remover_na_pagina(page, automation, hostname, confirmado, pasta_captura)
+            return remover_na_pagina(page, automation, hostname, confirmado, pasta_captura, corte=corte)
