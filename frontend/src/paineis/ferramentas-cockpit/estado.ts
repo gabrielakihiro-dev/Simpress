@@ -497,10 +497,10 @@ export function criarFerramentasCockpit(context: ContextoFerramentasCockpit) {
 
   // Serial (+ optional category) target: navegarParaLinhaComparacao finds the row in the rendered result (S-prefix rule included).
   // The category (sem_acesso_7_dias, divergencias_local, sem_usuario...) picks the right section when the serial is in several.
-  async function abrirComparacaoDaSerie(serial: Qualquer, categoria = "") {
+  async function abrirComparacaoDaSerie(serial: Qualquer, categoria = "", destacar = false) {
     const value = String(serial || "").trim();
     const category = String(categoria || "").trim();
-    pendingComparisonTarget = value ? (category ? { serial: value, category } : { serial: value }) : null;
+    pendingComparisonTarget = value ? { serial: value, ...(category ? { category } : {}), ...(destacar ? { destacar: true } : {}) } : null;
     selectedComparisonId = "";
     // Sai de Backups: o resultado pedido aparece mesmo com o painel já aberto. Primeira abertura: openPanel volta à Visão Geral
     // (padrão desde 23/11/2026) e navegarParaLinhaComparacao abre a aba da linha depois do render.

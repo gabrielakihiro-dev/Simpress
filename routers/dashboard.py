@@ -75,6 +75,8 @@ class DashboardServices:
     get_softexpert_finalization_failures: Optional[Callable[[], Dict[str, Any]]] = None
     # Lembretes (Ferramentas) atrasados e de hoje: só contagens, sem texto de lembrete (aviso do sino).
     get_lembretes_agendados: Optional[Callable[[], Dict[str, Any]]] = None
+    # Séries repetidas no Endpoint cujo hostname mudou (aviso do sino): ``itens`` com série e hostnames; hostname pode ser nome de pessoa.
+    get_hostnames_atualizados: Optional[Callable[[], Dict[str, Any]]] = None
 
 
 # Reapplying the display rules to the two newest events dominated the panel time; the result
@@ -197,6 +199,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "sem_acesso_60_dias": _long_unused_summary(services, history, history_signature),
         "backups_regionais": _backups_regionais_summary(services),
         "lembretes_agendados": _lembretes_agendados_summary(services),
+        "hostnames_atualizados": _hostnames_atualizados_summary(services),
     }
 
 
@@ -423,6 +426,22 @@ def _lembretes_agendados_summary(services: DashboardServices) -> Dict[str, Any]:
         # The alert is optional; the inventory summary must still load. Only the class is logged (no reminder text).
         logger.warning("Falha ao calcular o aviso de lembretes agendados: %s.", type(error).__name__)
         return {"total": 0, "atrasados": 0, "hoje": 0, "indisponivel": True}
+
+
+def _hostnames_atualizados_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
+    if services.get_hostnames_atualizados is None:
+        return None
+    try:
+        bruto = services.get_hostnames_atualizados().get("itens", [])
+        itens = [
+            {chave: str(item.get(chave) or "") for chave in ("serie", "hostname_anterior", "hostname_novo")}
+            for item in bruto if isinstance(item, dict)
+        ]
+    except Exception as error:
+        # Aviso opcional; só a classe do erro vai ao log (hostname pode ser nome de pessoa).
+        logger.warning("Falha ao calcular o aviso de hostnames atualizados: %s.", type(error).__name__)
+        itens = []
+    return {"total": len(itens), "itens": itens}
 
 
 def _backups_regionais_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
@@ -707,6 +726,7 @@ class PainelResposta(_Saida):
     sem_acesso_60_dias: Any = None
     backups_regionais: Optional[Dict[str, Any]] = None
     lembretes_agendados: Optional[Dict[str, Any]] = None
+    hostnames_atualizados: Optional[Dict[str, Any]] = None
 
 
 @dataclass(frozen=True)

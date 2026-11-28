@@ -53,6 +53,7 @@ from core.config import (
     DATA_DIR,
     DETAILS_UPLOAD_FILE,
     ENDPOINT_UPLOAD_FILE,
+    ENDPOINT_HOSTNAMES_ATUALIZADOS_FILE,
     ENTRA_USERS_FILE,
     MANUAL_PERSON_NAMES_FILE,
     ENTRA_INBOX_DIR,
@@ -945,6 +946,14 @@ def load_endpoint_aliases() -> Dict[str, str]:
     return read_endpoint_alias_index()["unique"]
 
 
+def _hostnames_atualizados_do_painel() -> Dict[str, Any]:
+    """Aviso do sino: o arquivo da última importação; sem ele, calcula do índice atual (sem gravar)."""
+    saved = effective_alias.ler_hostnames_atualizados(ENDPOINT_HOSTNAMES_ATUALIZADOS_FILE)
+    if saved is not None:
+        return saved
+    return effective_alias.calcular_hostnames_atualizados(read_endpoint_alias_index(), {})
+
+
 def read_endpoint_alias_index() -> Dict[str, Any]:
     """Retorna associações unívocas e linhas que precisam de conferência."""
     index = effective_alias.read_endpoint_alias_index(_effective_alias_services, removed_endpoint_hostname_keys())
@@ -1684,6 +1693,7 @@ _inventory_update_services = InventoryUpdateServices(
     removed_endpoint_hostnames=lambda: removed_endpoint_hostname_keys(),
     manual_users_file=lambda: MANUAL_USERS_FILE,
     modified_aliases_file=lambda: MODIFIED_APELIDOS_FILE,
+    hostnames_atualizados_file=lambda: ENDPOINT_HOSTNAMES_ATUALIZADOS_FILE,
     export_model_file=lambda: EXPORT_MODEL_FILE,
     prepare_export_model_sync=lambda records, endpoint_index: equipment_export.prepare_export_model_alias_sync(
         _equipment_export_services,
@@ -2112,6 +2122,7 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     get_backups_regionais=lambda: ler_painel_backups(_backups_services),
     # Só leitura: nunca cria nem repara o arquivo; devolve contagens, sem texto de lembrete.
     get_lembretes_agendados=lambda: ler_resumo_agendados(STATE_DIR / "lembretes.json"),
+    get_hostnames_atualizados=lambda: _hostnames_atualizados_do_painel(),
 ))
 obter_painel = _dashboard_exports.obter_painel
 app.include_router(dashboard_router)

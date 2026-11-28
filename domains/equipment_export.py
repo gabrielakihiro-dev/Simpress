@@ -128,11 +128,9 @@ def get_export_aliases(
     endpoint_index: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, str]:
     """Combina hostnames da InvAll com apelidos manuais, que têm prioridade."""
-    endpoint_aliases = (
-        endpoint_index.get("unique", {})
-        if endpoint_index is not None
-        else services.read_endpoint_alias_index()["unique"]
-    )
+    index = endpoint_index if endpoint_index is not None else services.read_endpoint_alias_index()
+    # Série repetida com verificação mais recente única também exporta o hostname resolvido.
+    endpoint_aliases = {**index.get("unique", {}), **index.get("resolved_by_recency", {})}
     return merge_export_aliases(endpoint_aliases, services.load_modified_apelidos())
 
 

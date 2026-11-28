@@ -77,6 +77,17 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual({row["computador"]: row["mais_antigo"] for row in rows}, {"PRNOTE-OLD": True, "PRNOTE-NEW": False})
         self.assertTrue(all(row["ultima_verificacao"] for row in rows))
 
+    def test_ambiguous_record_marks_the_applied_hostname_only_when_resolved(self):
+        result = compare_uploaded_workbooks(source_table(self._records()), source_table([]), {}, as_of=REFERENCE)
+        rows = result["registros_ambiguos"][0]["registros_endpoint"]
+        self.assertEqual({row["computador"]: row["aplicado"] for row in rows}, {"PRNOTE-OLD": False, "PRNOTE-NEW": True})
+
+        same = REFERENCE - timedelta(days=3)
+        tied = [endpoint_record("SN-1", "PRNOTE-A", same), endpoint_record("SN-1", "PRNOTE-B", same)]
+        result = compare_uploaded_workbooks(source_table(tied), source_table([]), {}, as_of=REFERENCE)
+        rows = result["registros_ambiguos"][0]["registros_endpoint"]
+        self.assertFalse(any(row["aplicado"] for row in rows))
+
     def test_no_button_when_dates_are_missing_tied_or_hostnames_repeat(self):
         same = REFERENCE - timedelta(days=3)
         cases = {
@@ -182,8 +193,11 @@ class RemovalWorkflowTests(unittest.TestCase):
         self.temp_context.cleanup()
 
     def test_removed_hostname_is_the_one_exported_and_can_be_restored(self):
+        # Série repetida com datas distintas: o hostname da verificação mais recente nomeia o equipamento,
+        # mas a série continua duplicada (fora de "unique").
         self.assertEqual(main.load_endpoint_aliases(), {})
-        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "ALIAS-1")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "HOST-NEW")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["invall_alias_status"], "aplicado_mais_recente")
 
         result = endpoint_removals.remove_endpoint_hostname(self.services, "SN-1", "HOST-OLD")
 
@@ -203,7 +217,7 @@ class RemovalWorkflowTests(unittest.TestCase):
 
         endpoint_removals.restore_endpoint_hostname(self.services, "SN-1", "HOST-OLD")
         self.assertEqual(main.load_endpoint_aliases(), {})
-        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "ALIAS-1")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "HOST-NEW")
         self.assertEqual(json.loads(self.removed.read_text(encoding="utf-8")), [])
 
     def test_the_last_remaining_hostname_and_unknown_pairs_are_refused(self):

@@ -16,6 +16,7 @@ interface MotionIndicadores {
 interface AppIndicadores {
   abrirModalAtualizarPlanilhas(evento?: Event): unknown;
   abrirPainelCockpit(painel: string): unknown;
+  abrirComparacaoDaSerie?(serie: string, categoria?: string, destacar?: boolean): unknown;
   abrirGestaoChamadosCockpit?(): unknown;
   abrirImportacaoModelo(tipo: string): unknown;
   abrirModalGerenciarUnidades(evento?: Event): unknown;
@@ -102,6 +103,7 @@ interface DadosPainelHome {
   sem_acesso_60_dias?: DadosAlerta;
   os_paradas?: DadosAlerta;
   divergencias_novas?: DadosAlerta;
+  hostnames_atualizados?: DadosAlerta;
   chamados_outro_tecnico?: DadosAlerta;
   falhas_finalizacao_softexpert?: DadosAlerta;
   backups_regionais?: DadosAlerta;
@@ -129,7 +131,7 @@ const PRONTIDAO_ESTADOS: Record<EstadoItemProntidao, string> = { ok: "Em dia", p
 // Chamados que saíram do Dashboard ou do SoftExpert sem finalização pelo site: o texto é fixo, o card some com total 0 ou leitura indisponível.
 const TEXTO_OUTRO_TECNICO = "Confira no SoftExpert e marque Conferido na aba OS (F6).";
 const MAX_SEM_ACESSO_60_LISTADOS = 5;
-const ALERTAS_DO_SINO = ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-chamados-outro-tecnico", "alerta-finalizacao-softexpert", "alerta-backups-regionais", "alerta-lembretes-agendados"];
+const ALERTAS_DO_SINO = ["alerta-sem-acesso-60", "alerta-os-paradas", "alerta-divergencias-novas", "alerta-hostnames-atualizados", "alerta-chamados-outro-tecnico", "alerta-finalizacao-softexpert", "alerta-backups-regionais", "alerta-lembretes-agendados"];
 
 export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
   "use strict";
@@ -651,6 +653,33 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
     mostrarAlertaPainel(card, state, textoDivergenciasNovas(info as DadosAlerta));
   }
 
+  // Hostname trocado pelo Endpoint em série repetida (/api/painel, até a próxima importação). Hostname pode ser nome de pessoa: só na tela, nunca em log.
+  function renderizarAlertaHostnamesAtualizados(info: DadosAlerta | null | undefined): void {
+    const card = elemento("alerta-hostnames-atualizados");
+    if (!card) return;
+    const total = Number(info?.total);
+    if (!(total > 0)) {
+      ocultarAlertaPainel(card, "vazio");
+      return;
+    }
+    mostrarAlertaPainel(card, "atualizados", `${total} ${total === 1 ? "série mudou" : "séries mudaram"} de hostname. Clique na série para ver na Comparação, aba Apelidos.`);
+    const lista = elemento("alerta-hostnames-atualizados-lista");
+    if (!lista) return;
+    const itens = (Array.isArray(info?.itens) ? info.itens as unknown[] : [])
+      .filter((item): item is { serie: string; hostname_anterior?: unknown; hostname_novo?: unknown } => Boolean(item) && typeof item === "object" && typeof (item as { serie?: unknown }).serie === "string");
+    lista.replaceChildren(...itens.map(item => {
+      const li = document.createElement("li");
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "ck-btn ck-btn--secundario ck-btn--sm ck-aviso__item-acao";
+      botao.dataset.serie = item.serie;
+      botao.textContent = `${item.serie}: ${String(item.hostname_anterior ?? "")} → ${String(item.hostname_novo ?? "")}`;
+      li.append(botao);
+      return li;
+    }));
+    lista.hidden = itens.length === 0;
+  }
+
   function renderizarAlertaChamadosOutroTecnico(info: DadosAlerta | null | undefined): void {
     const card = elemento("alerta-chamados-outro-tecnico");
     if (!card) return;
@@ -843,6 +872,7 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
       renderizarAlertaSemAcesso60(detalhe?.sem_acesso_60_dias);
       renderizarAlertaOsParadas(detalhe?.os_paradas);
       renderizarAlertaDivergenciasNovas(detalhe?.divergencias_novas);
+      renderizarAlertaHostnamesAtualizados(detalhe?.hostnames_atualizados);
       renderizarAlertaChamadosOutroTecnico(detalhe?.chamados_outro_tecnico);
       renderizarAlertaFalhasFinalizacao(detalhe?.falhas_finalizacao_softexpert);
       renderizarAlertaBackupsRegionais(detalhe?.backups_regionais);
@@ -851,6 +881,10 @@ export function criarIndicadoresHome(context: ContextoIndicadoresHome) {
     document.addEventListener("simpress:painel-atualizado", evento => renderizar((evento as CustomEvent<DadosPainelHome | undefined>).detail));
     const anterior = lerUltimoPainel?.();
     if (anterior) renderizar(anterior);
+    elemento("alerta-hostnames-atualizados-lista")?.addEventListener("click", evento => {
+      const serie = (evento.target as HTMLElement).closest<HTMLElement>("button[data-serie]")?.dataset.serie;
+      if (serie) void app.abrirComparacaoDaSerie?.(serie, "registros_ambiguos", true);
+    });
     ALERTAS_DO_SINO.forEach(id => {
       elemento(id)?.addEventListener("animationend", evento => {
         delete (evento.currentTarget as HTMLElement).dataset.enter;

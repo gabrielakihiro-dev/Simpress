@@ -69,7 +69,7 @@ _CAUSAS_SECAO = {
     "ausentes_no_endpoint": ("ausente_no_endpoint", "Na última comparação a série ficou sem correspondência no Endpoint: existe na Simpress, mas não foi achada no Endpoint."),
     "ausentes_em_detalhes": ("ausente_na_simpress", "Na última comparação a série ficou sem correspondência na Simpress: existe no Endpoint, mas não foi achada na Simpress."),
     "sem_acesso_7_dias": ("sem_acesso_7_dias", "Sem acesso há 7 dias ou mais: a última verificação no Endpoint foi há 7 dias ou mais."),
-    "apelidos_sem_atualizacao": ("linha_mantida_para_conferencia", "A linha ficou em 'Linhas mantidas para conferência': o hostname do Endpoint não foi aplicado como apelido (veja o motivo)."),
+    "apelidos_sem_atualizacao": ("linha_mantida_para_conferencia", "A linha ficou em 'Linhas mantidas para conferência': o apelido não foi atualizado pelo Endpoint (veja o motivo)."),
     "divergencias_local": ("localidade_divergente", "A localidade esperada pelo hostname é diferente da localidade cadastrada na Simpress."),
     "correspondencias_ambiguas": ("ocorrencia_ambigua", _TEXTO_AMBIGUA),
     "registros_ambiguos": ("ocorrencia_ambigua", _TEXTO_AMBIGUA),
@@ -79,13 +79,14 @@ _CAUSAS_SECAO = {
 _SECOES_EXPLICACAO = (*_CAUSAS_SECAO, "apelidos_atualizados", "mudancas_usuarios")
 # What the current record says about the Endpoint (invall_alias_status); anything else is unknown.
 _ENDPOINT_PELO_STATUS = {
-    "aplicado": "presente", "serie_invall_duplicada": "presente", "hostname_vazio": "presente",
+    "aplicado": "presente", "aplicado_mais_recente": "presente", "serie_invall_duplicada": "presente", "hostname_vazio": "presente",
     "serie_nao_encontrada": "ausente",
 }
 _CAUSAS_STATUS = {
     "serie_nao_encontrada": ("ausente_no_endpoint", "O Endpoint ativo não tem esta série."),
     "hostname_vazio": ("hostname_vazio_no_endpoint", "O Endpoint tem a série, mas o hostname está vazio."),
     "serie_invall_duplicada": ("serie_duplicada_no_endpoint", "A série aparece mais de uma vez no Endpoint."),
+    "aplicado_mais_recente": ("serie_duplicada_mais_recente_aplicada", "A série aparece mais de uma vez no Endpoint; vale o hostname da verificação mais recente."),
     "serie_detalhes_duplicada": ("serie_duplicada_na_simpress", "A série aparece mais de uma vez na Simpress."),
     "indisponivel": ("endpoint_indisponivel", "O Endpoint ativo não pôde ser lido; não dá para dizer se a série está nele."),
 }

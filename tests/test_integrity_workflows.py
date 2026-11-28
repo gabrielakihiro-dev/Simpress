@@ -272,6 +272,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.stack.enter_context(patch.object(main, "UPLOAD_BACKUPS_DIR", self.backups))
         self.stack.enter_context(patch.object(main, "MODIFIED_APELIDOS_FILE", self.overrides))
         self.stack.enter_context(patch.object(main, "ALIAS_HISTORY_FILE", self.manual_history))
+        self.stack.enter_context(patch.object(main, "ENDPOINT_HOSTNAMES_ATUALIZADOS_FILE", self.backups.parent / "endpoint_hostnames_atualizados.json"))
         self.stack.enter_context(patch.object(main, "COMPARISON_HISTORY_FILE", self.comparison_history))
         self.stack.enter_context(patch.object(main, "HISTORY_ANNOTATIONS_DIR", self.shared_annotations))
         self.stack.enter_context(patch.object(main, "LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR", self.pending_annotations))

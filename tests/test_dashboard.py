@@ -340,5 +340,33 @@ class FiltroBackupAdministradorNoPainelTests(unittest.TestCase):
         self.assertEqual(totais["sem_acesso_7_dias"], 4)
 
 
+class HostnamesAtualizadosNoPainelTests(unittest.TestCase):
+    def client(self, servico):
+        router, _ = create_dashboard_router(DashboardServices(
+            get_hostnames_atualizados=servico,
+            get_equipment=lambda: [], get_stats=lambda: {}, get_comparison_events=lambda: [],
+            categories=CATEGORIES, categorize=categorize,
+        ))
+        app = FastAPI()
+        app.include_router(router)
+        return TestClient(app)
+
+    def test_devolve_total_e_itens(self):
+        itens = [{"serie": "S1", "hostname_anterior": "A", "hostname_novo": "B"}]
+        dados = self.client(lambda: {"aplicados": {"S1": "B"}, "itens": itens}).get("/api/painel").json()
+        self.assertEqual(dados["hostnames_atualizados"], {"total": 1, "itens": itens})
+
+    def test_sem_servico_e_nulo_e_erro_vira_lista_vazia_sem_hostname_no_log(self):
+        self.assertIsNone(make_client([], []).get("/api/painel").json()["hostnames_atualizados"])
+
+        def falha():
+            raise ValueError("PRNOTE-SEGREDO")
+
+        with self.assertLogs("routers.dashboard", level="WARNING") as logs:
+            dados = self.client(falha).get("/api/painel").json()
+        self.assertEqual(dados["hostnames_atualizados"], {"total": 0, "itens": []})
+        self.assertNotIn("PRNOTE-SEGREDO", "".join(logs.output))
+
+
 if __name__ == "__main__":
     unittest.main()
