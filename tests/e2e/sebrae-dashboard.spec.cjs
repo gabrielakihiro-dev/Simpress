@@ -703,6 +703,33 @@ test("Rascunho: o que foi selecionado sobrevive a recarregar a página, sem Atua
   await expect(depois.locator("#sebrae-antigos-lista .sebrae-chamado").locator('[data-sebrae-campo="D"]')).toHaveValue("EM ABERTO");
 });
 
+// Avisos e rascunho em React (frontend/src/paineis/sebrae-dashboard/avisos-rascunho.tsx). Rascunho sintético com um chamado que
+// a fixture não tem, gravado antes de a página abrir.
+test("rascunho sem correspondência: Ver detalhes lista o chamado; mudança em outra aba troca o aviso e recolhe a lista", async ({ page, request }) => {
+  await page.addInitScript(() => {
+    try { localStorage.setItem("simpress:sebrae-rascunho", JSON.stringify({ importado_em: "outra", valores: { "UTIC-2026-9999": { A: "CLIENTE" } }, edicoes: {} })); } catch (_erro) { /* sem armazenamento */ }
+  });
+  const { cartao, painel } = await abrirPainel(page, request);
+  await expect(cartao.locator("#sebrae-novos-avisos > p.ck-campo__ajuda")).toHaveText("Sem formulário (veja os motivos):");
+  await expect(cartao.locator("#sebrae-novos-avisos > ul.sebrae-avisos > li.ck-cartao__meta").first()).toContainText(": pendente. ");
+  const bloco = painel.locator("#sebrae-rascunho");
+  const caixa = painel.locator("#sebrae-rascunho-detalhes");
+  await expect(bloco).toBeVisible();
+  await expect(bloco).toHaveAttribute("data-estado", "alerta");
+  await expect(painel.locator("#sebrae-rascunho-status")).toHaveText("Rascunhos preservados sem correspondência nesta importação (1).");
+  await expect(painel.locator("#sebrae-rascunho-resumo")).toHaveText("Ver detalhes (1)");
+  await expect(caixa).toHaveJSProperty("open", false);
+  await painel.locator("#sebrae-rascunho-resumo").click();
+  await expect(caixa).toHaveJSProperty("open", true);
+  await expect(painel.locator("#sebrae-rascunho-itens > li")).toHaveText("UTIC-2026-9999A CLIENTE");
+  await expect(painel.locator("#sebrae-rascunho-itens > li > b")).toHaveText("UTIC-2026-9999");
+  await page.evaluate(() => window.dispatchEvent(new StorageEvent("storage", { key: "simpress:sebrae-rascunho" })));
+  await expect(painel.locator("#sebrae-rascunho-status")).toContainText("O rascunho mudou em outra aba");
+  await expect(caixa).toBeHidden();
+  await expect(caixa).toHaveJSProperty("open", false);
+  await expect(painel.locator("#sebrae-rascunho-resumo")).toHaveText("Ver detalhes (0)");
+});
+
 // Ler chamados antigos: botão próprio (rotina `antigos`); a fixture simula POST/GET /api/sebrae/antigos/ler (1.º GET andando, 2.º concluído).
 test("Ler chamados antigos dispara o POST, mostra andamento e resultado e o antigo passa a ter a leitura do SoftExpert", async ({ page, request }) => {
   const { painel } = await abrirPainel(page, request, "", "leitura"); // o botão mora no topo do painel Chamados (F5), não no cartão da Automação (F4)

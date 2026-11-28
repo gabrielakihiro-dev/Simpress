@@ -7,6 +7,7 @@ export const CAMPOS_AUTOMATICOS = Object.freeze([
 ]);
 export const CAMPOS_PREENCHIDOS = Object.freeze([["K", "Série"], ["L", "Modelo"], ["N", "Cidade"], ["E", "OS"]]); // do antigo: vazios são preenchidos pelo site
 export const STATUS_CHAMADO = Object.freeze(["EM ABERTO", "FINALIZADO"]);
+export const STATUS_FINALIZADO = "FINALIZADO"; // sugestão do Status (D) em todo chamado do F5
 export const TIPOS_CHAMADO = Object.freeze(["INCIDENTE", "SOLICITAÇÃO"]);
 export const PADROES_MANUAIS = Object.freeze({ D: "EM ABERTO", S: "DISPONIBILIDADE" }); // Status e Tipo SLA habituais dos novos; o usuário pode trocar ou apagar
 // Chamados criados pela API: classificação habitual (A, B, J) mais os padrões de todos; a descrição "Revisado." entra uma vez só (secaoFinalizar)
@@ -533,7 +534,7 @@ export function aplicarRascunho(rascunho: Qualquer, formulario: Qualquer, aberto
 // Publicação em window, lida por frontend/src/aplicacao/app.ts e por paineis/sebrae-dashboard/montar.tsx.
 if (typeof window !== "undefined") {
   window.SimpressSebraeDashboardModel = Object.freeze({
-    CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, PADROES_MANUAIS, PADROES_API_SEBRAE, DESCRICAO_API_SEBRAE, SOLICITANTE_API_SEBRAE,
+    CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, STATUS_FINALIZADO, TIPOS_CHAMADO, PADROES_MANUAIS, PADROES_API_SEBRAE, DESCRICAO_API_SEBRAE, SOLICITANTE_API_SEBRAE,
     ehApiSebrae, padroesManuais, AVISO_CRUZAMENTO, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, encerramentoAgora, payloadEdicoes, descricaoJaNoDashboard,
     tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
     resumoLeituraAntigos, totalPreenchimentos, linhaChamado, payloadAtualizacao,

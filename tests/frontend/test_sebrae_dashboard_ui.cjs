@@ -2389,7 +2389,7 @@ function cargaSugestao(sugestoes = { sugestao_categoria: "IMPRESSORA", sugestao_
   return carga;
 }
 const campoNovo = (el, letra) => el["sebrae-novos-lista"].querySelector(`[data-sebrae-campo="${letra}"]`);
-const chipsDe = el => el["sebrae-novos-lista"].querySelectorAll(".sebrae-sugestao");
+const chipsDe = el => el["sebrae-novos-lista"].querySelectorAll(".sebrae-sugestao").filter(chip => chip.dataset.sebraeSugestao !== "D") // o chip FINALIZADO do Status (D) tem testes próprios;
 
 test("sugestão aparece em B e J do chamado novo, com texto e rótulo exatos, sem preencher nada", async () => {
   const disco = armazenamentoFalso();
@@ -2407,8 +2407,8 @@ test("sugestão aparece em B e J do chamado novo, com texto e rótulo exatos, se
   assert.equal(campoNovo(el, "J").value, "");
   // sem o clique, nada vai ao rascunho
   assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).valores["UTIC-2026-1378"] || {}, {});
-  // sem sugestao_responsavel na carga, A fica sem chip; D, R e S nunca têm
-  for (const letra of ["A", "D", "R", "S"]) assert.equal(campoNovo(el, letra).parentNode.querySelector(".sebrae-sugestao"), null, letra);
+  // sem sugestao_responsavel na carga, A fica sem chip; R e S nunca têm (D tem o chip FINALIZADO, testado à parte)
+  for (const letra of ["A", "R", "S"]) assert.equal(campoNovo(el, letra).parentNode.querySelector(".sebrae-sugestao"), null, letra);
 });
 
 test("sem chip: sugestão nula ou vazia, API SEBRAE, campo já preenchido (rascunho) e B do chamado antigo", async () => {
@@ -2439,7 +2439,7 @@ test("sem chip: sugestão nula ou vazia, API SEBRAE, campo já preenchido (rascu
   carga.importado.abertos[1].sugestao_categoria = "IMPRESSORA";
   carga.importado.finalizados[0].sugestao_tipo = "INCIDENTE";
   const antigos = await renderizarCartoes(carga);
-  assert.equal(antigos.el["sebrae-antigos-lista"].querySelectorAll(".sebrae-sugestao").length, 0);
+  assert.equal(chipsAntigos(antigos.el).length, 0);
   assert.equal(antigos.el["sebrae-finalizados-lista"].querySelectorAll(".sebrae-sugestao").length, 0);
 });
 
@@ -2553,7 +2553,7 @@ function cargaSugestaoAntigo(sugestoes = { sugestao_responsavel: "CLIENTE", suge
   return carga;
 }
 const campoAntigo = (el, numero, letra) => el["sebrae-antigos-lista"].querySelectorAll(`[data-sebrae-campo="${letra}"]`).find(c => c.dataset.sebraeNumero === numero);
-const chipsAntigos = el => el["sebrae-antigos-lista"].querySelectorAll(".sebrae-sugestao");
+const chipsAntigos = el => el["sebrae-antigos-lista"].querySelectorAll(".sebrae-sugestao").filter(chip => chip.dataset.sebraeSugestao !== "D") // o chip FINALIZADO do Status (D) tem testes próprios;
 
 test("antigo com A e J vazios mostra o mesmo chip de A e J, com texto e rótulo exatos, sem preencher nada", async () => {
   const disco = armazenamentoFalso();
@@ -2571,7 +2571,7 @@ test("antigo com A e J vazios mostra o mesmo chip de A e J, com texto e rótulo 
   assert.equal(campoAntigo(el, ANTIGO_SUGESTAO, "A").value, "");
   assert.equal(campoAntigo(el, ANTIGO_SUGESTAO, "J").value, "");
   assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).edicoes[ANTIGO_SUGESTAO] || {}, {}, "sem o clique, nada vai ao rascunho");
-  for (const letra of ["B", "D", "R", "S"]) assert.equal(campoAntigo(el, ANTIGO_SUGESTAO, letra).parentNode.querySelector(".sebrae-sugestao"), null, letra);
+  for (const letra of ["B", "R", "S"]) assert.equal(campoAntigo(el, ANTIGO_SUGESTAO, letra).parentNode.querySelector(".sebrae-sugestao"), null, letra);
 });
 
 test("Usar no antigo preenche o campo, grava em edicoes pelo caminho da edição do antigo e remove o chip", async () => {
@@ -2880,6 +2880,52 @@ test("quando a finalização acompanhada termina, a tela pede a atualização do
   for (let i = 0; i < 40 && !eventos.includes("simpress:atualizar-notificacoes"); i++) await new Promise(r => setImmediate(r));
   assert.deepEqual(eventos.filter(tipo => tipo === "simpress:atualizar-notificacoes"), ["simpress:atualizar-notificacoes"]);
   assert.ok(consultas >= 2, "acompanhou até o fim");
+});
+
+// ---- Sugestão FINALIZADO no Status (D) de todo chamado em aberto (pedido do usuário, 27/11/2026) ----
+
+const chipD = (lista, numero) => lista.querySelectorAll('.sebrae-sugestao[data-sebrae-sugestao="D"]')
+  .find(chip => chip.parentNode.querySelector('[data-sebrae-campo="D"]')?.dataset.sebraeNumero === numero);
+
+test("Status (D) em EM ABERTO mostra `Sugestão: FINALIZADO` no novo e no antigo, sem preencher nada", async () => {
+  const disco = armazenamentoFalso();
+  const { el } = await renderizarCartoes(cargaSugestao(), disco);
+  const novo = chipD(el["sebrae-novos-lista"], "UTIC-2026-1378");
+  assert.ok(novo, "chip do novo");
+  assert.equal(campoNovo(el, "D").value, "EM ABERTO");
+  assert.equal(novo.querySelector(".sebrae-sugestao__texto").textContent, "Sugestão: FINALIZADO");
+  assert.equal(novo.querySelector("button").getAttribute("aria-label"), "Usar sugestão FINALIZADO em Status (D)");
+  assert.ok(chipD(el["sebrae-antigos-lista"], "linha:27"), "chip do antigo com D EM ABERTO");
+  assert.equal(el["sebrae-finalizados-lista"].querySelectorAll(".sebrae-sugestao").length, 0, "finalizado não tem chip");
+  assert.deepEqual(lerRascunho(disco, IMPORTADO_EM).edicoes["linha:27"] || {}, {}, "sem o clique, nada vai ao rascunho");
+});
+
+test("Usar em D muda de EM ABERTO para FINALIZADO, grava no rascunho e some; voltar a EM ABERTO mostra o chip de novo", async () => {
+  const disco = armazenamentoFalso();
+  const { el } = await renderizarCartoes(cargaSugestao(), disco);
+  const lista = el["sebrae-antigos-lista"];
+  const chip = chipD(lista, "linha:27");
+  const select = campoAntigo(el, "linha:27", "D");
+  chip.querySelector("button").click();
+  assert.equal(select.value, "FINALIZADO");
+  assert.equal(chipD(lista, "linha:27"), undefined, "chip removido");
+  assert.equal(lerRascunho(disco, IMPORTADO_EM).edicoes["linha:27"].D, "FINALIZADO");
+
+  const novo = chipD(el["sebrae-novos-lista"], "UTIC-2026-1378");
+  const selectNovo = campoNovo(el, "D");
+  selectNovo.value = "FINALIZADO";
+  selectNovo.dispatchEvent({ type: "change", currentTarget: selectNovo });
+  assert.equal(novo.hidden, true, "FINALIZADO escolhido à mão esconde o chip");
+  selectNovo.value = "EM ABERTO";
+  selectNovo.dispatchEvent({ type: "change", currentTarget: selectNovo });
+  assert.equal(novo.hidden, false, "EM ABERTO mostra o chip de novo");
+});
+
+test("Status (D) já FINALIZADO (rascunho) não mostra o chip", async () => {
+  const disco = armazenamentoFalso();
+  gravarCampoRascunho(disco, IMPORTADO_EM, "UTIC-2026-1378", "D", "FINALIZADO", "novo");
+  const { el } = await renderizarCartoes(cargaSugestao(), disco);
+  assert.equal(chipD(el["sebrae-novos-lista"], "UTIC-2026-1378"), undefined);
 });
 
 // ---- Finalizar chamado antigo NÃO encontrado: bloco laranja e caixa "outro técnico" (decisão de 25/11/2026) ----
