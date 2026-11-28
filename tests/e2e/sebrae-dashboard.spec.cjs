@@ -274,6 +274,64 @@ test("voltar à aba Novos reabre o chamado escolhido antes, não o primeiro", as
   await expect(painel.locator(`#sebrae-novos-mestre [data-sebrae-mestre="${numero}"]`)).toHaveAttribute("aria-current", "true");
 });
 
+// 30 antigos sintéticos a mais: a aba Antigos passa de 25 (uma página) e ganha "Carregar mais".
+async function comAntigosExtras(page) {
+  await page.route("**/api/sebrae/novos", async r => {
+    const resp = await r.fetch();
+    const dados = await resp.json();
+    const base = dados.importado.abertos[0];
+    for (let i = 0; i < 30; i++) {
+      const numero = `UTIC-2026-${3000 + i}`;
+      dados.importado.abertos.push({ ...base, numero, chamado: numero, titulo: `Extra ${i}` });
+    }
+    await r.fulfill({ response: resp, json: dados });
+  });
+}
+
+// Abaixo de 1024px o detalhe cobre a lista: Voltar a traz de volta.
+async function mostrarMestre(page, painel, alvo) {
+  if (!(await alvo.isVisible())) await painel.locator(".sebrae-voltar >> visible=true").click();
+  await expect(alvo).toBeVisible();
+}
+
+test("Carregar mais dos antigos: o foco vai ao 26º item da lista, visível, sem voltar a rolagem ao topo", async ({ page, request }) => {
+  await comAntigosExtras(page);
+  const { painel } = await abrirPainel(page, request);
+  await abrirSecaoAntigos(painel);
+  const botoes = painel.locator("#sebrae-antigos-mestre [data-sebrae-mestre]");
+  await mostrarMestre(page, painel, botoes.first());
+  await expect(botoes).toHaveCount(25);
+  await painel.locator("#sebrae-antigos .sebrae-mais__botao").click();
+  await expect(painel.locator("#sebrae-antigos [data-sebrae-mais]")).toBeHidden(); // a lista acabou: o botão some
+  const vigesimoSexto = botoes.nth(25);
+  await expect(vigesimoSexto).toBeFocused();
+  await expect(vigesimoSexto).toBeInViewport();
+  if (page.viewportSize().width < 1024) {
+    // no celular a área rolável não pode voltar ao topo no redesenho
+    expect(await page.locator("#cockpit-tool-panels").evaluate(no => no.scrollTop)).toBeGreaterThan(0);
+  }
+});
+
+test("redesenhar a lista mestre devolve o foco ao botão novo do mesmo chamado", async ({ page, request }) => {
+  await comAntigosExtras(page); // a fixture tem um antigo só: o foco fica num que não é o aberto
+  const { painel } = await abrirPainel(page, request);
+  await abrirSecaoAntigos(painel);
+  const botao = painel.locator("#sebrae-antigos-mestre [data-sebrae-mestre]").nth(20); // no meio da lista, longe do topo
+  await mostrarMestre(page, painel, botao);
+  const numero = await botao.getAttribute("data-sebrae-mestre");
+  await botao.focus();
+  await botao.evaluate(no => { window.__mestreAntigo = no; });
+  const rolagem = () => page.locator("#cockpit-tool-panels").evaluate(no => no.scrollTop);
+  const antes = await rolagem();
+  // change na lista chama atualizarMestre, que redesenha o mestre com nós novos
+  await painel.locator("#sebrae-antigos-lista").evaluate(no => no.dispatchEvent(new Event("change")));
+  const foco = await page.evaluate(() => ({ numero: document.activeElement?.dataset?.sebraeMestre, mesmoNo: document.activeElement === window.__mestreAntigo, conectadoAntigo: window.__mestreAntigo.isConnected }));
+  expect(foco).toEqual({ numero, mesmoNo: false, conectadoAntigo: false });
+  // o redesenho não mexe na rolagem (no celular, sem tirar o foco antes, ela voltava ao topo)
+  expect(await rolagem()).toBe(antes);
+  await expect(painel.locator(`#sebrae-antigos-mestre [data-sebrae-mestre="${numero}"]`)).toBeInViewport();
+});
+
 test("Histórico mostra os três últimos registros no cartão, sem botão nem painel completo", async ({ page, request }) => {
   const cartao = await abrirCartao(page, request);
   const mini = cartao.locator("#sebrae-historico-resumo li");
