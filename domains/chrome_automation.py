@@ -468,10 +468,11 @@ class ChromeAutomationRunner:
 
     # ------------------------------------------------------------------ actions
 
-    def start(self, rotina: str) -> Dict[str, Any]:
-        if rotina not in ROUTINES or rotina == "ux_apelidos":
+    def start(self, rotina: str, *, numero: str = "") -> Dict[str, Any]:
+        """``numero`` (só ``antigos``): relê no SoftExpert apenas esse chamado UTIC, já validado por quem chama."""
+        if rotina not in ROUTINES or rotina == "ux_apelidos" or (numero and rotina != "antigos"):
             raise DomainError("Rotina inválida.", status_code=422)
-        return self._start(rotina)
+        return self._start(rotina, numero=numero)
 
     def start_ux_alias(self, filename: str, content: bytes) -> Dict[str, Any]:
         """Recebe o próprio Blob do F7; não consulta Downloads nem regenera a exportação."""
@@ -492,7 +493,7 @@ class ChromeAutomationRunner:
             raise DomainError("O arquivo enviado não é uma planilha XLSX válida.", status_code=422) from None
         return self._start("ux_apelidos", filename=filename, content=content)
 
-    def _start(self, rotina: str, *, filename: str = "", content: bytes = b"") -> Dict[str, Any]:
+    def _start(self, rotina: str, *, filename: str = "", content: bytes = b"", numero: str = "") -> Dict[str, Any]:
         with self._lock:
             active = self._active_locked()
             if active is not None:
@@ -505,6 +506,8 @@ class ChromeAutomationRunner:
             upload = None
             try:
                 arguments = [self.contract.routine_flag, rotina]
+                if numero:
+                    arguments.extend(["--numero", numero])
                 if rotina == "ux_apelidos":
                     upload = tempfile.TemporaryDirectory(prefix="simpress-ux-apelidos-")
                     path = Path(upload.name) / filename

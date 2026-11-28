@@ -1361,6 +1361,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send({"iniciado": True, "numeros": [numero]}, 202)
             return
         if path == "/api/sebrae/antigos/ler":
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))  # corpo opcional {numero} ("Conferir este chamado")
             if antigos_state["cenario"] == "conflito" or automation_run or antigos_state["rodando"]:
                 self.send({"detail": "Já há uma rotina em andamento: Rotina de OS desde 08:00. Aguarde terminar ou cancele."}, 409)
             else:

@@ -1708,6 +1708,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-final__texto { grid-area: texto; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .sebrae-final__anexo { grid-area: anexo; display: flex; flex-direction: column; align-content: start; gap: 6px; min-width: 0; }
 .sebrae-final__rodape { grid-area: rodape; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.sebrae-final__orientacao:not([hidden]) { display: flex; width: 100%; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .sebrae-chamado__finalizar .ck-campo, .sebrae-chamado__finalizar textarea { width: 100%; }
 .sebrae-chamado__finalizar p { margin: 0; overflow-wrap: anywhere; }
 .sebrae-chamado__finalizar input[type="file"] { width: 100%; min-height: var(--altura-controle); padding: 3px 6px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-sm); background: var(--cor-campo); color: var(--cor-texto-suave); font-size: var(--fs-ui); cursor: pointer; transition: border-color var(--duracao) var(--curva); }

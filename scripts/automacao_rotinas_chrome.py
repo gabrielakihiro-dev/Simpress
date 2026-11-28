@@ -2130,11 +2130,12 @@ def rodar_rotina_sebrae(context: "BrowserContext") -> int:
     return sebrae_leitura.executar(context, sys.modules[__name__])
 
 
-def rodar_rotina_antigos(context: "BrowserContext") -> int:
-    # Só leitura do SoftExpert: lê os chamados antigos em aberto (com UTIC) que ainda não estão em data/state/sebrae_antigos_softexpert.json.
+def rodar_rotina_antigos(context: "BrowserContext", numero: str = "") -> int:
+    # Só leitura do SoftExpert: lê os chamados antigos em aberto (com UTIC) que ainda não estão em data/state/sebrae_antigos_softexpert.json;
+    # com `numero`, relê só esse chamado (botão "Conferir este chamado" do F5), mesmo que já esteja no cache.
     from scripts import sebrae_leitura
 
-    return sebrae_leitura.executar_antigos(context, sys.modules[__name__])
+    return sebrae_leitura.executar_antigos(context, sys.modules[__name__], numero=numero)
 
 
 def rodar_rotina_fechar(context: "BrowserContext", sem_finalizar: bool = False) -> int:
@@ -3409,7 +3410,7 @@ def _esperar_logins(pendentes: list, tentar: Callable) -> None:
         pendentes[0][1].wait_for_timeout(2000)
 
 
-def executar(rotina: str, sem_finalizar: bool = False, planilha_ux: Path | None = None) -> int:
+def executar(rotina: str, sem_finalizar: bool = False, planilha_ux: Path | None = None, numero: str = "") -> int:
     # A trava vem antes do Playwright: uma execução bloqueada responde mesmo sem ele instalado.
     with trava_execucao(rotina):
         from playwright.sync_api import sync_playwright
@@ -3442,7 +3443,7 @@ def executar(rotina: str, sem_finalizar: bool = False, planilha_ux: Path | None 
                 if rotina == "fechar":
                     return rodar_rotina_fechar(context, sem_finalizar)
                 if rotina == "antigos":
-                    return rodar_rotina_antigos(context)
+                    return rodar_rotina_antigos(context, numero)
                 codigos = []
                 for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
                     verificar_cancelamento()
@@ -3497,6 +3498,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar", "antigos", "ux_apelidos"], default="os")
     parser.add_argument("--planilha-ux", type=Path, help="arquivo exato exportado pelo F7; somente com --rotina ux_apelidos")
+    parser.add_argument("--numero", default="", help="chamado UTIC-AAAA-NNNN; somente com --rotina antigos (relê só esse chamado)")
     parser.add_argument(
         "--sem-finalizar", action="store_true",
         help="só com --rotina fechar: preenche e confere o formulário, mas não clica em Finalizar nem altera o Dashboard",
@@ -3516,7 +3518,10 @@ def main() -> int:
         print(f"\n[ERRO] {mensagem_playwright_ausente()}", flush=True)
         return 3
     try:
-        return executar(args.rotina, args.sem_finalizar, args.planilha_ux)
+        if args.numero and args.rotina != "antigos":
+            print("\n[ERRO] --numero só vale com --rotina antigos.", flush=True)
+            return 1
+        return executar(args.rotina, args.sem_finalizar, args.planilha_ux, args.numero)
     except TravaOcupada as erro:
         print(f"\n[BLOQUEADO] {erro}", flush=True)
         return 2

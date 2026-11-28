@@ -352,6 +352,14 @@ def salvar_antigo(caminho: Path, chamado: ChamadoSoftExpert, lido_em: str = "") 
         _gravar(caminho, todos)
 
 
+def remover_antigo(caminho: Path, numero: str) -> None:
+    """Tira um chamado do cache (o SoftExpert não o achou na releitura): sem isso o selo "Não encontrado" nunca aparece."""
+    with lock_paths([caminho]):
+        todos = ler_antigos(caminho, estrito=True)
+        if todos.pop(numero, None) is not None:
+            _gravar(caminho, todos)
+
+
 def _mesmo_texto(a: Any, b: Any) -> bool:
     return " ".join(str(a or "").split()).casefold() == " ".join(str(b or "").split()).casefold()
 
