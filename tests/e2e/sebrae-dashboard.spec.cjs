@@ -312,6 +312,18 @@ test("Carregar mais dos antigos: o foco vai ao 26º item da lista, visível, rol
   if (page.viewportSize().width < 1024) await expect(botoes.nth(26)).not.toBeInViewport({ ratio: 1 });
 });
 
+// O React desenha os itens da lista mestre (mestre.tsx): o HTML, com a ordem dos atributos, é o do código imperativo antigo
+// (capturado na main). A hora do destaque depende do fuso da máquina e fica fora da comparação.
+test("lista mestre: o HTML dos itens é o mesmo do desenho antigo (selos, estrela, lado, aria-current e data-tom)", async ({ page, request }) => {
+  await page.route("**/api/sebrae/observacoes", rota => rota.fulfill({ json: { observacoes: { "UTIC-2026-1100": { observacao: "", atualizado_em: null, destaque: true, destaque_em: "2026-11-05T09:00:00-03:00" } } } }));
+  const { painel } = await abrirPainel(page, request);
+  await abrirSecaoAntigos(painel);
+  const html = numero => painel.locator(`.sebrae-mestre__item:has(> [data-sebrae-mestre="${numero}"])`).first()
+    .evaluate(no => no.outerHTML.replace(/(<span class="sebrae-mestre__quando">)[^<]*/, "$1"));
+  expect(await html("UTIC-2026-1200")).toBe('<li class="sebrae-mestre__item"><button type="button" class="sebrae-mestre__botao" data-sebrae-mestre="UTIC-2026-1200" aria-current="true"><span class="sebrae-mestre__num">UTIC-2026-1200</span><span class="sebrae-mestre__selos"><span class="ck-badge sebrae-selo sebrae-selo-os" data-status="ok" title="OS 7303022">OS</span><span class="ck-badge sebrae-selo">Não lido</span><span class="nl-selo-lado">SIMPRESS</span></span><span class="sebrae-mestre__titulo">Teclado sem resposta</span><span class="sebrae-mestre__quem">Camila Vitoria Lopes de Oliveira · DEMO0001</span></button></li>');
+  expect(await html("UTIC-2026-1100")).toBe('<li class="sebrae-mestre__item"><button type="button" class="sebrae-mestre__botao" data-sebrae-mestre="UTIC-2026-1100" data-tom="alerta"><span class="sebrae-mestre__num">UTIC-2026-1100</span><span class="sebrae-mestre__selos"><span class="sebrae-mestre__estrela" role="img" aria-label="Destaque">★</span></span><span class="sebrae-mestre__titulo"></span><span class="sebrae-mestre__quem"></span><span class="sebrae-mestre__quando"></span></button></li>');
+});
+
 test("redesenhar a lista mestre devolve o foco ao botão novo do mesmo chamado", async ({ page, request }) => {
   await comAntigosExtras(page); // a fixture tem um antigo só: o foco fica num que não é o aberto
   const { painel } = await abrirPainel(page, request);

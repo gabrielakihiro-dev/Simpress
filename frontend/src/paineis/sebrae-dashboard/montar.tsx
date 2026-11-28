@@ -62,6 +62,7 @@ export function montar(_container: HTMLElement) {
   const lojaDestaques = criarLojaDestaques();
   const lojaMestre = criarLojaMestre();
   // Síncrono: estado.ts lê e foca os itens novos logo depois de gravar (Carregar mais, foco preservado, abrir chamado).
+  // Nunca chame atualizarMestre de dentro de um render ou efeito do React: ali o flushSync só avisa e não desenha na hora.
   const gravarMestre = lojaMestre.atualizar;
   lojaMestre.atualizar = parte => flushSync(() => gravarMestre(parte));
   const acoes = criarDashboardSebrae({
