@@ -79,6 +79,8 @@ _CARREGANDO = ", ".join(
     f"[class*={nome}]:visible" for nome in ("loader", "loading", "spinner", "mask")
 )
 CAPTURAS_MANTIDAS = 20
+# Fração da viewport (largura E altura) a partir da qual a caixa é a moldura de tela cheia, não o painel.
+LIMITE_CAPTURA = 0.8
 COLUNA_CONTATO = "horario do ultimo contato"
 _SIM = re.compile(r"Sim,?\s*prosseguir", re.I)
 
@@ -209,7 +211,7 @@ def _sair_sem_remover(page: Any, automacao: Any, caixa: Any, pasta: Path | None,
 
 
 _JS_PAINEL = """
-(alerta) => {
+(alerta, limite) => {
   const titulo = [...alerta.querySelectorAll('*')]
     .find(el => el.children.length === 0 && /Esta a[çc][ãa]o resulta em/i.test(el.textContent || ''));
   const botoes = [...alerta.querySelectorAll('button')].filter(b => /^\\s*(Cancel|Cancelar)\\s*$/i.test(b.textContent || ''));
@@ -220,21 +222,24 @@ _JS_PAINEL = """
   const r = (painel || alerta).getBoundingClientRect();
   const x = Math.max(0, r.left), y = Math.max(0, r.top);
   const largura = Math.min(window.innerWidth, r.right) - x, altura = Math.min(window.innerHeight, r.bottom) - y;
-  return largura > 0 && altura > 0 ? {x, y, width: largura, height: altura} : null;
+  if (largura <= 0 || altura <= 0) return null;
+  // Moldura de tela cheia (cobre a grade com nome e usuário): não captura.
+  if (largura >= limite * window.innerWidth && altura >= limite * window.innerHeight) return null;
+  return {x, y, width: largura, height: altura};
 }
 """
 
 
 def _caixa_estavel(page: Any, alerta: Any) -> dict[str, float] | None:
-    """Caixa do painel igual em 2 leituras seguidas (fim da animação); sem estabilizar, a última lida."""
+    """Caixa do painel igual em 2 leituras seguidas (fim da animação); sem estabilizar, None (sem captura)."""
     anterior = None
     for _ in range(15):
-        atual = alerta.evaluate(_JS_PAINEL)
+        atual = alerta.evaluate(_JS_PAINEL, LIMITE_CAPTURA)
         if atual is not None and atual == anterior:
             return dict(atual)
         anterior = atual
         page.wait_for_timeout(200)
-    return dict(anterior) if anterior else None
+    return None
 
 
 def _zoom(page: Any) -> float:
@@ -432,15 +437,19 @@ def _confirmar_remocao(
     if not remocao_liberada(confirmado):  # a variável pode ter mudado durante a espera
         return _sair_sem_remover(page, automacao, caixa, pasta, "recusado_por_configuracao")
 
+    automacao.log(ORIGEM, "Confirmando a remoção (clique único).")
     if antes_do_clique is not None:
         try:
             antes_do_clique()  # marcador durável "em_andamento": sem ele, nunca clica
         except Exception as erro:
             logger.debug("Marcador da remoção no Endpoint não gravado (%s).", type(erro).__name__)
             return _sair_sem_remover(page, automacao, caixa, pasta, "marcador_nao_gravado")
-    automacao.log(ORIGEM, "Confirmando a remoção (clique único).")
     inicio = time.monotonic()
     try:
+        # Reconfere depois do marcador; se mudou, sai sem clicar (o domínio limpa o marcador: resultado sem clique).
+        if not pronto():
+            automacao.log(ORIGEM, "Diálogo não reconhecido: mudou_depois_do_marcador.")
+            return _sair_sem_remover(page, automacao, caixa, pasta, "dialogo_inesperado")
         sim.click(timeout=10000)  # irreversível: um único clique, fora de qualquer etapa que refaça
         dialogo.wait_for(state="hidden", timeout=ESPERA_DIALOGO_FECHAR_MS)
         automacao.log(ORIGEM, f"Diálogo fechou em {time.monotonic() - inicio:.0f} s.")

@@ -376,6 +376,55 @@ class RemovalWorkflowTests(unittest.TestCase):
             endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, cai_depois_do_clique)
         self.assertEqual(len(chamadas), 1)
 
+    def test_second_request_busy_with_the_marker_says_in_progress(self):
+        from fastapi import HTTPException
+
+        def pedido_b(hostname, confirmado, corte, antes_do_clique=None, apos_trava=None):
+            # O pedido A (mesmo par) gravou o marcador e segura a trava do Chrome.
+            self.pending.write_text(json.dumps([{"serie": "SN-1", "hostname": "HOST-OLD", "resultado": "em_andamento"}]))
+            raise HTTPException(409, endpoint_removals.MSG_CHROME_OCUPADO)
+
+        with self.assertRaises(DomainConflictError) as raised:
+            endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, pedido_b)
+        self.assertEqual(raised.exception.detail, endpoint_removals.MSG_EM_ANDAMENTO_OUTRO_PEDIDO)
+
+        def ocupado_sem_marcador(hostname, confirmado, corte, antes_do_clique=None, apos_trava=None):
+            raise HTTPException(409, endpoint_removals.MSG_CHROME_OCUPADO)
+
+        self.pending.write_text("[]", encoding="utf-8")
+        with self.assertRaises(HTTPException):
+            endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, ocupado_sem_marcador)
+
+    def test_incerto_write_failure_with_marker_says_marked_in_progress(self):
+        original = self.services.atomic_file_transaction
+        estado = {"falhar": False}
+
+        def transacao(root, targets):
+            if estado["falhar"]:
+                raise FileTransactionError("disco cheio")
+            return original(root, targets)
+
+        def incerto_depois_do_marcador(hostname, confirmado, corte, antes_do_clique=None, apos_trava=None):
+            antes_do_clique()
+            estado["falhar"] = True  # o disco falha depois do marcador
+            return {"resultado": "incerto", "mensagem": "sintético"}
+
+        broken = dataclasses.replace(self.services, atomic_file_transaction=transacao)
+        saida = endpoint_removals.remove_in_endpoint(broken, "SN-1", "HOST-OLD", True, incerto_depois_do_marcador)
+        self.assertEqual(saida["resultado"], "incerto")
+        self.assertIn("marcada como em andamento", saida["mensagem"])
+        self.assertNotIn("Não consegui registrar", saida["mensagem"])
+        self.assertEqual([item["resultado"] for item in self._pending()], ["em_andamento"])
+
+    def test_no_click_result_clears_the_marker(self):
+        def marcador_e_desiste(hostname, confirmado, corte, antes_do_clique=None, apos_trava=None):
+            antes_do_clique()
+            return {"resultado": "dialogo_inesperado", "mensagem": "sintético"}  # reconferência falhou, sem clique
+
+        saida = endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, marcador_e_desiste)
+        self.assertEqual(saida["resultado"], "dialogo_inesperado")
+        self.assertEqual(self._pending(), [])
+
     def test_marker_becomes_incerto_and_the_lock_rereads_pending(self):
         remover, _ = self._remover("incerto")
         endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, remover)

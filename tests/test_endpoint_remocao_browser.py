@@ -16,6 +16,8 @@ BASE = "https://endpoint.teste.invalid/client"
 PAGINA = """<!doctype html><html><head><style>
 .ember-table-table-row { display:flex } .ember-table-cell,.ember-table-header-cell { width:220px; flex:none }
 #dlg[hidden] { display:none } #dlg { width:400px; transition: transform .4s } #dlg.entrando { transform: translateX(300px) }
+#dlg.cheio { position:fixed; left:0; top:0; width:100vw; height:100vh; background:#fff }
+.cresce { animation: cresce 1s linear infinite } @keyframes cresce { from { height:0 } to { height:100px } }
 </style></head><body>
 <div class="ember-table-header-row ember-table-table-row">
 <div class="ember-table-header-cell"><input type="checkbox" id="todos"></div>
@@ -75,7 +77,9 @@ document.querySelector('#remover').onclick=()=>{
  window.registrar('remover');
  const n=document.querySelectorAll('#rows input:checked').length;
  document.querySelector('#overlay').hidden=false; document.querySelector('#dlg').hidden=false;
- const dlg=document.querySelector('#dlg'); dlg.classList.add('entrando'); requestAnimationFrame(()=>requestAnimationFrame(()=>dlg.classList.remove('entrando')));
+ const dlg=document.querySelector('#dlg'); dlg.classList.add('entrando');
+ if (cfg.dialogo_cheio) dlg.classList.add('cheio');
+ requestAnimationFrame(()=>requestAnimationFrame(()=>dlg.classList.remove('entrando')));
  // Como no portal: a moldura aparece primeiro e o conteúdo chega ~800 ms depois.
  setTimeout(()=>{
   document.querySelector('#conteudo').innerHTML = CONTEUDO;
@@ -84,6 +88,8 @@ document.querySelector('#remover').onclick=()=>{
   mdm().checked = cfg.mdm;
   // O clique no label alterna o input (o clique sintético no input não conta como outro clique do usuário).
   document.querySelector('label.checkbox--form').addEventListener('click', e=>{if(e.target.tagName!=='INPUT') window.registrar('label_mdm')});
+  // dialogo_animado: o painel cresce sem parar abaixo dos botões (a caixa nunca estabiliza).
+  if (cfg.dialogo_animado) { const cresce=document.createElement('div'); cresce.className='cresce'; document.querySelector('#dlg').append(cresce); }
   if (cfg.motivo) document.querySelector('#motivo').innerHTML='<label>Motivo *</label><textarea required></textarea>';
   document.querySelector('#sim').onclick=()=>{
    window.registrar('sim');
@@ -160,8 +166,9 @@ class RemoverNoEndpointTests(unittest.TestCase):
 
     def rodar(self, linhas, confirmado=False, depois=None, mdm=False, motivo=False, fecha=True, reconhecivel=True,
               contato="nov 23, 2026 11:20 AM", corte="nov 25, 2026 08:59 PM", apos_sim=None, some_apos=None,
-              segundo=None, antes_do_clique=None):
+              segundo=None, antes_do_clique=None, primeiro=None):
         segundo = segundo or {}
+        primeiro = primeiro or {}
         cliques = []
         abertas = []
         page = self.browser.new_page(viewport={"width": 1100, "height": 700})
@@ -178,11 +185,12 @@ class RemoverNoEndpointTests(unittest.TestCase):
             atuais = linhas if not abertas else (depois if depois is not None else linhas)
             abertas.append(route.request.url)
             cfg = json.dumps({"linhas": atuais, "mdm": mdm, "motivo": motivo, "fecha": fecha, "reconhecivel": reconhecivel, "contato": contato,
-                              "apos_sim": apos_sim, "some_apos": some_apos if abertas[:-1] else None,
+                              "apos_sim": apos_sim, "some_apos": some_apos if abertas[:-1] else None, **primeiro,
                               **(segundo if abertas[:-1] else {})})
             route.fulfill(status=200, content_type="text/html; charset=utf-8", body=PAGINA.replace("__CFG__", cfg))
 
         page.route(f"{BASE}**", servir)
+        self.page = page
         automacao = _automacao()
         self.logs = []
         automacao.log = lambda origem, mensagem: self.logs.append(mensagem)
@@ -335,6 +343,33 @@ class RemoverNoEndpointTests(unittest.TestCase):
             resultado, _, _ = self.rodar(["PRNOTE100"])
         largura = int.from_bytes(Path(resultado["captura"]).read_bytes()[16:20], "big")
         self.assertTrue(190 <= largura <= 210, largura)  # painel de 400 px CSS x zoom 0,5
+
+    def test_captura_recusa_moldura_cheia_e_caixa_instavel(self):
+        for cfg in ({"dialogo_cheio": True}, {"dialogo_animado": True}):
+            with self.subTest(cfg=cfg):
+                resultado, cliques, _ = self.rodar(["PRNOTE100"], primeiro=cfg)
+                self.assertEqual(resultado["resultado"], "cancelado_sem_confirmacao")
+                self.assertEqual(resultado["captura"], "")  # sem captura; o diálogo continua fechado pelo Cancel
+                self.assertEqual(cliques[-1], "cancelar:mdm")
+                self.assertFalse(self.alerta_visivel)
+
+    def test_log_vem_antes_do_marcador(self):
+        with patch.multiple(endpoint_remocao, INTERVALO_CONFERENCIA_MS=300):
+            resultado, _, _ = self.rodar(["PRNOTE100"], confirmado=True, depois=[], apos_sim=[],
+                                         antes_do_clique=lambda: self.logs.append("MARCADOR"))
+        self.assertEqual(resultado["resultado"], "removido")
+        self.assertLess(self.logs.index("Confirmando a remoção (clique único)."), self.logs.index("MARCADOR"))
+
+    def test_dialogo_que_muda_depois_do_marcador_nao_clica(self):
+        def marcador_e_mudanca():
+            self.page.evaluate("document.querySelector('#dlg label input').checked = false")
+
+        resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, antes_do_clique=marcador_e_mudanca)
+        self.assertEqual(resultado["resultado"], "dialogo_inesperado")
+        self.assertNotIn("sim", cliques)
+        self.assertTrue(cliques[-1].startswith("cancelar"))
+        self.assertFalse(self.alerta_visivel)
+        self.assertEqual(self.marcadas, 0)
 
     def test_zoom_real_sem_escala_e_1(self):
         page = self.browser.new_page()

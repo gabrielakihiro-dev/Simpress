@@ -95,6 +95,10 @@ MSG_EM_ANDAMENTO = (
     "A remoção no Endpoint Central foi interrompida depois de começar: confira no Endpoint. Se o computador "
     "sumiu de lá, use \"Gravar só no cockpit\"; o Endpoint não é acionado de novo."
 )
+MSG_CHROME_OCUPADO = "O Chrome está ocupado por outra automação. Tente novamente ao terminar."
+MSG_EM_ANDAMENTO_OUTRO_PEDIDO = (
+    "A remoção deste computador no Endpoint Central está em andamento; aguarde e confira no Endpoint."
+)
 MSG_PENDENTE = (
     "Esta remoção no Endpoint Central ficou pendente: confira no Endpoint. Se o computador sumiu de lá, "
     "use \"Gravar só no cockpit\"; o Endpoint não é acionado de novo."
@@ -247,16 +251,19 @@ def remove_in_endpoint(
         resultado = dict(remover(str(row.get("hostname") or hostname), confirmado, str(corte), antes_do_clique, apos_trava))
     except DomainError:
         raise
-    except Exception:
+    except Exception as error:
         # Com o marcador gravado, o clique pode ter acontecido: nunca "nada foi removido".
         if _marker_present(services, key):
+            if getattr(error, "detail", None) == MSG_CHROME_OCUPADO:
+                raise DomainConflictError(MSG_EM_ANDAMENTO_OUTRO_PEDIDO) from None  # outro pedido do mesmo par
             raise DomainConflictError(MSG_EM_ANDAMENTO) from None
         raise
     if resultado.get("resultado") == "incerto":
         if not _mark_pending(services, serie, hostname, "incerto"):
-            resultado["mensagem"] = (
-                f"{resultado.get('mensagem', '')} Não consegui registrar a pendência: "
-                "não tente de novo antes de conferir no Endpoint."
+            resultado["mensagem"] = f"{resultado.get('mensagem', '')} " + (
+                "A remoção ficou marcada como em andamento no cockpit: confira no Endpoint."
+                if _marker_present(services, key)
+                else "Não consegui registrar a pendência: não tente de novo antes de conferir no Endpoint."
             )
         return {**resultado, "gravado_local": False, "pendente": True}
     if resultado.get("resultado") != "removido":

@@ -57,7 +57,7 @@ def create_endpoint_removals_router(
             except DomainError:
                 raise  # par pendente relido depois da trava (409)
             except automacao.TravaOcupada:
-                raise HTTPException(409, "O Chrome está ocupado por outra automação. Tente novamente ao terminar.") from None
+                raise HTTPException(409, endpoint_removals.MSG_CHROME_OCUPADO) from None
             except automacao.RotinaEncerrada as erro:
                 raise HTTPException(409, f"{erro}{aba}") from None
             except Exception:
