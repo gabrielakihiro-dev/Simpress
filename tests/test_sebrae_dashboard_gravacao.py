@@ -1288,5 +1288,79 @@ class AlinhamentoAEsquerdaTest(unittest.TestCase):
         self.assertTrue(all('horizontal="left"' in x for x in depois[len(antes):]))
 
 
+DINAMICA = "xl/worksheets/sheet6.xml"
+
+
+def com_dinamica(conteudo, b2="10", a1="nota", d1="SUM(B2:B3)", cache_d1="10"):
+    """Same workbook (with LISTAS) plus a "Din" sheet: a pivot table drawn on B2:C3, a constant in A1 and a formula in D1."""
+    partes = partes_de(com_listas(conteudo))
+    partes[DINAMICA] = (
+        f'<worksheet {NS}><sheetData><row r="1">{texto("A1", a1, 7)}<c r="D1"><f>{d1}</f><v>{cache_d1}</v></c></row>'
+        f'<row r="2">{texto("B2", "Total", 7)}<c r="C2"><v>{b2}</v></c></row><row r="3"><c r="B3" s="7"/></row></sheetData></worksheet>'
+    ).encode()
+    partes["xl/worksheets/_rels/sheet6.xml.rels"] = (
+        f'<Relationships xmlns="{REL}"><Relationship Id="rId1" Type="{DOC}/pivotTable" Target="../pivotTables/pivotTable1.xml"/></Relationships>'
+    ).encode()
+    partes["xl/pivotTables/pivotTable1.xml"] = b'<pivotTableDefinition xmlns="x" name="D1"><location ref="B2:C3" firstHeaderRow="1"/></pivotTableDefinition>'
+    partes["xl/workbook.xml"] = partes["xl/workbook.xml"].replace(b"</sheets>", b'<sheet name="Din" sheetId="7" r:id="rId8"/></sheets>')
+    partes["xl/_rels/workbook.xml.rels"] = partes["xl/_rels/workbook.xml.rels"].replace(
+        b"</Relationships>", f'<Relationship Id="rId8" Type="{DOC}/worksheet" Target="worksheets/sheet6.xml"/></Relationships>'.encode()
+    )
+    return rezipar(partes)
+
+
+def rezipar(partes, ordem=None, **extras):
+    """Zip of ``partes`` (in ``ordem`` when given) plus ``extras`` (e.g. ``docProps/core.xml``), like a new save of the same file."""
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        for nome in ordem or partes:
+            arquivo.writestr(nome, partes[nome])
+        for nome, dados in extras.items():
+            arquivo.writestr(nome.replace("__", "/"), dados)
+    return saida.getvalue()
+
+
+class ValoresDasOutrasAbasTest(unittest.TestCase):
+    """Retomada depois do Dashboard aberto (27/11/2026): fechar o Excel Online grava outros bytes com os mesmos valores."""
+
+    def setUp(self):
+        self.base = com_dinamica(montar())
+
+    def iguais(self, outro):
+        return G.mesmos_valores(self.base, outro) and G.valores_das_outras_abas(self.base) == G.valores_das_outras_abas(outro)
+
+    def test_le_constantes_e_formulas_fora_da_dinamica(self):
+        abas = G.valores_das_outras_abas(self.base)
+        self.assertNotIn("CHAMADOS", abas)
+        self.assertEqual(abas["Din"], {"A1": "nota", "D1": "=SUM(B2:B3)"})
+        self.assertEqual(abas["LISTAS"]["D3"], CATEGORIAS_ORIGINAIS[1])  # pela sharedStrings
+
+    def test_mesmos_valores_com_outros_bytes_passa(self):
+        partes = partes_de(self.base)
+        outro = rezipar(partes, ordem=sorted(partes, reverse=True), docProps__core_xml=b"<coreProperties>v11</coreProperties>")
+        self.assertNotEqual(hashlib.sha256(outro).hexdigest(), hashlib.sha256(self.base).hexdigest())
+        self.assertTrue(self.iguais(outro))
+
+    def test_texto_da_sharedstrings_virando_inline_passa(self):
+        partes = partes_de(self.base)
+        partes[LISTAS] = partes[LISTAS].replace(b'<c r="D3" s="9" t="s"><v>2</v></c>', texto("D3", CATEGORIAS_ORIGINAIS[1], 9).encode())
+        self.assertTrue(self.iguais(rezipar(partes)))
+
+    def test_dinamica_redesenhada_e_cache_de_formula_passam(self):
+        self.assertTrue(self.iguais(com_dinamica(montar(), b2="99", cache_d1="99")))
+
+    def test_valor_de_outra_aba_mudado_para(self):
+        self.assertFalse(self.iguais(com_dinamica(montar(), a1="editado por terceiro")))
+        partes = partes_de(self.base)
+        partes[LISTAS] = partes[LISTAS].replace(b"nota", b"outra nota")
+        self.assertFalse(self.iguais(rezipar(partes)))
+
+    def test_formula_de_outra_aba_mudada_para(self):
+        self.assertFalse(self.iguais(com_dinamica(montar(), d1="SUM(B2:B9)")))
+
+    def test_valor_da_chamados_mudado_para(self):
+        self.assertFalse(self.iguais(com_dinamica(montar(status=("FINALIZADO", "FINALIZADO")))))
+
+
 if __name__ == "__main__":
     unittest.main()
