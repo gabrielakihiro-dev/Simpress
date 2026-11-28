@@ -27,3 +27,14 @@ export interface EstadoRascunho {
 }
 export const criarLojaRascunho = () => criarLoja<EstadoRascunho>({ texto: "", situacao: "", detalhes: [], versao: 0 });
 export type LojaRascunho = ReturnType<typeof criarLojaRascunho>;
+
+/** Número e aria-label de cada sub-aba do F5 (novos, antigos, destaques, finalizados) e o texto do resultado do filtro.
+ *  `abas` null = aplicarVisao ainda não rodou: o partial fica como veio ("0", "Novos: 0 chamados", sem data-zero). */
+export interface EstadoAbas {
+  abas: Record<string, { n: number; rotulo: string }> | null;
+  resultado: string;
+  /** Conta as chamadas de aplicarVisao: cada uma reescreve o texto do resultado (role=status), como o textContent fazia. */
+  versao: number;
+}
+export const criarLojaAbas = () => criarLoja<EstadoAbas>({ abas: null, resultado: "", versao: 0 });
+export type LojaAbas = ReturnType<typeof criarLojaAbas>;

@@ -228,6 +228,8 @@ test("F5: teclado nas sub-abas (setas, Home, End) e no filtro (Enter abre, Esc l
   await expect(termo).toBeFocused();
   await page.keyboard.type("1378");
   await expect(painel.locator("#sebrae-filtro-resultado")).toHaveText("1 chamado(s) encontrado(s)");
+  await expect(aba("novos")).toHaveAttribute("aria-label", "Novos: 1 chamado encontrado"); // com filtro o rótulo diz "encontrado"
+  await expect(aba("antigos")).toHaveAttribute("data-zero", "");
   await expect(painel.locator("#sebrae-novos-mestre [data-sebrae-mestre]")).toHaveCount(1); // Novo layout: só o chamado aberto aparece no detalhe; a lista compacta tem todas as linhas visíveis
   await termo.fill("zzzz"); // sem resultado: o aviso da aba some com a lista
   await expect(painel.locator("#sebrae-novos [data-sebrae-vazio-filtro] .sebrae-vazio__1")).toHaveText("Nenhum chamado encontrado para “zzzz”.");
