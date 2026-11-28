@@ -2899,6 +2899,34 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertEqual(mocks["baixar"].call_count, 2)
         self._espera_fechada()
 
+    def test_new_version_with_the_same_values_after_the_wait_sends_and_concludes(self):
+        # Ensaio de 27/11/2026: só fechar o Excel Online gravou versão nova (outros bytes, mesmos valores).
+        from tests.test_sebrae_dashboard_gravacao import com_dinamica, montar, partes_de, rezipar
+
+        conferido = com_dinamica(montar())
+        partes = partes_de(conferido)
+        regravado = rezipar(partes, ordem=sorted(partes, reverse=True), docProps__core_xml=b"<coreProperties>v11</coreProperties>")
+        self.assertNotEqual(conferido, regravado)
+        resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado", "ok"), baixados=[conferido, regravado])
+        self.assertEqual(resultado, 0)
+        self.assertEqual(registro["status"], "concluido")
+        mocks["duplicar"].assert_called_once()
+        self.assertEqual(mocks["page"].expect_file_chooser.call_count, 2)
+        self.assertTrue(any("mesmos valores do conferido" in t for t in self.logs_rotina))
+
+    def test_new_version_with_another_value_after_the_wait_stops(self):
+        from tests.test_sebrae_dashboard_gravacao import com_dinamica, montar
+
+        for editado in (com_dinamica(montar(status=("FINALIZADO", "FINALIZADO"))), com_dinamica(montar(), a1="editado por terceiro")):
+            with self.subTest():
+                resultado, registro, mocks = self._rodar_com_dashboard_aberto(
+                    acompanhar=("bloqueado", "ok"), baixados=[com_dinamica(montar()), editado],
+                )
+                self.assertIs(type(resultado), automacao.RotinaErro)
+                self.assertEqual(str(resultado), automacao.MSG_SHAREPOINT_MUDOU + automacao.MSG_SHAREPOINT_PROXIMO_PASSO)
+                self.assertEqual(registro["status"], "falhou")
+                mocks["page"].expect_file_chooser.assert_called_once()
+
     def test_unchanged_sharepoint_after_the_locked_notice_sends_and_concludes(self):
         resultado, registro, mocks = self._rodar_com_dashboard_aberto(acompanhar=("bloqueado", "ok"), baixados=[b"conferido", b"conferido"])
         self.assertEqual(resultado, 0)

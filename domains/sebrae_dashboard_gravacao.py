@@ -257,6 +257,62 @@ def mesmos_valores(a: bytes, b: bytes) -> bool:
     return valores_dos_chamados(a) == valores_dos_chamados(b)
 
 
+_FORMULA = re.compile(r"<f\b[^>]*?(?:/>|>(.*?)</f>)", re.DOTALL)
+_INTERVALO = re.compile(r"([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?")
+
+
+def _areas_dinamicas(pacote: _Pacote, parte: str) -> List[Tuple[int, int, int, int]]:
+    """``(first col, first row, last col, last row)`` of every pivot table drawn on the worksheet ``parte``."""
+    rels = parte.rsplit("/", 1)[0] + "/_rels/" + parte.rsplit("/", 1)[1] + ".rels"
+    if rels not in pacote.partes:
+        return []
+    areas = []
+    for tipo, destino in _relacoes(pacote.texto(rels), parte).values():
+        local = re.search(r'<location\b[^>]*\bref="([^"]+)"', pacote.texto(destino)) if tipo.endswith("/pivotTable") else None
+        intervalo = _INTERVALO.fullmatch(local.group(1)) if local else None
+        if intervalo:
+            col1, lin1, col2, lin2 = intervalo.groups()
+            areas.append((_letra_para_indice(col1), int(lin1), _letra_para_indice(col2 or col1), int(lin2 or lin1)))
+    return areas
+
+
+def valores_das_abas(conteudo: bytes) -> Dict[str, Dict[str, str]]:
+    """Per worksheet (by name), ``ref -> value`` of every non-empty cell: the constant text, or ``=`` plus the formula text (never
+    the cached result, which volatile formulas change on every open). Chartsheets have no cells and are skipped.
+
+    Left out: CHAMADOS columns P and R (Excel rewrites the date serials of the site; ``valores_dos_chamados`` compares them to the
+    minute) and cells inside a pivot table (Excel redraws them from CHAMADOS when it saves, the site never does; real downloads of
+    27/11/2026: every "Din. Abertos" difference was inside a pivot table).
+    Styles, shared-string order and zip metadata are ignored, like in ``valores_dos_chamados``."""
+    pacote = _ler_pacote(conteudo)
+    try:
+        relacoes = _relacoes(pacote.texto("xl/_rels/workbook.xml.rels"), "xl/workbook.xml")
+        abas: Dict[str, Dict[str, str]] = {}
+        for tag in _SHEET_TAG.findall(pacote.texto("xl/workbook.xml")):
+            atributos = _atributos(tag)
+            nome = unescape(atributos.get("name", ""))
+            tipo, parte = relacoes[atributos.get("r:id", "")]
+            if not tipo.endswith("/worksheet"):
+                continue
+            dinamicas = _areas_dinamicas(pacote, parte)
+            datas = COLUNAS_DE_DATA if nome == ABA else ()
+            celulas: Dict[str, str] = {}
+            for linha in _LINHA.finditer(pacote.texto(parte)):
+                numero = int(linha.group(1))
+                for celula in _CELULA.finditer(linha.group(3) or ""):
+                    coluna = _letra_para_indice(celula.group(1))
+                    if celula.group(1) in datas or any(c1 <= coluna <= c2 and l1 <= numero <= l2 for c1, l1, c2, l2 in dinamicas):
+                        continue
+                    formula = _FORMULA.search(celula.group(3) or "")
+                    valor = "=" + unescape(formula.group(1) or "") if formula else _valor_celula(celula.group(0), pacote.compartilhadas)
+                    if valor is not None:
+                        celulas[celula.group(1) + linha.group(1)] = valor
+            abas[nome] = celulas
+    except (KeyError, UnicodeDecodeError) as erro:
+        raise GravacaoInvalida("A estrutura do Dashboard não é a esperada.") from erro
+    return abas
+
+
 CHAVE_DE_LINHA = "linha:"
 AUTOMATICAS_VAZIAS = ("E", "K", "L", "N")  # filled by the site only into empty cells
 LIDAS_VAZIAS = ("G", "I")  # title and requester from the SoftExpert read, also only into empty cells

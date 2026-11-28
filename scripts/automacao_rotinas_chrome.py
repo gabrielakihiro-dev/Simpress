@@ -3236,8 +3236,12 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
                 incerto.append(True)
 
         def _retomar() -> None:
-            # Depois de esperar o Dashboard ser fechado: o SharePoint tem de estar byte a byte como no download conferido. Só leitura;
-            # nunca refaz a conferência nem o merge (as outras abas do montado vêm do download anterior). Mudou: para sem enviar.
+            # Depois de esperar o Dashboard ser fechado: o SharePoint tem de ter os valores do download conferido, em todas as abas que o
+            # envio sobrescreve. Só fechar o Excel Online grava versão nova, com outros bytes (ensaio de 27/11/2026). Só leitura; nunca
+            # refaz a conferência nem o merge (as outras abas do montado vêm do download anterior). Mudou um valor: para sem enviar.
+            from domains.sebrae_dashboard import DashboardInvalido
+            from domains.sebrae_dashboard_gravacao import mesmos_valores, valores_das_abas
+
             def _baixar_de_novo() -> bytes:
                 verificar_cancelamento()
                 try:
@@ -3251,9 +3255,17 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
                     raise EtapaInstavel(str(erro)) from erro
 
             atual = etapa_resiliente(_baixar_de_novo, "Baixar o Dashboard de novo depois da espera")
-            if hashlib.sha256(atual).hexdigest() != hashlib.sha256(baixado.read_bytes()).hexdigest():
+            conferido = baixado.read_bytes()
+            if hashlib.sha256(atual).hexdigest() == hashlib.sha256(conferido).hexdigest():
+                log("Dashboard", "O Dashboard no SharePoint continua igual ao conferido; seguindo com o envio.")
+                return
+            try:
+                iguais = mesmos_valores(atual, conferido) and valores_das_abas(atual) == valores_das_abas(conferido)
+            except DashboardInvalido:
+                iguais = False  # ilegível: na dúvida, para
+            if not iguais:
                 raise RotinaErro(MSG_SHAREPOINT_MUDOU + MSG_SHAREPOINT_PROXIMO_PASSO)
-            log("Dashboard", "O Dashboard no SharePoint continua igual ao conferido; seguindo com o envio.")
+            log("Dashboard", "O SharePoint gravou uma versão nova do Dashboard ao fechá-lo, com os mesmos valores do conferido; seguindo com o envio.")
 
         no_envio = True
         try:

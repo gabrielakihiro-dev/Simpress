@@ -107,7 +107,8 @@ test("Andamento mostra cidade, fila, atendimento e endereço de entrega só com 
     assert.ok(texto.includes("<script>alert('x')</script>"), "a descrição entra como texto, sem virar tag");
     assert.equal(ativo.querySelectorAll("script").length, 0, "nenhuma tag viva vinda da descrição");
     assert.ok(texto.indexOf("7134662") < texto.indexOf("7124895"), "OS Oracle em ordem decrescente");
-    assert.match(texto, /Andamento registrado/);
+    assert.doesNotMatch(texto, /Andamento registrado/, "o bloco da linha do tempo foi removido");
+    assert.equal(ativo.querySelectorAll("textarea").length, 0, "sem campo de anotação");
 
     const entregue = celulas["SN-ENTREGUE"].textContent;
     assert.doesNotMatch(entregue, /Rua que não deve aparecer/);
@@ -115,25 +116,7 @@ test("Andamento mostra cidade, fila, atendimento e endereço de entrega só com 
   } finally { restaurar(); }
 });
 
-test("linha do tempo mostra as mudanças e a anotação de até 2000 caracteres por versão", async () => {
-  const { celulas, restaurar } = await abrirAndamento(
-    [{ serie: "SN-1", relacao: "conferida", oracle: [], simpress: {} }],
-    { eventos: [{
-      snapshot_id: "import-1", item_id: "ticket-row-1", atualizado_em: "2026-10-10T10:00:00", tipo: "Dados alterados",
-      mudancas: [{ campo: "OS Oracle", anterior: ["7124895"], atual: ["7279287"] }], anotacao: "Acompanhar parceiro",
-    }] },
-  );
-  try {
-    const texto = celulas["SN-1"].textContent;
-    assert.match(texto, /Dados alterados/);
-    assert.match(texto, /OS Oracle: 7124895 → 7279287/);
-    const campo = celulas["SN-1"].querySelector("textarea");
-    assert.equal(campo.maxLength, 2000);
-    assert.equal(campo.value, "Acompanhar parceiro");
-  } finally { restaurar(); }
-});
-
-test("Andamento separa dados e linha do tempo em duas colunas (.ck-os-andamento)", async () => {
+test("Andamento tem só a coluna de dados (.ck-os-andamento), sem linha do tempo", async () => {
   const { celulas, restaurar } = await abrirAndamento([
     { serie: "SN-COLUNAS", relacao: "conferida", oracle: [], simpress: { pedidos: ["1"], ordens_servico: ["2"], status: ["Pedido entregue"] } },
   ]);
@@ -141,13 +124,12 @@ test("Andamento separa dados e linha do tempo em duas colunas (.ck-os-andamento)
     const celula = celulas["SN-COLUNAS"];
     assert.equal(celula.children.length, 1, "a célula tem um único filho: o wrapper");
     const painel = celula.children[0];
-    assert.match(painel.className, /\bck-os-andamento\b/);
-    const [dados, tempo] = painel.children;
-    assert.match(dados.className, /\bck-os-andamento__dados\b/);
-    assert.match(tempo.className, /\bck-os-andamento__tempo\b/);
-    assert.match(dados.textContent, /Ordens no Oracle/);
-    assert.equal(dados.querySelectorAll(".ck-det-bloco").length, 0, "a linha do tempo não fica na coluna de dados");
-    assert.equal(tempo.querySelectorAll(".ck-det-bloco").length, 1);
-    assert.match(tempo.textContent, /Andamento registrado/);
+    assert.match(painel.className, /ck-os-andamento/);
+    assert.equal(painel.children.length, 1);
+    assert.match(painel.children[0].className, /ck-os-andamento__dados/);
+    assert.match(painel.textContent, /Ordens no Oracle/);
+    assert.equal(painel.querySelectorAll(".ck-det-bloco").length, 0);
+    assert.doesNotMatch(painel.textContent, /Andamento registrado/);
+    assert.equal(painel.querySelectorAll("textarea").length, 0);
   } finally { restaurar(); }
 });
