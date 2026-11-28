@@ -845,6 +845,31 @@ test("antigo não encontrado no SoftExpert na última leitura fica laranja, com 
   expect(await linha("UTIC-2026-1210").evaluate(no => getComputedStyle(no).borderLeftWidth)).toBe("1px"); // o lido segue normal
 });
 
+test("Finalizar de antigo com nao_encontrado: orientação fora do resultado e Conferir este chamado relê só ele", async ({ page, request }) => {
+  await page.route("**/api/sebrae/novos", async rota => {
+    const resposta = await rota.fetch();
+    const corpo = await resposta.json();
+    corpo.importado.abertos.forEach(a => {
+      if (a.numero === "UTIC-2026-1211") a.softexpert = { ...a.softexpert, finalizacao: { status: "nao_encontrado", em: "2026-11-27T10:00:00" } };
+    });
+    await rota.fulfill({ response: resposta, json: corpo });
+  });
+  const { painel } = await abrirPainel(page, request, "", "leitura");
+  await painel.locator("#sebrae-aba-antigos").click();
+  const cartao = painel.locator('#sebrae-antigos-lista .sebrae-chamado[data-numero="UTIC-2026-1211"]');
+  await abrirItemAntigo(cartao);
+  const orientacao = cartao.locator(".sebrae-final__orientacao");
+  await expect(orientacao).toBeVisible();
+  await expect(orientacao).toContainText("Se você já finalizou este chamado no SoftExpert, clique em Conferir este chamado. Se ele não for encontrado, em Finalizar no SoftExpert marque “registrar como finalizado por outro técnico” (precisa de A, B, D = FINALIZADO e R).");
+  await expect(cartao.locator(".sebrae-chamado__resultado .sebrae-final__orientacao")).toHaveCount(0); // fora do role=status
+  await expect(painel.locator('#sebrae-antigos-lista .sebrae-chamado[data-numero="UTIC-2026-1210"] .sebrae-final__orientacao')).toBeHidden();
+  const corpos = [];
+  page.on("request", r => { if (r.method() === "POST" && r.url().endsWith("/api/sebrae/antigos/ler")) corpos.push(r.postDataJSON()); });
+  await orientacao.getByRole("button", { name: "Conferir este chamado" }).click();
+  await expect(page.locator(TOAST).filter({ hasText: "Conferindo UTIC-2026-1211 no SoftExpert." })).toBeVisible();
+  await expect.poll(() => corpos).toEqual([{ numero: "UTIC-2026-1211" }]);
+});
+
 test("Finalizar de antigo não encontrado: bloco laranja com A, B, D e R, caixa sempre desmarcada e confirmar_outro_tecnico só se marcada", async ({ page, request }) => {
   await page.route("**/api/sebrae/novos", async rota => {
     const resposta = await rota.fetch();

@@ -168,6 +168,15 @@ export function avisoEncerramento(numeros: Qualquer[]): string {
 /** Texto da leitura dos antigos: andamento (X de Y), resultado ou interrupção. `anteriorEm` ignora o resultado da execução anterior. */
 export function resumoLeituraAntigos(resultado: Qualquer, emAndamento: Qualquer, quando: string = "", anteriorEm: Qualquer = null): string {
   const contar = (lista: Qualquer) => Object.keys(lista || {}).length;
+  const numero = resultado?.numero; // leitura de um só ("Conferir este chamado")
+  if (emAndamento && numero && resultado.em !== anteriorEm) return `Conferindo ${numero} no SoftExpert… Para parar, use Cancelar execução.`;
+  if (!emAndamento && numero) {
+    const de = `Conferência de ${numero}${quando ? ` de ${quando}` : ""}`;
+    if (!resultado.concluido) return `${de} interrompida.`;
+    if ((resultado.lidos || []).includes(numero)) return `${de}: encontrado no SoftExpert e lido de novo.`;
+    if ((resultado.nao_encontrados || []).includes(numero)) return `${de}: não encontrado no SoftExpert. Em Finalizar no SoftExpert, marque “registrar como finalizado por outro técnico”.`;
+    return `${de}: não foi possível ler (${(resultado.falhas || {})[numero] || "veja o log"}).`;
+  }
   if (emAndamento) {
     const atual = resultado && resultado.em !== anteriorEm ? resultado : null;
     const feitos = atual ? (atual.lidos || []).length + contar(atual.falhas) : 0;
