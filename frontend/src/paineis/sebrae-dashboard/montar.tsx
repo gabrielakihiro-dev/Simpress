@@ -8,7 +8,8 @@ import { ChipsLeitura, type AlvosLeitura } from "./leitura";
 import { criarLojaLeitura } from "./leitura-loja";
 import { AvisosNovos, Rascunho, type AlvosRascunho } from "./avisos-rascunho";
 import { ContagensAbas, type AlvosAbas } from "./abas";
-import { criarLojaAbas, criarLojaAvisos, criarLojaRascunho } from "./lojas";
+import { ResultadoFechar, type AlvosFechar } from "./fechar";
+import { criarLojaAbas, criarLojaAvisos, criarLojaFechar, criarLojaRascunho } from "./lojas";
 import { sugestaoOsPainel } from "./sugestao-os";
 import type { AppSebrae, Registro } from "./tipos";
 
@@ -16,7 +17,8 @@ import type { AppSebrae, Registro } from "./tipos";
 // A tela de "Chamados novos do SoftExpert" continua nos elementos que já estão em static/index.html; este painel só liga
 // o comportamento a eles e devolve as ações que a aplicação chama pela ponte (frontend/src/aplicacao/pontes.ts).
 // Os chips da última leitura dos antigos (#sebrae-leitura, leitura.tsx), os avisos dos novos (#sebrae-novos-avisos) e o
-// rascunho (#sebrae-rascunho, avisos-rascunho.tsx) e as contagens das sub-abas com o resultado do filtro (abas.tsx) são React declarativo: preenchem por portal os pontos dinâmicos do partial.
+// rascunho (#sebrae-rascunho, avisos-rascunho.tsx), as contagens das sub-abas com o resultado do filtro (abas.tsx) e o
+// resultado do Atualizar/Fechar (#sebrae-fechar, fechar.tsx) são React declarativo: preenchem por portal os pontos dinâmicos do partial.
 // Os elementos #sebrae-historico-resumo (painel sebrae-historico) e #sebrae-conflitos (painel sebrae-conflitos) não são tocados aqui.
 const IDS_LEITURA: Record<keyof AlvosLeitura, string> = {
   grupo: "sebrae-leitura", hora: "sebrae-leitura-hora", horaTexto: "sebrae-leitura-hora", lidos: "sebrae-leitura-lidos",
@@ -54,6 +56,7 @@ export function montar(_container: HTMLElement) {
   const lojaAvisos = criarLojaAvisos();
   const lojaRascunho = criarLojaRascunho();
   const lojaAbas = criarLojaAbas();
+  const lojaFechar = criarLojaFechar();
   const acoes = criarDashboardSebrae({
     app,
     dom,
@@ -66,6 +69,7 @@ export function montar(_container: HTMLElement) {
     lojaAvisos,
     lojaRascunho,
     lojaAbas,
+    lojaFechar,
   });
   // Cada parte tem a sua raiz (num div solto: o conteúdo vai por portal), então erro ao montar ou ao desenhar uma não
   // derruba as outras nem o painel: as ações voltam sempre. Portais anexam: cada parte esvazia os seus alvos de texto antes.
@@ -102,6 +106,11 @@ export function montar(_container: HTMLElement) {
     const alvos: AlvosAbas = { abas, resultado: exigir("sebrae-filtro-resultado") };
     [...Object.values(abas).map(({ contagem }) => contagem), alvos.resultado].forEach(alvo => alvo.replaceChildren());
     return <ContagensAbas alvos={alvos} loja={lojaAbas} />;
+  });
+  montarParte("o resultado do Atualizar/Fechar", () => {
+    const alvos: AlvosFechar = { bloco: exigir("sebrae-fechar"), status: exigir("sebrae-fechar-status"), lista: exigir("sebrae-fechar-lista") };
+    [alvos.status, alvos.lista].forEach(alvo => alvo.replaceChildren());
+    return <ResultadoFechar alvos={alvos} loja={lojaFechar} />;
   });
   return acoes;
 }

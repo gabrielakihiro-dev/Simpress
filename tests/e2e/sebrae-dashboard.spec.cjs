@@ -523,11 +523,12 @@ test("Atualizar Dashboard confirma, finaliza em massa e mostra o resultado por c
   expect(corpoEnvio.finalizar_softexpert).toBe(true);
   expect(corpoEnvio.enviar_sharepoint).toBe(true);
   expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
-  await expect(painel.locator("#sebrae-fechar-status")).toContainText("Finalizando no SoftExpert");
+  await expect(painel.locator('#sebrae-fechar[aria-busy="true"] #sebrae-fechar-status')).toContainText("Finalizando no SoftExpert");
   const cartao = painel.locator('#sebrae-finalizados-lista details.sebrae-finalizado[data-numero="UTIC-2026-1200"]');
   await expect(cartao.locator("> summary")).toContainText("UTIC-2026-1200 · Teclado sem resposta · Camila Vitoria Lopes de Oliveira", { timeout: 10000 });
   await expect(painel.getByText("Finalização no SoftExpert terminada")).toHaveCount(0); // o cartão finalizado substitui o texto e a linha de resultado
   await expect(painel.locator("#sebrae-fechar-lista li")).toHaveCount(0);
+  await expect(painel.locator("#sebrae-fechar")).toBeHidden(); // só finalizados: status vazio esconde o bloco
   await expect(painel.locator("#sebrae-antigos-lista .sebrae-chamado")).toHaveCount(0);
   await expect(painel.locator("#sebrae-sharepoint-aviso")).toBeHidden();
 });
@@ -589,6 +590,8 @@ test("chamado FINALIZADO sem descrição é pulado; o envio ao SharePoint pede c
   await expect(painel.locator("#sebrae-fechar-status")).toContainText("Nenhum chamado foi finalizado no SoftExpert");
   await expect(painel.locator("#sebrae-fechar-status")).toContainText("1 pulado(s)");
   await expect(painel.locator("#sebrae-fechar-lista")).toContainText("UTIC-2026-1200: não será finalizado no SoftExpert (sem descrição para finalizar).");
+  await expect(painel.locator('#sebrae-fechar-lista > li.sebrae-fechar__item[data-status="pulado"]')).toHaveCount(1);
+  await expect(painel.locator("#sebrae-fechar")).toHaveAttribute("aria-busy", "false");
   await expect(painel.locator("#sebrae-atualizar-status")).toContainText("Baixado"); // a atualização não quebra
 });
 

@@ -6,7 +6,7 @@
 import { baixarDaApi } from "../../comum/baixar-api.ts";
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
 import { criarLojaLeitura } from "./leitura-loja.ts";
-import { criarLojaAbas, criarLojaAvisos, criarLojaRascunho, type ItemRascunho } from "./lojas.ts";
+import { criarLojaAbas, criarLojaAvisos, criarLojaFechar, criarLojaRascunho, type ItemRascunho } from "./lojas.ts";
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
@@ -41,6 +41,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   const rascunhoTela = context.lojaRascunho ?? criarLojaRascunho();
   // Contagens das sub-abas e resultado do filtro: o DOM nasce em abas.tsx a partir desta loja.
   const abasTela = context.lojaAbas ?? criarLojaAbas();
+  // Resultado do Atualizar/Fechar: o DOM nasce em fechar.tsx a partir desta loja.
+  const fecharTela = context.lojaFechar ?? criarLojaFechar();
 
   if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
     if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
@@ -2056,8 +2058,6 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   }
 
   function renderizarFechar() {
-    const host = el("sebrae-fechar");
-    if (!host) return;
     const f = estado.fechar;
     const res = f.resultado;
     const aoVivo = f.emAndamento && Boolean(res?.em_andamento);
@@ -2068,18 +2068,11 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     if (f.emAndamento) status = `Finalizando no SoftExpert…${aoVivo && f.numeros.length ? ` ${(res?.resultados || []).length} de ${f.numeros.length} concluído(s).` : ""}`;
     else if (f.mensagemInicio) status = f.mensagemInicio;
     else if (res && (restantes.length || pulados.length || !(res.resultados || []).length)) status = resumoResultado({ ...res, resultados: restantes });
-    host.hidden = !status;
-    definirTexto("sebrae-fechar-status", status);
-    host.setAttribute("aria-busy", f.emAndamento ? "true" : "false");
     const itens = [
       ...(f.emAndamento && !aoVivo ? [] : restantes.map((r: Registro) => ({ status: r.status, texto: `${[r.numero, identificacaoChamado(r.numero)].filter(Boolean).join(" · ")}: ${textoResultado(r)}` }))),
       ...pulados.map((p: Registro) => ({ status: "pulado", texto: textoPulado(p) })),
     ];
-    el("sebrae-fechar-lista")?.replaceChildren(...itens.map(item => {
-      const li = dom.createTextElement("li", "sebrae-fechar__item", item.texto);
-      li.dataset.status = item.status;
-      return li;
-    }));
+    fecharTela.atualizar({ status, ocupado: f.emAndamento, itens, versao: fecharTela.ler().versao + 1 });
   }
 
   function renderizarSharepoint() {
