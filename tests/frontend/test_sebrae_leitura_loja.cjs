@@ -9,7 +9,7 @@ const { createFakeDocument } = require("./support/fake-dom.cjs");
 const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
 const { criarDashboardSebrae } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
 const { criarLojaLeitura, chipsLeitura } = require("../../frontend/src/paineis/sebrae-dashboard/leitura-loja.ts");
-const { criarLojaAvisos, criarLojaFechar, criarLojaRascunho } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
+const { criarLojaAvisos, criarLojaFechar, criarLojaMestre, criarLojaRascunho } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
 
 const COM_FALHAS = { em: "2026-10-28T10:40:00-03:00", concluido: true, lidos: ["UTIC-2026-1"], falhas: { "UTIC-2026-2": "Página não abriu.", "UTIC-2026-3": "Sem acesso." }, sem_utic: 1 };
 const SEM_FALHAS = { em: "2026-10-28T11:00:00-03:00", concluido: true, lidos: ["UTIC-2026-2", "UTIC-2026-3"], falhas: {}, sem_utic: 0 };
@@ -59,10 +59,11 @@ function montar({ respostas = [{ em_andamento: false, resultado: null }], post =
   const lojaAvisos = criarLojaAvisos();
   const lojaRascunho = criarLojaRascunho();
   const lojaFechar = criarLojaFechar();
+  const lojaMestre = criarLojaMestre();
   const app = { apiFetch, showToast: (texto, tipo) => toasts.push({ texto, tipo }), confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = criarDashboardSebrae({ app, dom, sebraeDashboardModel: { ...sebraeDashboardModel, INTERVALO_FECHAR_MS: 0 }, lojaLeitura: loja, lojaAvisos, lojaRascunho, lojaFechar });
-  return { feature, loja, lojaAvisos, lojaRascunho, lojaFechar, ouvintesJanela, toasts, doc, restaurar() { global.document = antigoDoc; global.window = antigaJanela; } };
+  const feature = criarDashboardSebrae({ app, dom, sebraeDashboardModel: { ...sebraeDashboardModel, INTERVALO_FECHAR_MS: 0 }, lojaLeitura: loja, lojaAvisos, lojaRascunho, lojaFechar, lojaMestre });
+  return { feature, loja, lojaAvisos, lojaRascunho, lojaFechar, lojaMestre, ouvintesJanela, toasts, doc, restaurar() { global.document = antigoDoc; global.window = antigaJanela; } };
 }
 
 test("carregar a lista põe o último resultado na loja; o chip de falhas abre e fecha o popover", async () => {
@@ -195,4 +196,53 @@ test("fechar: sem resultado o bloco fica oculto; o último resultado traz o resu
     ]);
     assert.ok(f.versao >= 1, "o finalizado recarrega a lista, que consulta e desenha de novo");
   } finally { montagem.restaurar(); }
+});
+
+// ---- Lista mestre das sub-abas ----
+test("lista mestre: escolher a aba grava os itens de cada lista (número, título, selos, selecionado) com versão crescente", () => {
+  const { feature, lojaMestre, doc, restaurar } = montar();
+  try {
+    assert.ok(feature);
+    assert.deepEqual(lojaMestre.ler(), { listas: {}, versao: 0 }, "antes da primeira chamada o partial fica como veio");
+    const lista = doc.getElementById("sebrae-antigos-lista");
+    const linha = (numero, titulo, lado) => {
+      const detalhe = doc.createElement("details");
+      detalhe.dataset.numero = numero;
+      const resumo = doc.createElement("summary");
+      const span = (classe, texto) => { const no = doc.createElement("span"); no.className = classe; no.textContent = texto; return no; };
+      const selos = span("sebrae-antigo__selos", "");
+      const lido = span("ck-badge sebrae-selo", "Lido");
+      lido.dataset.status = "info";
+      lido.title = "Lido no SoftExpert";
+      const estrela = span("ck-badge sebrae-selo-destaque", "Destaque");
+      estrela.dataset.status = "alerta";
+      const oculto = span("ck-badge sebrae-selo", "Oculto");
+      oculto.hidden = true;
+      // o DOM falso lê `>` como mais um ancestral qualquer: um nível a mais faz `.sebrae-antigo__selos > .ck-badge` achar os selos
+      const nivel = span("", "");
+      nivel.append(lido, estrela, oculto);
+      selos.append(nivel);
+      resumo.append(span("sebrae-antigo__assunto", titulo), span("sebrae-antigo__quem", "Ana"), selos);
+      const campo = doc.createElement("input");
+      campo.dataset.sebraeCampo = "A";
+      campo.value = lado;
+      detalhe.append(resumo, campo);
+      return detalhe;
+    };
+    lista.append(linha("UTIC-2026-1", "Impressora", "cliente"), linha("UTIC-2026-2", "Scanner", ""));
+    doc.getElementById("sebrae-aba-antigos").click();
+    const { listas, versao } = lojaMestre.ler();
+    assert.equal(versao, 1);
+    assert.deepEqual(Object.keys(listas).sort(), ["antigos", "destaques", "finalizados", "novos"]);
+    const { tomDoLado } = require("../../frontend/src/componentes/nl-modelo.ts");
+    const tom = tomDoLado("CLIENTE") !== "indigo" ? { tom: tomDoLado("CLIENTE") } : {};
+    assert.deepEqual(listas.antigos, [
+      { numero: "UTIC-2026-1", titulo: "Impressora", quem: "Ana", selecionado: true, tom: undefined, achado: undefined, osDecidir: undefined,
+        selos: [{ classe: "ck-badge sebrae-selo", texto: "Lido", status: "info", title: "Lido no SoftExpert" }, { estrela: true, status: "alerta" }, { classe: "nl-selo-lado", texto: "CLIENTE", ...tom }] },
+      { numero: "UTIC-2026-2", titulo: "Scanner", quem: "Ana", selecionado: false, tom: undefined, achado: undefined, osDecidir: undefined,
+        selos: [{ classe: "ck-badge sebrae-selo", texto: "Lido", status: "info", title: "Lido no SoftExpert" }, { estrela: true, status: "alerta" }] },
+    ], "sem chamado aberto na aba atual, o primeiro abre; o selo escondido fica fora");
+    doc.getElementById("sebrae-aba-antigos").click();
+    assert.equal(lojaMestre.ler().versao, 2, "cada chamada soma 1 (a key nova recria os nós, como o replaceChildren)");
+  } finally { restaurar(); }
 });
