@@ -60,6 +60,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   const ABAS: string[] = ["novos", "antigos", "destaques", "finalizados"];
   const ROTULO_ABA: Record<string, string> = { novos: "Novos", antigos: "Antigos", destaques: "Destaques", finalizados: "Finalizados" };
   const POR_PAGINA = 25;
+  const TEXTO_ORIENTACAO_NAO_ENCONTRADO = "Se você já finalizou este chamado no SoftExpert, clique em Conferir este chamado. Se ele não for encontrado, em Finalizar no SoftExpert marque “registrar como finalizado por outro técnico” (precisa de A, B, D = FINALIZADO e R).";
   // Vive só na memória da página: F5 → F4 → F5 mantém a aba; recarregar volta a Novos com o filtro vazio.
   const visao: VisaoSebrae = { aba: "novos", termo: "", paginas: { antigos: POR_PAGINA, finalizados: POR_PAGINA }, novosAbertos: null, itens: [], porNo: new Map() };
   const abertosPelaPessoa = new WeakSet<Element>();
@@ -1179,14 +1180,24 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const colAnexo = document.createElement("div");
     colAnexo.className = "sebrae-final__anexo";
     colAnexo.append(campo("Anexo PDF (opcional)", arquivo), pdfLinha, feedbackPdf);
+    // Fora do `resultado` (role=status): orientação quando o SoftExpert não achou o antigo (talvez finalizado à mão).
+    const orientacao = document.createElement("div");
+    orientacao.className = "sebrae-final__orientacao";
+    orientacao.hidden = true;
+    const conferir = document.createElement("button");
+    conferir.type = "button";
+    conferir.className = "ck-btn ck-btn--secundario ck-btn--sm";
+    conferir.textContent = "Conferir este chamado";
+    conferir.dataset.sebraeConferir = numero;
+    orientacao.append(dom.createTextElement("p", "ck-campo__ajuda", TEXTO_ORIENTACAO_NAO_ENCONTRADO), conferir);
     const rodape = document.createElement("div");
     rodape.className = "sebrae-final__rodape";
-    rodape.append(acoes, resultado);
+    rodape.append(acoes, resultado, orientacao);
     const corpo = document.createElement("div");
     corpo.className = "sebrae-final__corpo";
     corpo.append(listaPendencias(), colTexto, colAnexo, rodape);
     area.appendChild(corpo);
-    estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, tentarRemover, feedbackPdf, botao, cancelar, resultado });
+    estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, tentarRemover, feedbackPdf, botao, cancelar, resultado, orientacao, conferir });
     texto.addEventListener("input", () => {
       contar();
       window.clearTimeout(estado.temporizadores[numero]);
@@ -1200,6 +1211,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     tentarRemover.addEventListener("click", () => removerPdf(numero, true));
     botao.addEventListener("click", () => finalizarNoSoftExpert(numero));
     cancelar.addEventListener("click", () => cancelarFinalizacao(numero));
+    conferir.addEventListener("click", () => conferirAntigo(numero));
     atualizarFinalizar(numero);
     if (aplicarRevisado) salvarDescricao(numero); // só salva; finalizar continua sendo clique do usuário
     return area;
@@ -1222,6 +1234,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       : soft.cancelado && !soft.finalizacao ? "Finalização cancelada."
       : soft.finalizacao ? `${textoResultado(soft.finalizacao)}${quando ? ` · ${quando}` : ""}` : "";
     ref.resultado.dataset.estado = soft.processando ? "andamento" : soft.finalizacao?.status || (soft.cancelado ? "cancelado" : "");
+    ref.orientacao.hidden = soft.novo || soft.processando || soft.finalizacao?.status !== "nao_encontrado";
+    ref.conferir.disabled = estado.antigos.emAndamento || estado.fechar.emAndamento;
   }
 
   function atualizarTodosFinalizar() {
@@ -2378,6 +2392,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     // Chips e lista de falhas (leitura.tsx): somem durante a leitura; sem falhas, o popover fecha.
     const resultado = a.emAndamento ? null : a.resultado;
     leitura.atualizar({ resultado, falhasAbertas: leitura.ler().falhasAbertas && Object.keys(resultado?.falhas || {}).length > 0 });
+    atualizarTodosFinalizar(); // "Conferir este chamado" fica desabilitado enquanto a leitura roda
   }
 
   const abrirFalhas = (abrir: boolean) => leitura.atualizar({ falhasAbertas: abrir });
@@ -2472,6 +2487,24 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     }
     app.showToast("Leitura dos chamados antigos iniciada.", "success");
     app.atualizarEstadoAutomacao?.(); // habilita o Cancelar execução sem esperar a próxima consulta da Automação
+    acompanharAntigos();
+  }
+
+  /** "Conferir este chamado": relê no SoftExpert só este antigo e acompanha como a leitura de todos (recarrega a lista ao fim). */
+  async function conferirAntigo(numero: string) {
+    const a = estado.antigos;
+    if (a.emAndamento) return;
+    try {
+      await app.apiFetch("/api/sebrae/antigos/ler", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ numero }),
+        errorMessage: "Não foi possível conferir o chamado no SoftExpert.",
+      });
+    } catch (falha) { const error = falha as ErroApi;
+      app.showToast(error.message, error.status === 409 ? "warning" : "error");
+      return;
+    }
+    app.showToast(`Conferindo ${numero} no SoftExpert.`, "success");
+    app.atualizarEstadoAutomacao?.();
     acompanharAntigos();
   }
 

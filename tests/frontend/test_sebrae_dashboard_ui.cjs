@@ -172,6 +172,16 @@ test("resumoLeituraAntigos: andamento com X de Y, resultado completo e interromp
   assert.equal(resumoLeituraAntigos(null, false), "");
 });
 
+test("resumoLeituraAntigos: conferência de um chamado só", () => {
+  const um = { numero: "UTIC-2026-0099", em: "novo", concluido: true, lidos: [], falhas: {}, nao_encontrados: [] };
+  assert.equal(resumoLeituraAntigos(um, true, "", "velho"), "Conferindo UTIC-2026-0099 no SoftExpert… Para parar, use Cancelar execução.");
+  assert.equal(resumoLeituraAntigos({ ...um, lidos: ["UTIC-2026-0099"] }, false), "Conferência de UTIC-2026-0099: encontrado no SoftExpert e lido de novo.");
+  assert.match(resumoLeituraAntigos({ ...um, nao_encontrados: ["UTIC-2026-0099"], falhas: { "UTIC-2026-0099": "x" } }, false, "27/11/2026 10:00"),
+    /^Conferência de UTIC-2026-0099 de 27\/11\/2026 10:00: não encontrado no SoftExpert\./);
+  assert.equal(resumoLeituraAntigos({ ...um, falhas: { "UTIC-2026-0099": "RuntimeError" } }, false), "Conferência de UTIC-2026-0099: não foi possível ler (RuntimeError).");
+  assert.equal(resumoLeituraAntigos({ ...um, concluido: false }, false), "Conferência de UTIC-2026-0099 interrompida.");
+});
+
 test("avisos de nome: mais de uma pessoa na descrição não preenche; uma só liga pelo nome citado", () => {
   assert.match(avisoOutraPessoa({ outra_pessoa: "Ícaro Gabriel Duarte Campos" }), /mais de uma pessoa \(Ícaro Gabriel Duarte Campos/);
   assert.equal(avisoOutraPessoa({}), "");

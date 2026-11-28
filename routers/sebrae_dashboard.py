@@ -17,7 +17,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Mapping, Optional, Sequence, Tuple
 
-from fastapi import APIRouter, File, Query, UploadFile
+from fastapi import APIRouter, Body, File, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -29,7 +29,7 @@ from domains import (
     sebrae_historico, sebrae_novos, sebrae_observacoes as obs, sebrae_os_recusadas,
 )
 from domains import sebrae_categoria  # noqa: F401 - reexportado: os testes fazem patch.object(rota_sebrae.sebrae_categoria, ...)
-from domains.sebrae_chamados import mascarar_cpfs
+from domains.sebrae_chamados import chave_do_numero, mascarar_cpfs
 from domains import sebrae_dashboard_atualizacao as atualizacao, sebrae_dashboard_importacao as importacao, sebrae_dashboard_tela as tela
 from domains import sebrae_dashboard_rotinas as rotinas
 from domains.sebrae_dashboard import DashboardInvalido, ler_coluna_c
@@ -142,6 +142,14 @@ class RecuperacaoEnvioPayload(BaseModel):
     envio_id: str = Field(..., pattern=r"^[a-f0-9]{32}$")
     acao: Literal["limpar", "confirmar_recebimento", "declarar_nao_enviado", "concluir_legado"]
     confirmacao: str = Field("", max_length=100)
+
+
+class LerAntigosPayload(BaseModel):
+    """Corpo opcional de ``POST /api/sebrae/antigos/ler``: com ``numero``, relê só esse antigo em aberto."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    numero: str = Field(..., min_length=1, max_length=40)
 
 
 class ConflitosPayload(BaseModel):
@@ -294,6 +302,12 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             services, [c.model_dump() for c in chamados], [e.model_dump() for e in edicoes], _nomes_pessoas,
             aceita_vazio=aceita_vazio, exigir_encerramento=exigir_encerramento, confirmados=confirmados,
         )
+
+    def _chave_ou_vazio(numero: Any) -> str:
+        try:
+            return chave_do_numero(str(numero or ""))
+        except ValueError:
+            return ""
 
     def _exigir_finalizavel(numero: str) -> str:
         """Antigo EM ABERTO/sem status do Dashboard importado ou novo da última busca (ainda fora do Dashboard)."""
@@ -548,13 +562,22 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return JSONResponse({"escolhas": escolhas, "enviar": envio}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/antigos/ler", status_code=202)
-    def ler_antigos():
-        """Botão de ler os chamados antigos no SoftExpert: inicia a rotina ``antigos`` (só leitura, só os que ainda não foram lidos)."""
+    def ler_antigos(payload: Optional[LerAntigosPayload] = Body(None)):
+        """Botão de ler os chamados antigos no SoftExpert: inicia a rotina ``antigos`` (só leitura, só os que ainda não foram lidos).
+
+        Com ``{numero}`` (botão "Conferir este chamado"), relê só esse antigo em aberto, mesmo já lido; 422 se não for um."""
         if services.runner is None:
             raise DomainBusyError("A automação não está disponível neste servidor.")
-        if sebrae_novos.ler_existentes(services.caminhos().existentes) is None:
+        existentes = sebrae_novos.ler_existentes(services.caminhos().existentes)
+        if existentes is None:
             raise DomainValidationError("Importe o Dashboard antes.", status_code=422)
-        services.runner().start("antigos")  # 409 quando outra rotina roda
+        if payload is None:
+            services.runner().start("antigos")  # 409 quando outra rotina roda
+        else:
+            numero = fin.validar_numero(payload.numero)
+            if numero not in {n for a in existentes["abertos"] if (n := _chave_ou_vazio(a.get("numero")))}:
+                raise DomainValidationError(f"{numero} não é um chamado antigo EM ABERTO do Dashboard importado.", status_code=422)
+            services.runner().start("antigos", numero=numero)
         return JSONResponse({"iniciado": True}, status_code=202, headers={"Cache-Control": "no-store"})
 
     @router.get("/api/sebrae/antigos/ler")

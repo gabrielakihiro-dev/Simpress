@@ -164,6 +164,15 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         self.assertTrue(state["log"]["arquivo"].endswith("_os.site.log"))
         harness.finish(0)
 
+    def test_antigos_with_numero_passes_it_as_argument_and_other_routines_refuse_it(self):
+        harness = self.harness()
+        with self.assertRaises(DomainError) as raised:
+            harness.runner.start("os", numero="UTIC-2026-0001")
+        self.assertEqual((raised.exception.status_code, harness.popen_calls), (422, []))
+        harness.runner.start("antigos", numero="UTIC-2026-0001")
+        self.assertEqual(harness.popen_calls[0][0][-4:], ["--rotina", "antigos", "--numero", "UTIC-2026-0001"])
+        harness.finish(0)
+
     def test_project_python_prefers_the_venv(self):
         venv_python = self.root / ".venv" / "Scripts" / "python.exe"
         venv_python.parent.mkdir(parents=True)
