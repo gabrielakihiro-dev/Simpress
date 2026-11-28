@@ -276,12 +276,13 @@ def _areas_dinamicas(pacote: _Pacote, parte: str) -> List[Tuple[int, int, int, i
     return areas
 
 
-def valores_das_outras_abas(conteudo: bytes) -> Dict[str, Dict[str, str]]:
-    """Per worksheet other than CHAMADOS (by name), ``ref -> value`` of every non-empty cell: the constant text, or ``=`` plus the
-    formula text (never the cached result, which volatile formulas change on every open). Chartsheets have no cells and are skipped.
+def valores_das_abas(conteudo: bytes) -> Dict[str, Dict[str, str]]:
+    """Per worksheet (by name), ``ref -> value`` of every non-empty cell: the constant text, or ``=`` plus the formula text (never
+    the cached result, which volatile formulas change on every open). Chartsheets have no cells and are skipped.
 
-    Cells inside a pivot table are skipped: Excel redraws them from CHAMADOS when it saves and nobody can type there, while the
-    site never redraws them (real downloads of 27/11/2026: every "Din. Abertos" difference was inside a pivot table).
+    Left out: CHAMADOS columns P and R (Excel rewrites the date serials of the site; ``valores_dos_chamados`` compares them to the
+    minute) and cells inside a pivot table (Excel redraws them from CHAMADOS when it saves, the site never does; real downloads of
+    27/11/2026: every "Din. Abertos" difference was inside a pivot table).
     Styles, shared-string order and zip metadata are ignored, like in ``valores_dos_chamados``."""
     pacote = _ler_pacote(conteudo)
     try:
@@ -291,15 +292,16 @@ def valores_das_outras_abas(conteudo: bytes) -> Dict[str, Dict[str, str]]:
             atributos = _atributos(tag)
             nome = unescape(atributos.get("name", ""))
             tipo, parte = relacoes[atributos.get("r:id", "")]
-            if nome == ABA or not tipo.endswith("/worksheet"):
+            if not tipo.endswith("/worksheet"):
                 continue
             dinamicas = _areas_dinamicas(pacote, parte)
+            datas = COLUNAS_DE_DATA if nome == ABA else ()
             celulas: Dict[str, str] = {}
             for linha in _LINHA.finditer(pacote.texto(parte)):
                 numero = int(linha.group(1))
                 for celula in _CELULA.finditer(linha.group(3) or ""):
                     coluna = _letra_para_indice(celula.group(1))
-                    if any(c1 <= coluna <= c2 and l1 <= numero <= l2 for c1, l1, c2, l2 in dinamicas):
+                    if celula.group(1) in datas or any(c1 <= coluna <= c2 and l1 <= numero <= l2 for c1, l1, c2, l2 in dinamicas):
                         continue
                     formula = _FORMULA.search(celula.group(3) or "")
                     valor = "=" + unescape(formula.group(1) or "") if formula else _valor_celula(celula.group(0), pacote.compartilhadas)

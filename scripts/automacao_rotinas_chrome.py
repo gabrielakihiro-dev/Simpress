@@ -3240,7 +3240,7 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
             # envio sobrescreve. Só fechar o Excel Online grava versão nova, com outros bytes (ensaio de 27/11/2026). Só leitura; nunca
             # refaz a conferência nem o merge (as outras abas do montado vêm do download anterior). Mudou um valor: para sem enviar.
             from domains.sebrae_dashboard import DashboardInvalido
-            from domains.sebrae_dashboard_gravacao import mesmos_valores, valores_das_outras_abas
+            from domains.sebrae_dashboard_gravacao import mesmos_valores, valores_das_abas
 
             def _baixar_de_novo() -> bytes:
                 verificar_cancelamento()
@@ -3260,7 +3260,7 @@ def _rodar_rotina_enviar_protegida(context: "BrowserContext", arquivo: "Path | N
                 log("Dashboard", "O Dashboard no SharePoint continua igual ao conferido; seguindo com o envio.")
                 return
             try:
-                iguais = mesmos_valores(atual, conferido) and valores_das_outras_abas(atual) == valores_das_outras_abas(conferido)
+                iguais = mesmos_valores(atual, conferido) and valores_das_abas(atual) == valores_das_abas(conferido)
             except DashboardInvalido:
                 iguais = False  # ilegível: na dúvida, para
             if not iguais:

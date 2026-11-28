@@ -1320,19 +1320,27 @@ def rezipar(partes, ordem=None, **extras):
     return saida.getvalue()
 
 
-class ValoresDasOutrasAbasTest(unittest.TestCase):
+class ValoresDasAbasTest(unittest.TestCase):
     """Retomada depois do Dashboard aberto (27/11/2026): fechar o Excel Online grava outros bytes com os mesmos valores."""
 
     def setUp(self):
         self.base = com_dinamica(montar())
 
     def iguais(self, outro):
-        return G.mesmos_valores(self.base, outro) and G.valores_das_outras_abas(self.base) == G.valores_das_outras_abas(outro)
+        return G.mesmos_valores(self.base, outro) and G.valores_das_abas(self.base) == G.valores_das_abas(outro)
+
+    def chamados_com(self, antigo, novo):
+        partes = partes_de(self.base)
+        folha = partes["xl/worksheets/sheet4.xml"].decode()
+        self.assertIn(antigo, folha)
+        partes["xl/worksheets/sheet4.xml"] = folha.replace(antigo, novo, 1).encode()
+        return rezipar(partes)
 
     def test_le_constantes_e_formulas_fora_da_dinamica(self):
-        abas = G.valores_das_outras_abas(self.base)
-        self.assertNotIn("CHAMADOS", abas)
+        abas = G.valores_das_abas(self.base)
         self.assertEqual(abas["Din"], {"A1": "nota", "D1": "=SUM(B2:B3)"})
+        self.assertEqual(abas["CHAMADOS"]["Q2"], f"={FORMULA_Q}")
+        self.assertNotIn("P2", abas["CHAMADOS"])  # datas: só por valores_dos_chamados, até o minuto
         self.assertEqual(abas["LISTAS"]["D3"], CATEGORIAS_ORIGINAIS[1])  # pela sharedStrings
 
     def test_mesmos_valores_com_outros_bytes_passa(self):
@@ -1360,6 +1368,20 @@ class ValoresDasOutrasAbasTest(unittest.TestCase):
 
     def test_valor_da_chamados_mudado_para(self):
         self.assertFalse(self.iguais(com_dinamica(montar(status=("FINALIZADO", "FINALIZADO")))))
+
+    def test_chamados_fora_das_colunas_de_dado_mudada_para(self):
+        # Revisão de 27/11/2026: W, colunas à direita, cabeçalho e fórmulas da CHAMADOS também são sobrescritos pelo envio.
+        for antigo, novo in (
+            ('<c r="V2" s="5">', texto("W2", "SIM") + '<c r="V2" s="5">'),
+            ("</sheetData>", f'<row r="50">{texto("W50", "anotacao")}</row></sheetData>'),
+            ("STATUS", "STATUS X"),
+            ("<f>1+1</f>", "<f>1+2</f>"),
+        ):
+            with self.subTest(novo=novo):
+                self.assertFalse(self.iguais(self.chamados_com(antigo, novo)))
+
+    def test_data_da_chamados_regravada_no_mesmo_minuto_passa(self):
+        self.assertTrue(self.iguais(self.chamados_com("<v>46000.5</v>", "<v>46000.500000001</v>")))
 
 
 if __name__ == "__main__":
