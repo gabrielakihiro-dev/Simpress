@@ -615,6 +615,10 @@ export type LembretesReagendados = {
   "reagendados": number;
 };
 
+export type LerAntigosPayload = {
+  "numero": string;
+};
+
 export type Limpeza = {
   "aplicada": boolean;
   "itens": ItemLimpeza[];
@@ -1950,7 +1954,7 @@ export interface Rotas {
   };
   "POST /api/sebrae/antigos/ler": {
     consulta: never;
-    corpo: never;
+    corpo: LerAntigosPayload | null | undefined;
     resposta: unknown;
   };
   "POST /api/sebrae/chamados/{numero}/anexo": {
