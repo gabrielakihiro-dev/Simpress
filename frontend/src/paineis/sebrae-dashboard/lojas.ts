@@ -60,3 +60,18 @@ export interface EstadoDestaques {
 }
 export const criarLojaDestaques = () => criarLoja<EstadoDestaques>({ anuncio: "", resumo: "", versaoAnuncio: 0, versaoResumo: 0 });
 export type LojaDestaques = ReturnType<typeof criarLojaDestaques>;
+
+/** Selo de um item da lista mestre: a estrela de destaque ou um selo de texto. `tom` vira data-nl-tom (selo CLIENTE/SIMPRESS).
+ *  A estrela leva status/title quando copia o selo `Destaque` do resumo (que tem data-status). */
+export type SeloMestre =
+  | { estrela: true; status?: string; title?: string }
+  | { estrela?: undefined; classe: string; texto: string; status?: string; title?: string; tom?: string };
+/** Item da lista compacta (#sebrae-<aba>-mestre): número, selos, título, `quem`, data e trecho achado pelo filtro. */
+export interface ItemMestre { numero: string; titulo: string; quem: string; selos: SeloMestre[]; selecionado: boolean; tom?: string; quando?: string; achado?: string; osDecidir?: string }
+export interface EstadoMestre {
+  listas: Record<string, ItemMestre[]>;
+  /** Conta as chamadas de atualizarMestre: 0 = nunca (o partial fica como veio); cada uma recria os nós, como o replaceChildren. */
+  versao: number;
+}
+export const criarLojaMestre = () => criarLoja<EstadoMestre>({ listas: {}, versao: 0 });
+export type LojaMestre = ReturnType<typeof criarLojaMestre>;

@@ -2,11 +2,12 @@
 // Dashboard (chamados novos e alterações nos antigos em aberto). Porte fiel do antigo frontend/src/legado/features/sebrae-dashboard.js:
 // mesmos IDs, ARIA, textos, toasts e corpos de POST. Depende só do contexto recebido (app, dom, modelo). A tela segue
 // montada à mão no DOM (sem JSX), porque o resto da Automação procura esses elementos pelo ID; só os chips da última leitura
-// dos antigos saem do React (leitura.tsx), a partir da loja que renderizarAntigos e abrirFalhas escrevem.
+// dos antigos saem do React (leitura.tsx), a partir da loja que renderizarAntigos e abrirFalhas escrevem, e os itens da lista
+// mestre das sub-abas (mestre.tsx), a partir dos dados que atualizarMestre grava (as leituras do DOM continuam aqui).
 import { baixarDaApi } from "../../comum/baixar-api.ts";
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
 import { criarLojaLeitura } from "./leitura-loja.ts";
-import { criarLojaAbas, criarLojaAvisos, criarLojaDestaques, criarLojaFechar, criarLojaRascunho, type ItemRascunho } from "./lojas.ts";
+import { criarLojaAbas, criarLojaAvisos, criarLojaDestaques, criarLojaFechar, criarLojaMestre, criarLojaRascunho, type ItemMestre, type ItemRascunho, type SeloMestre } from "./lojas.ts";
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
@@ -44,6 +45,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   // Resultado do Atualizar/Fechar: o DOM nasce em fechar.tsx a partir desta loja.
   const fecharTela = context.lojaFechar ?? criarLojaFechar();
   const destaquesTela = context.lojaDestaques ?? criarLojaDestaques();
+  // Itens da lista mestre de cada sub-aba: o DOM nasce em mestre.tsx a partir desta loja.
+  const mestreTela = context.lojaMestre ?? criarLojaMestre();
 
   if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
     if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
@@ -1589,41 +1592,12 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     else delete no.dataset.sebraeAberto;
   }
 
-  const estrelaMestre = () => {
-    const estrela = dom.createTextElement("span", "sebrae-mestre__estrela", "★");
-    estrela.setAttribute("role", "img");
-    estrela.setAttribute("aria-label", "Destaque");
-    return estrela;
-  };
-  const seloMestre = (texto: string, status: string, classe = "") => {
-    const selo = dom.createTextElement("span", `ck-badge sebrae-selo${classe}`, texto);
-    selo.dataset.status = status;
-    return selo;
-  };
-
-  /** Botão do item: número, selos, título, `quem`, data (`quando`, à direita) e o trecho achado pelo filtro. */
-  function montarItemMestre(d: { numero: string; titulo: string; quem: string; selos: ElementoSebrae[]; selecionado: boolean; tom?: string; quando?: string; achado?: string; osDecidir?: string }) {
-    const botao = document.createElement("button");
-    botao.type = "button";
-    botao.className = "sebrae-mestre__botao";
-    botao.dataset.sebraeMestre = d.numero;
-    if (d.selecionado) botao.setAttribute("aria-current", "true");
-    if (d.tom) botao.dataset.tom = d.tom;
-    if (d.osDecidir) botao.dataset.osDecidir = d.osDecidir;
-    const selos = dom.createTextElement("span", "sebrae-mestre__selos", "");
-    selos.append(...d.selos);
-    botao.append(dom.createTextElement("span", "sebrae-mestre__num", d.numero), selos, dom.createTextElement("span", "sebrae-mestre__titulo", d.titulo), dom.createTextElement("span", "sebrae-mestre__quem", d.quem));
-    if (d.quando) botao.appendChild(dom.createTextElement("span", "sebrae-mestre__quando", d.quando));
-    if (d.achado) botao.appendChild(dom.createTextElement("span", "sebrae-mestre__achado", d.achado));
-    const item = document.createElement("li");
-    item.className = "sebrae-mestre__item";
-    item.appendChild(botao);
-    return item;
-  }
+  const estrelaMestre = (): SeloMestre => ({ estrela: true });
+  const seloMestre = (texto: string, status: string, classe = ""): SeloMestre => ({ classe: `ck-badge sebrae-selo${classe}`, texto, status });
 
   /** Um item da lista compacta. Novos e Antigos copiam o resumo da linha (número, título, `[solicitante] · série`, selos e o lado CLIENTE/SIMPRESS);
    * Finalizados e Destaques leem os dados do próprio chamado (o resumo da linha fica escondido). */
-  function itemMestre(aba: string, linha: ElementoSebrae, selecionado: boolean) {
+  function itemMestre(aba: string, linha: ElementoSebrae, selecionado: boolean): ItemMestre {
     const numero = numeroDe(linha);
     const entrada = visao.porNo.get(linha);
     const achado = entrada?.achado?.textContent as string | undefined;
@@ -1634,34 +1608,34 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       const selos = [seloMestre("Finalizado", "ok", " sebrae-mestre__ok")];
       if (fin?.status === STATUS_OUTRO_TECNICO) selos.push(seloMestre("Finalizado por outro técnico", "info", " sebrae-mestre__outro"));
       if (estado.destaques[numero]) selos.push(estrelaMestre());
-      return montarItemMestre({ numero, titulo: ficha.titulo || "", quem: [ficha.solicitante, serie].filter(Boolean).join(" · "), selos, selecionado, tom: estado.destaques[numero] ? "alerta" : undefined, quando: fin?.encerrado_em, achado });
+      return { numero, titulo: ficha.titulo || "", quem: [ficha.solicitante, serie].filter(Boolean).join(" · "), selos, selecionado, tom: estado.destaques[numero] ? "alerta" : undefined, quando: fin?.encerrado_em, achado };
     }
     if (aba === "destaques") {
       const info = resumoChamado(numero);
-      return montarItemMestre({ numero, titulo: info?.titulo || "", quem: info?.solicitante || "", selos: [estrelaMestre()], selecionado, tom: "alerta", quando: formatarDataHora(estado.destaques[numero]?.em), achado });
+      return { numero, titulo: info?.titulo || "", quem: info?.solicitante || "", selos: [estrelaMestre()], selecionado, tom: "alerta", quando: formatarDataHora(estado.destaques[numero]?.em), achado };
     }
     const resumo = linha.querySelector<ElementoSebrae>("summary");
     const texto = (seletor: string) => resumo?.querySelector<ElementoSebrae>(seletor)?.textContent || "";
     const serie = entrada?.campos.find((c: CampoVisao) => c.rotulo === "Série")?.valor;
     // O realce que o resumo antigo dava (borda à esquerda) passa ao item da lista: laranja se o SoftExpert não achou o chamado, âmbar se é destaque.
     const tom = linha.querySelector('[data-leitura="nao_encontrado"]') ? "laranja" : linha.querySelector(".sebrae-chamado--destaque") ? "alerta" : undefined;
-    const selos: ElementoSebrae[] = [];
+    const selos: SeloMestre[] = [];
     // Os selos `--auto` (D: FINALIZADO, Pronto para finalizar, Finalizando…, atenção, falha) são acesos por CSS (`:has`) no resumo; a cópia só leva os que estão acesos agora.
     const aceso = (selo: ElementoSebrae) => !selo.matches(".sebrae-selo--auto") || (typeof getComputedStyle === "function" && getComputedStyle(selo).display !== "none");
     resumo?.querySelectorAll<ElementoSebrae>(".sebrae-antigo__selos > .ck-badge").forEach(selo => {
       if (selo.hidden || !aceso(selo)) return;
-      const copia = selo.matches(".sebrae-selo-destaque") ? estrelaMestre() : dom.createTextElement("span", selo.className, selo.textContent);
-      if (selo.dataset.status) copia.dataset.status = selo.dataset.status;
+      const copia: SeloMestre = selo.matches(".sebrae-selo-destaque") ? estrelaMestre() : { classe: selo.className, texto: selo.textContent || "" };
+      if (selo.dataset.status) copia.status = selo.dataset.status;
       if (selo.title) copia.title = selo.title;
       selos.push(copia);
     });
     const lado = String(linha.querySelector<ElementoSebrae>('[data-sebrae-campo="A"]')?.value || "").trim().toUpperCase();
     if (lado === "CLIENTE" || lado === "SIMPRESS") {
-      const selo = dom.createTextElement("span", "nl-selo-lado", lado);
-      if (tomDoLado(lado) !== "indigo") selo.dataset.nlTom = tomDoLado(lado);
+      const selo: SeloMestre = { classe: "nl-selo-lado", texto: lado };
+      if (tomDoLado(lado) !== "indigo") selo.tom = tomDoLado(lado);
       selos.push(selo);
     }
-    return montarItemMestre({ numero, titulo: texto(".sebrae-antigo__assunto"), quem: [texto(".sebrae-antigo__quem"), serie].filter(Boolean).join(" · "), selos, selecionado, tom, achado, osDecidir: linha.dataset.osDecidir });
+    return { numero, titulo: texto(".sebrae-antigo__assunto"), quem: [texto(".sebrae-antigo__quem"), serie].filter(Boolean).join(" · "), selos, selecionado, tom, achado, osDecidir: linha.dataset.osDecidir };
   }
 
   /** Refaz as listas compactas e, sem chamado aberto na aba atual, abre o primeiro (o detalhe nunca fica vazio). */
@@ -1669,6 +1643,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   const escolhidoPorAba = new Map<string, string>();
 
   function atualizarMestre() {
+    const listas: Record<string, ItemMestre[]> = {};
+    const focos: [ElementoSebrae, string][] = [];
     ABAS_MESTRE.forEach(aba => {
       const mestre = el(`sebrae-${aba}-mestre`);
       if (!mestre) return;
@@ -1680,9 +1656,16 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       }
       if (aberta) escolhidoPorAba.set(aba, numeroDe(aberta));
       const comFoco = mestre.contains(document.activeElement) ? (document.activeElement as ElementoSebrae).dataset?.sebraeMestre : undefined;
-      mestre.replaceChildren(...linhas.map(linha => itemMestre(aba, linha, linha === aberta)));
-      if (comFoco) mestre.querySelectorAll<ElementoSebrae>("[data-sebrae-mestre]").forEach(botao => { if (botao.dataset.sebraeMestre === comFoco) botao.focus(); });
+      listas[aba] = linhas.map(linha => itemMestre(aba, linha, linha === aberta));
+      if (comFoco) focos.push([mestre, comFoco]);
     });
+    // A loja vinda do montar grava com flushSync: os nós novos existem já no retorno (o "Carregar mais" de instalarVisao lê
+    // mestre.children[anterior] logo depois e mostrarChamadoSebrae é síncrona).
+    // O React remove os itens um a um e o Chrome dispara o focusout do botão removido no meio, com a lista pela metade: o
+    // layout zera a rolagem do painel. Tirar o foco antes, com a lista cheia, deixa a rolagem como o replaceChildren deixava.
+    if (focos.length) (document.activeElement as ElementoSebrae | null)?.blur?.();
+    mestreTela.atualizar({ listas, versao: mestreTela.ler().versao + 1 });
+    focos.forEach(([mestre, comFoco]) => mestre.querySelectorAll<ElementoSebrae>("[data-sebrae-mestre]").forEach(botao => { if (botao.dataset.sebraeMestre === comFoco) botao.focus(); }));
   }
 
   /** Abre o chamado no detalhe (um por lista); no celular troca a lista pelo detalhe. */
