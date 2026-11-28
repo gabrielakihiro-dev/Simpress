@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { criarDashboardSebrae: createSebraeDashboard } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
 const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
-const { criarLojaAbas, criarLojaDestaques } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
+const { criarLojaAbas, criarLojaDestaques, criarIlhasDestaque, criarLojaCartoesDestaque } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
 
 // Número, aria-label e data-zero das sub-abas, selo de Destaques e resultado do filtro são desenhados pelo React (abas.tsx)
 // a partir desta loja; os harnesses guardam a do teste em andamento (os testes do arquivo rodam um por vez).
@@ -17,6 +17,26 @@ const resultadoFiltro = () => lojaAbasAtual.ler().resultado; // texto de #sebrae
 let lojaDestaquesAtual = null;
 const novaLojaDestaques = () => (lojaDestaquesAtual = criarLojaDestaques());
 const destaquesTela = () => lojaDestaquesAtual.ler();
+// O botão, o conteúdo do selo e os cartões da aba Destaques são desenhados pelo React (ilhas-destaque.tsx); no Node só se prova a lógica
+// pelas lojas da ponte: hosts registrados, retrato dos ligados, feedback do botão e a lista de cartões.
+let ilhasAtual = null;
+let lojaCartoesAtual = null;
+let feedbackDestaque = {};
+const novasIlhas = () => { feedbackDestaque = {}; return (ilhasAtual = criarIlhasDestaque()); };
+// Faz o papel do React na aba: cada versão da loja vira um nó mínimo por cartão (data-sebrae-destaque-cartao) em #sebrae-destaques-lista,
+// que é de onde a contagem e o filtro da aba Destaques leem (o conteúdo do cartão em si só se confere no e2e).
+const novaLojaCartoes = () => {
+  const loja = (lojaCartoesAtual = criarLojaCartoesDestaque());
+  loja.assinar(() => {
+    const lista = global.document.getElementById("sebrae-destaques-lista");
+    lista.replaceChildren(...loja.ler().cartoes.map(({ numero }) => {
+      const cartao = global.document.createElement("div");
+      cartao.dataset.sebraeDestaqueCartao = numero;
+      return cartao;
+    }));
+  });
+  return loja;
+};
 
 const { formatarEncerramento, encerramentoParaCampo, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, dadosAntigo, resumoLeituraAntigos, totalPreenchimentos,
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, excluidosFinalizar, avisoExcluidosFinalizar, resultadoEnvioAtualizacao, resumoResultado, resumoInicio,
@@ -446,7 +466,7 @@ async function renderizarCartoes(carga = CARGA_CARTOES, armazenamento = null, ch
   });
   const app = { apiFetch, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel, lojaAbas: novaLojaAbas(), lojaDestaques: novaLojaDestaques() });
+  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel, lojaAbas: novaLojaAbas(), lojaDestaques: novaLojaDestaques(), ilhasDestaque: novasIlhas(), lojaCartoesDestaque: novaLojaCartoes() });
   await feature.carregarNovosSebrae();
   return { doc, el, feature, app };
 }
@@ -1727,33 +1747,33 @@ test("autosave de observação dispara PUT com debounce no input e imediato no c
 
 // ---- Destaque manual (botão, selo, seção `Chamados em destaque`) ----
 
-const botoesDestaque = (raiz, numero) => raiz.querySelectorAll("[data-sebrae-destaque]").filter(no => no.dataset.sebraeDestaque === numero);
+// hosts do bloco do botão (o botão em si é do React) dentro de `raiz`
+const botoesDestaque = (raiz, numero) => ilhasAtual.loja.ler().hosts.filter(h => h.tipo === "bloco" && h.numero === numero && raiz.contains(h.host)).map(h => h.host);
+const ligado = numero => Boolean(ilhasAtual.loja.ler().ligados[numero]); // aria-pressed e texto do botão
+// o clique do botão React: chama o que estado.ts pôs em aoAlternar e guarda o feedback (texto/situação) que ele mostraria
+const alternarDestaque = numero => ilhasAtual.aoAlternar(numero, {}, (texto, situacao) => { feedbackDestaque[numero] = { texto, situacao }; });
 const artigosDe = numero => global.document.querySelectorAll("article[data-numero]").filter(no => no.dataset.numero === numero);
 const seloDe = (raiz, numero) => raiz.querySelectorAll(".sebrae-selo-destaque").filter(no => no.dataset.sebraeDestaqueSelo === numero);
-const cartaoDaSecao = (el, numero) => el["sebrae-destaques-lista"].querySelectorAll("[data-sebrae-destaque-cartao]").find(no => no.dataset.sebraeDestaqueCartao === numero);
+const cartaoDaSecao = (el, numero) => { const c = lojaCartoesAtual.ler().cartoes.find(item => item.numero === numero); return c && { ...c, textContent: [c.titulo, ...c.fatos.flat(), c.observacao].join(" ") }; };
 const putsDestaque = chamadas => chamadas.filter(c => c.metodo === "PUT" && c.url.endsWith("/destaque"));
 
 test("o botão do chamado novo alterna, chama o PUT e acende selo, classe e a aba Destaques; o do cartão da aba desfaz tudo", async () => {
   const chamadas = [];
   const { el } = await renderizarCartoes(CARGA_CARTOES, null, chamadas);
-  const secao = el["sebrae-destaques-lista"];
   const numero = "UTIC-2026-1378";
-  const [botao] = botoesDestaque(el["sebrae-novos-lista"], numero);
+  assert.equal(botoesDestaque(el["sebrae-novos-lista"], numero).length, 1, "o cartão novo tem o host do botão");
   const [artigo] = artigosDe(numero);
   assert.equal(zero("destaques"), true, "sem destaque a aba fica apagada");
-  assert.equal(botao.textContent, "Marcar destaque");
-  assert.equal(botao.getAttribute("aria-pressed"), "false");
+  assert.equal(ligado(numero), false);
   assert.equal(seloDe(artigo, numero)[0].hidden, true);
   assert.ok(!artigo.className.includes("sebrae-chamado--destaque"));
 
-  botao.click();
+  alternarDestaque(numero);
   await esvaziarFila();
   assert.deepEqual(putsDestaque(chamadas).map(c => [c.url, JSON.parse(c.corpo)]), [[`/api/sebrae/chamados/${numero}/destaque`, { destaque: true }]]);
-  assert.equal(botao.textContent, "Tirar destaque");
-  assert.equal(botao.getAttribute("aria-pressed"), "true");
+  assert.equal(ligado(numero), true);
   const selo = seloDe(artigo, numero)[0];
   assert.equal(selo.hidden, false);
-  assert.equal(selo.textContent, "★Destaque");
   assert.ok(artigo.className.includes("sebrae-chamado--destaque"));
   assert.equal(contagem("destaques"), "1");
   assert.equal(zero("destaques"), false);
@@ -1762,16 +1782,11 @@ test("o botão do chamado novo alterna, chama o PUT e acende selo, classe e a ab
   assert.ok(cartao.textContent.includes("Computador travando"));
   assert.ok(cartao.textContent.includes("Em destaque desde"));
   assert.equal(artigosDe(numero).length, 1, "o F5 da Home acha só o artigo original");
-  assert.equal(secao.querySelectorAll("article").length, 0);
-  assert.equal(secao.querySelectorAll("[id]").length, 0, "a seção não repete ids");
 
-  const [botaoDaSecao] = botoesDestaque(cartao, numero);
-  assert.equal(botaoDaSecao.getAttribute("aria-pressed"), "true");
-  botaoDaSecao.click();
+  alternarDestaque(numero); // o botão do cartão da aba chama a mesma ponte
   await esvaziarFila();
   assert.deepEqual(putsDestaque(chamadas).map(c => JSON.parse(c.corpo)), [{ destaque: true }, { destaque: false }]);
-  assert.equal(botao.textContent, "Marcar destaque");
-  assert.equal(botao.getAttribute("aria-pressed"), "false");
+  assert.equal(ligado(numero), false);
   assert.equal(seloDe(artigo, numero)[0].hidden, true);
   assert.ok(!artigo.className.includes("sebrae-chamado--destaque"));
   assert.equal(zero("destaques"), true, "sem destaque a aba volta a ficar apagada");
@@ -1794,8 +1809,8 @@ test("destaque vindo das listas: antigo UTIC e linha:N mostram selo e classe, en
   assert.equal(artigosDe("UTIC-2026-1200").length, 1);
   assert.equal(lista.querySelectorAll(".sebrae-antigo__resumo .sebrae-selo-obs").map(no => no.hidden).join(), "false,true", "só o resumo com observação anotada mostra o selo Observação");
 
-  const [botaoLinha] = botoesDestaque(lista, "linha:27");
-  botaoLinha.click();
+  assert.equal(botoesDestaque(lista, "linha:27").length, 1);
+  alternarDestaque("linha:27");
   await esvaziarFila();
   assert.equal(putsDestaque(chamadas)[0].url, "/api/sebrae/chamados/linha%3A27/destaque");
   assert.equal(contagem("destaques"), "2");
@@ -1815,9 +1830,9 @@ test("chamado finalizado em destaque fica na ordem do servidor (data de finaliza
   assert.equal(detalhe.querySelector(".sebrae-finalizado__resumo .sebrae-selo-destaque").hidden, false, "o selo do resumo acende");
 
   const outro = el["sebrae-finalizados-lista"].children[0];
-  const [botao] = botoesDestaque(outro, "UTIC-2026-1090");
+  assert.equal(botoesDestaque(outro, "UTIC-2026-1090").length, 1);
   assert.equal(outro.querySelector("textarea[data-sebrae-observacao]").readOnly, true);
-  botao.click();
+  alternarDestaque("UTIC-2026-1090");
   await esvaziarFila();
   assert.deepEqual(putsDestaque(chamadas).map(c => c.url), ["/api/sebrae/chamados/UTIC-2026-1090/destaque"]);
   assert.deepEqual(ordem(), ["UTIC-2026-1090", "UTIC-2026-1100"], "marcar destaque não muda a ordem");
@@ -1844,9 +1859,8 @@ test("destaque fora das listas vem de GET /api/sebrae/observacoes e aparece como
   assert.ok(cartao.textContent.includes("Em destaque desde"));
   assert.equal(cartaoDaSecao(el, "linha:5"), undefined);
   assert.equal(artigosDe("UTIC-2026-0999").length, 0, "não existe cartão original; o mínimo não é article[data-numero]");
-  const [botao] = botoesDestaque(cartao, "UTIC-2026-0999");
-  assert.equal(botao.getAttribute("aria-pressed"), "true");
-  botao.click();
+  assert.equal(ligado("UTIC-2026-0999"), true);
+  alternarDestaque("UTIC-2026-0999");
   await esvaziarFila();
   assert.deepEqual(putsDestaque(chamadas).map(c => [c.url, JSON.parse(c.corpo)]), [["/api/sebrae/chamados/UTIC-2026-0999/destaque", { destaque: false }]]);
   assert.equal(zero("destaques"), true);
@@ -1863,24 +1877,20 @@ test("falha do PUT mostra a mensagem no cartão, mantém o estado e deixa tentar
   };
   const { el } = await renderizarCartoes(CARGA_CARTOES, null, apiFetch);
   const numero = "UTIC-2026-1378";
-  const [botao] = botoesDestaque(el["sebrae-novos-lista"], numero);
   const [artigo] = artigosDe(numero);
-  botao.click();
+  alternarDestaque(numero);
   await esvaziarFila();
-  const feedback = artigo.querySelector(".sebrae-destaque__feedback");
-  assert.equal(feedback.textContent, "Não foi possível salvar o destaque: Servidor fora do ar");
-  assert.equal(feedback.dataset.estado, "erro");
-  assert.equal(botao.textContent, "Marcar destaque");
-  assert.equal(botao.getAttribute("aria-pressed"), "false");
+  assert.deepEqual(feedbackDestaque[numero], { texto: "Não foi possível salvar o destaque: Servidor fora do ar", situacao: "erro" });
+  assert.equal(ligado(numero), false);
   assert.equal(seloDe(artigo, numero)[0].hidden, true);
   assert.ok(!artigo.className.includes("sebrae-chamado--destaque"));
   assert.equal(zero("destaques"), true);
 
   falhar = false;
-  botao.click();
+  alternarDestaque(numero);
   await esvaziarFila();
-  assert.equal(feedback.textContent, "", "o sucesso limpa a mensagem de erro");
-  assert.equal(botao.getAttribute("aria-pressed"), "true");
+  assert.equal(feedbackDestaque[numero].texto, "", "o sucesso limpa a mensagem de erro");
+  assert.equal(ligado(numero), true);
   assert.equal(zero("destaques"), false);
 });
 
@@ -1905,58 +1915,14 @@ const respostaDestaque = (url, opcoes) => { const ligado = JSON.parse(opcoes.bod
 
 test("marcar e tirar o destaque anunciam o resultado na região aria-live, a cada vez com um nó novo", async () => {
   const { el } = await renderizarCartoes(CARGA_CARTOES);
-  const [botao] = botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378");
   assert.deepEqual([destaquesTela().anuncio, destaquesTela().versaoAnuncio], ["", 0]);
-  botao.click();
+  alternarDestaque("UTIC-2026-1378");
   await esvaziarFila();
   assert.deepEqual([destaquesTela().anuncio, destaquesTela().versaoAnuncio], ["Destaque marcado.", 1]);
-  botoesDestaque(el["sebrae-destaques-lista"], "UTIC-2026-1378")[0].click();
+  alternarDestaque("UTIC-2026-1378");
   await esvaziarFila();
   // versão nova = key nova em destaques.tsx = nó de texto novo, mesmo que o texto se repita
   assert.deepEqual([destaquesTela().anuncio, destaquesTela().versaoAnuncio], ["Destaque removido.", 2]);
-});
-
-test("tirar o último destaque pelo cartão da aba Destaques com o original num details fechado leva o foco à aba Destaques, nunca ao body", async () => {
-  const carga = structuredClone(CARGA_CARTOES);
-  carga.importado.finalizados[0].destaque = true;
-  const { doc, el } = await renderizarCartoes(carga);
-  const numero = carga.importado.finalizados[0].numero;
-  const botaoDaSecao = botoesDestaque(el["sebrae-destaques-lista"], numero)[0];
-  el["sebrae-aba-destaques"].click(); // a pessoa está na aba Destaques
-  botaoDaSecao.focus();
-  assert.equal(doc.activeElement, botaoDaSecao);
-  botaoDaSecao.click();
-  await esvaziarFila();
-  assert.equal(zero("destaques"), true);
-  assert.notEqual(doc.activeElement, doc.body, "o foco não pode cair no body");
-  assert.equal(doc.activeElement, el["sebrae-aba-destaques"], "o cartão original está num details fechado de outra aba: o foco vai à aba Destaques");
-});
-
-test("tirar o último destaque sem cartão original (só no servidor) leva o foco à aba Destaques", async () => {
-  const carga = structuredClone(CARGA_CARTOES);
-  carga.observacoes = { "UTIC-2026-0999": { observacao: "Antiga.", atualizado_em: "2026-10-01T08:00:00-03:00", destaque: true, destaque_em: "2026-11-01T10:00:00-03:00" } };
-  const { doc, el } = await renderizarCartoes(carga);
-  await esvaziarFila();
-  const botao = botoesDestaque(el["sebrae-destaques-lista"], "UTIC-2026-0999")[0];
-  el["sebrae-aba-destaques"].click();
-  botao.focus();
-  botao.click();
-  await esvaziarFila();
-  assert.equal(zero("destaques"), true);
-  assert.equal(doc.activeElement, el["sebrae-aba-destaques"]);
-  assert.equal(el["sebrae-novos-secao"].getAttribute("tabindex"), "-1", "o título vira alvo de foco programático");
-});
-
-test("quem não estava no botão não ganha foco ao tirar o destaque", async () => {
-  const carga = structuredClone(CARGA_CARTOES);
-  carga.novos.formulario[0].destaque = true;
-  const { doc, el } = await renderizarCartoes(carga);
-  const outro = doc.createElement("button");
-  doc.body.append(outro);
-  outro.focus();
-  botoesDestaque(el["sebrae-destaques-lista"], "UTIC-2026-1378")[0].click();
-  await esvaziarFila();
-  assert.equal(doc.activeElement, outro);
 });
 
 test("recarregar a lista com o PUT em andamento não apaga o destaque marcado", async () => {
@@ -1966,7 +1932,7 @@ test("recarregar a lista com o PUT em andamento não apaga o destaque marcado", 
     return url === "/api/sebrae/observacoes" ? { observacoes: {} } : CARGA_CARTOES;
   };
   const { el, feature } = await renderizarCartoes(CARGA_CARTOES, null, apiFetch);
-  botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378")[0].click();
+  alternarDestaque("UTIC-2026-1378");
   await esvaziarFila();
   await feature.carregarNovosSebrae(); // recarga (autosave, importação…) enquanto o PUT não respondeu
   await esvaziarFila();
@@ -1974,7 +1940,7 @@ test("recarregar a lista com o PUT em andamento não apaga o destaque marcado", 
   await esvaziarFila();
   assert.equal(zero("destaques"), false);
   assert.equal(contagem("destaques"), "1");
-  assert.equal(botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378")[0].getAttribute("aria-pressed"), "true");
+  assert.equal(ligado("UTIC-2026-1378"), true);
 });
 
 // Servidor falso com estado: o PUT muda o destaque; a lista de novos e as leituras refletem o estado no momento da chamada.
@@ -2004,7 +1970,7 @@ test("GET de destaques lido antes de um PUT que retirou o destaque não o ressus
   await esvaziarFila();
   await feature.carregarNovosSebrae(); // 2ª leitura de destaques: retrato "com destaque", pendente
   await esvaziarFila();
-  botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378")[0].click(); // tira o destaque (PUT responde na hora)
+  alternarDestaque("UTIC-2026-1378"); // tira o destaque (PUT responde na hora)
   await esvaziarFila();
   await feature.carregarNovosSebrae(); // outra recarga (autosave…) zera os números "mexidos"
   await esvaziarFila();
@@ -2012,7 +1978,7 @@ test("GET de destaques lido antes de um PUT que retirou o destaque não o ressus
   antigo.liberar();
   await esvaziarFila();
   assert.equal(zero("destaques"), true, "a leitura antiga não ressuscita o destaque retirado");
-  assert.equal(botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378")[0].getAttribute("aria-pressed"), "false");
+  assert.equal(ligado("UTIC-2026-1378"), false);
 });
 
 test("recarga com o PUT que retira o destaque em andamento: a leitura que chega depois do PUT não o ressuscita", async () => {
@@ -2021,7 +1987,7 @@ test("recarga com o PUT que retira o destaque em andamento: a leitura que chega 
   const { apiFetch } = servidorDestaque({ destaque: true, adiarPut: put, adiarLeitura: { numero: 2, promessa: leitura.promessa } });
   const { el, feature } = await renderizarCartoes(CARGA_CARTOES, null, apiFetch);
   await esvaziarFila();
-  botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378")[0].click(); // PUT pendente
+  alternarDestaque("UTIC-2026-1378"); // PUT pendente
   await esvaziarFila();
   await feature.carregarNovosSebrae(); // recarga durante o PUT: a lista ainda traz o destaque e a leitura (2ª) fica pendente
   await esvaziarFila();
@@ -2032,7 +1998,7 @@ test("recarga com o PUT que retira o destaque em andamento: a leitura que chega 
   leitura.liberar(); // retrato de antes do PUT
   await esvaziarFila();
   assert.equal(zero("destaques"), true);
-  assert.equal(botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378")[0].getAttribute("aria-pressed"), "false");
+  assert.equal(ligado("UTIC-2026-1378"), false);
 });
 
 test("a lista lida antes de um PUT concluído não desfaz o resultado dele", async () => {
@@ -2049,29 +2015,13 @@ test("a lista lida antes de um PUT concluído não desfaz o resultado dele", asy
   await esvaziarFila();
   const recarga = feature.carregarNovosSebrae();
   await esvaziarFila();
-  botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378")[0].click();
+  alternarDestaque("UTIC-2026-1378");
   await esvaziarFila();
   lenta.liberar();
   await recarga;
   await esvaziarFila();
   assert.equal(zero("destaques"), true);
-  assert.equal(botoesDestaque(el["sebrae-novos-lista"], "UTIC-2026-1378")[0].getAttribute("aria-pressed"), "false");
-});
-
-test("autosave/recarga da seção mantém o foco no botão do cartão de destaque", async () => {
-  const carga = structuredClone(CARGA_CARTOES);
-  carga.novos.formulario[0].destaque = true;
-  const { doc, el, feature } = await renderizarCartoes(carga);
-  await esvaziarFila();
-  el["sebrae-aba-destaques"].click(); // o botão só recebe foco com a aba Destaques aberta
-  const antes = botoesDestaque(el["sebrae-destaques-lista"], "UTIC-2026-1378")[0];
-  antes.focus();
-  assert.equal(doc.activeElement, antes);
-  await feature.carregarNovosSebrae(); // a seção é refeita por inteiro
-  await esvaziarFila();
-  const depois = botoesDestaque(el["sebrae-destaques-lista"], "UTIC-2026-1378")[0];
-  assert.notEqual(depois, antes, "o cartão foi refeito");
-  assert.equal(doc.activeElement, depois, "e o foco acompanha o botão novo");
+  assert.equal(ligado("UTIC-2026-1378"), false);
 });
 
 // Sub-abas, filtro (lupa) e paginação do F5 (07/11/2026). O DOM imita o index.html: abas, lupa, caixa do filtro e os quatro painéis.
@@ -2144,7 +2094,7 @@ async function montarVisao() {
   };
   const app = { apiFetch, showToast() {}, confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel, lojaAbas: novaLojaAbas(), lojaDestaques: novaLojaDestaques() });
+  const feature = createSebraeDashboard({ app, dom, sebraeDashboardModel, lojaAbas: novaLojaAbas(), lojaDestaques: novaLojaDestaques(), ilhasDestaque: novasIlhas(), lojaCartoesDestaque: novaLojaCartoes() });
   await feature.carregarNovosSebrae();
   await esvaziarFila(); await esvaziarFila();
   return {
@@ -2343,18 +2293,14 @@ test("recarga em segundo plano mantém a aba, a página e o Novo recolhido", asy
   assert.equal(el["sebrae-novos-lista"].children[0].open, false);
 });
 
-test("tirar o último destaque pela aba Destaques zera a contagem, apaga o alerta e leva o foco à aba, nunca a um painel escondido", async () => {
-  const { doc, el, aria } = await montarVisao();
+test("tirar o último destaque pela aba Destaques zera a contagem e apaga o alerta", async () => {
+  const { el, aria } = await montarVisao();
   el["sebrae-aba-destaques"].click();
-  const estrela = el["sebrae-destaques-lista"].querySelectorAll("[data-sebrae-destaque]").find(b => b.dataset.sebraeDestaque === "UTIC-2026-1100");
-  estrela.focus();
-  assert.equal(doc.activeElement, estrela);
-  estrela.click();
+  alternarDestaque("UTIC-2026-1100");
   await esvaziarFila(); await esvaziarFila();
   assert.equal(aria("destaques"), "Destaques: 0 chamados");
   assert.ok(zero("destaques"));
   assert.equal(alertaDestaques(), false);
-  assert.equal(doc.activeElement, el["sebrae-aba-destaques"]);
 });
 
 test("o destaque é achado também por série (campo da sub-aba de origem), não só pelo título", async () => {
@@ -2366,25 +2312,22 @@ test("o destaque é achado também por série (campo da sub-aba de origem), não
   assert.equal(resultadoFiltro(), "1 chamado(s) encontrado(s)");
 });
 
-test("tirar o destaque de um finalizado além do 25º não o esconde atrás de Carregar mais e o foco fica na aba selecionada", async () => {
+test("tirar o destaque de um finalizado além do 25º não o esconde atrás de Carregar mais", async () => {
   const original = CARGA_VISAO.importado.finalizados;
   const ficha = titulo => ({ titulo, solicitante: "X", fatos: [], detalhes: [] });
   const extra = Array.from({ length: 29 }, (_, i) => ({ numero: `UTIC-2026-${3000 + i}`, encerrado_em: "", ficha: ficha(`F${i}`) }));
   const alvo = { numero: "UTIC-2026-3999", encerrado_em: "", ficha: ficha("Alvo"), destaque: true };
   CARGA_VISAO.importado.finalizados = [...extra.slice(0, 28), alvo, extra[28], ...original];
   try {
-    const { doc, el } = await montarVisao();
+    const { el } = await montarVisao();
     el["sebrae-aba-finalizados"].click();
     const li = el["sebrae-finalizados-lista"].children.find(n => n.dataset.numero === "UTIC-2026-3999");
     li.querySelector("details").open = true;
-    const botao = li.querySelectorAll("[data-sebrae-destaque]")[0];
-    botao.focus();
-    botao.click();
+    alternarDestaque("UTIC-2026-3999");
     await esvaziarFila(); await esvaziarFila();
     assert.ok(el["sebrae-finalizados-lista"].children.indexOf(li) >= 25, "voltou à posição original, além da 1ª página");
     assert.equal(li.hidden, false);
     assert.equal(el["sebrae-finalizados"].hidden, false);
-    assert.ok(doc.activeElement === botao || doc.activeElement === el["sebrae-aba-finalizados"], "foco no botão ou na aba selecionada, nunca na aba Destaques escondida");
   } finally {
     CARGA_VISAO.importado.finalizados = original;
   }
