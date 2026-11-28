@@ -7,8 +7,9 @@
 import { baixarDaApi } from "../../comum/baixar-api.ts";
 import { tomDoLado } from "../../componentes/nl-modelo.ts";
 import { criarLojaLeitura } from "./leitura-loja.ts";
-import { criarLojaAbas, criarLojaAvisos, criarLojaDestaques, criarLojaFechar, criarLojaMestre, criarLojaRascunho, type ItemMestre, type ItemRascunho, type SeloMestre } from "./lojas.ts";
+import { criarIlhasDestaque, criarLojaAbas, criarLojaAvisos, criarLojaCartoesDestaque, criarLojaDestaques, criarLojaFechar, criarLojaMestre, criarLojaRascunho, type ItemMestre, type ItemRascunho, type SeloMestre } from "./lojas.ts";
 import { legendaCampoOs, pedeDecisao, SELO_OS_NOVA, SELO_OS_SEM_RELACAO } from "./sugestao-os-modelo.ts";
+import type { CartaoDestaque } from "./lojas.ts";
 import type { CampoVisao, ContextoSebraeDashboard, ElementoSebrae, ErroApi, EstadoSebrae, OsNova, Registro, VisaoSebrae } from "./tipos";
 
 export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
@@ -47,6 +48,9 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   const destaquesTela = context.lojaDestaques ?? criarLojaDestaques();
   // Itens da lista mestre de cada sub-aba: o DOM nasce em mestre.tsx a partir desta loja.
   const mestreTela = context.lojaMestre ?? criarLojaMestre();
+  // Selo e botão de destaque (ilhas React dentro dos hosts criados aqui) e os cartões da aba Destaques: o DOM nasce em ilhas-destaque.tsx.
+  const ilhasDestaque = context.ilhasDestaque ?? criarIlhasDestaque();
+  const cartoesDestaque = context.lojaCartoesDestaque ?? criarLojaCartoesDestaque();
 
   if (typeof window.addEventListener === "function") window.addEventListener("storage", evento => {
     if (evento.key === CHAVE_RASCUNHO || evento.key?.startsWith(PREFIXO_CAMPO)) {
@@ -1328,16 +1332,14 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
 
   // ---- Destaque manual: `estado.destaques` manda; tudo o que aparece na tela é refeito a partir dele ----
 
-  /** Selo `Destaque` (cor + estrela + texto); escondido enquanto o chamado não está em destaque. */
+  /** Host do selo `Destaque`; a estrela e o texto nascem em ilhas-destaque.tsx. O `hidden` é só daqui (escondido enquanto o chamado não está em destaque). */
   function seloDestaque(numero: string) {
     const selo = document.createElement("span");
     selo.className = "ck-badge sebrae-selo-destaque";
     selo.dataset.status = "alerta";
     selo.dataset.sebraeDestaqueSelo = numero;
     selo.hidden = !estado.destaques[numero];
-    const estrela = dom.createTextElement("span", "sebrae-selo-destaque__estrela", "★");
-    estrela.setAttribute("aria-hidden", "true");
-    selo.append(estrela, "Destaque");
+    ilhasDestaque.registrar(selo, "selo", numero);
     return selo;
   }
 
@@ -1353,27 +1355,19 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     destaquesTela.atualizar({ ...atual, resumo: texto, versaoResumo: atual.versaoResumo + 1 });
   }
 
-  function atualizarBotaoDestaque(botao: ElementoSebrae, ligado: boolean) {
-    botao.setAttribute("aria-pressed", String(ligado));
-    botao.textContent = ligado ? "Tirar destaque" : "Marcar destaque";
-  }
+  /** Retrato de estado.destaques (número -> ligado) para o botão React. */
+  const retratoDestaques = () => Object.fromEntries(Object.keys(estado.destaques).map(numero => [numero, true]));
+  /** Grava na loja os hosts ainda conectados e o retrato; com flushSync (montar) os nós existem no retorno. */
+  const desenharIlhas = () => ilhasDestaque.desenhar(retratoDestaques());
 
-  /** Botão que alterna o destaque (aria-pressed) + mensagem de erro; vale para todo cartão, inclusive o finalizado. */
+  /** Host do botão que alterna o destaque + mensagem de erro (ilhas-destaque.tsx); vale para todo cartão, inclusive o finalizado. */
   function blocoDestaque(numero: string) {
     const bloco = document.createElement("div");
     bloco.className = "sebrae-destaque__acao";
-    const botao = document.createElement("button");
-    botao.type = "button";
-    botao.className = "ck-btn ck-btn--secundario ck-btn--sm sebrae-destaque__botao";
-    botao.dataset.sebraeDestaque = numero;
-    atualizarBotaoDestaque(botao, Boolean(estado.destaques[numero]));
-    const feedback = dom.createTextElement("p", "ck-campo__ajuda sebrae-destaque__feedback", "");
-    feedback.setAttribute("role", "status");
-    feedback.dataset.estado = "";
-    botao.addEventListener("click", () => alternarDestaque(numero, botao, feedback));
-    bloco.append(botao, feedback);
+    ilhasDestaque.registrar(bloco, "bloco", numero);
     return bloco;
   }
+  ilhasDestaque.aoAlternar = (numero, botao, definir) => { void alternarDestaque(numero, botao as ElementoSebrae, definir); };
 
   const nosDoChamado = (seletor: string, atributo: string, numero: string) => [...document.querySelectorAll<ElementoSebrae>(seletor)].filter(no => no.dataset[atributo] === numero);
 
@@ -1393,7 +1387,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   /** Leva `estado.destaques[numero]` para todos os cartões desse chamado (o original e o da seção), sem criar ids. */
   function sincronizarDestaque(numero: string) {
     const ligado = Boolean(estado.destaques[numero]);
-    nosDoChamado("[data-sebrae-destaque]", "sebraeDestaque", numero).forEach(botao => atualizarBotaoDestaque(botao, ligado));
+    desenharIlhas(); // o botão lê `ligado` da loja
     nosDoChamado("[data-sebrae-destaque-selo]", "sebraeDestaqueSelo", numero).forEach(selo => { selo.hidden = !ligado; });
     nosDoChamado("article.sebrae-chamado", "numero", numero).forEach(artigo => artigo.classList.toggle("sebrae-chamado--destaque", ligado));
   }
@@ -1409,40 +1403,29 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     return null;
   }
 
-  /** Cartão compacto da seção: só leitura (número, solicitante, observação, data) + o botão. Não é `article[data-numero]`: o F5 da Home procura esse seletor e deve achar o original. */
-  function cartaoDestaque(numero: string) {
+  /** Dados do cartão compacto da seção (só leitura: número, solicitante, observação, data); o DOM nasce em ilhas-destaque.tsx. Não é `article[data-numero]`: o F5 da Home procura esse seletor e deve achar o original. */
+  function dadosCartaoDestaque(numero: string): CartaoDestaque {
     const info = resumoChamado(numero);
     const registro = estado.destaques[numero] || {};
-    const cartao = document.createElement("div");
-    cartao.className = "sebrae-chamado sebrae-chamado--resumo sebrae-chamado--destaque";
-    cartao.dataset.sebraeDestaqueCartao = numero;
-    const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", numero);
-    if (info?.titulo) titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", info.titulo));
-    const cab = document.createElement("header");
-    cab.className = "sebrae-chamado__cab";
-    cab.append(titulo, seloDestaque(numero));
     const desde = formatarDataHora(registro.em);
-    const fatos = listaFatos([info?.solicitante ? ["Solicitante", info.solicitante] : null, desde ? ["Em destaque desde", desde] : null].filter(Boolean) as string[][]);
-    const observacao = estado.observacoes[numero]?.enviado ?? registro.observacao ?? info?.observacao ?? "";
-    const bloco = document.createElement("div");
-    bloco.className = "sebrae-destaque__observacao";
-    bloco.append(dom.createTextElement("span", "ck-campo__rotulo", "Observação do andamento"), dom.createTextElement("p", "sebrae-destaque__texto", observacao || "—"));
-    const zona = document.createElement("div");
-    zona.className = "sebrae-destaque__corpo";
-    zona.append(...([fatos.children.length ? fatos : null, bloco, blocoDestaque(numero)].filter(Boolean) as HTMLElement[]));
-    cartao.append(cab, zona);
-    return cartao;
+    const fatos = ([info?.solicitante ? ["Solicitante", info.solicitante] : null, desde ? ["Em destaque desde", desde] : null].filter(Boolean) as unknown[][])
+      .map(([rotulo, valor]) => [String(rotulo ?? ""), String(valor ?? "")] as [string, string]);
+    return { numero, titulo: info?.titulo || "", fatos, observacao: estado.observacoes[numero]?.enviado ?? registro.observacao ?? info?.observacao ?? "" };
   }
 
   /** Refaz a aba `Destaques`; contagem, selo de alerta e visibilidade ficam com `aplicarVisao`. */
   function desenharDestaques() {
     const lista = el("sebrae-destaques-lista");
     const numeros = lista ? Object.keys(estado.destaques).sort((a, b) => String(estado.destaques[b].em || "").localeCompare(String(estado.destaques[a].em || "")) || a.localeCompare(b)) : [];
-    const cartoes = numeros.map(cartaoDestaque);
+    let cartoes: ElementoSebrae[] = [];
     if (lista) {
       const comFoco = lista.contains(document.activeElement) ? (document.activeElement as ElementoSebrae).dataset?.sebraeDestaque : undefined;
       const aberto = ([...lista.children] as ElementoSebrae[]).find(estaAberta)?.dataset.sebraeDestaqueCartao; // o cartão do detalhe continua o mesmo
-      lista.replaceChildren(...cartoes);
+      // O React remove os cartões um a um e o Chrome dispara o focusout no meio; tirar o foco antes, com a lista cheia, evita isso (como em atualizarMestre).
+      if (comFoco) (document.activeElement as ElementoSebrae | null)?.blur?.();
+      desenharIlhas(); // retrato novo antes dos cartões: o botão deles lê `ligado` da mesma loja
+      cartoesDestaque.atualizar({ cartoes: numeros.map(dadosCartaoDestaque), versao: cartoesDestaque.ler().versao + 1 });
+      cartoes = [...lista.children] as ElementoSebrae[];
       cartoes.forEach(cartao => { if (cartao.dataset.sebraeDestaqueCartao === aberto) definirAberta(cartao, true); });
       // a seção é refeita por inteiro; quem estava no botão de um cartão continua nele (no cartão novo)
       if (comFoco) [...lista.querySelectorAll<ElementoSebrae>("[data-sebrae-destaque]")].find(botao => botao.dataset.sebraeDestaque === comFoco)?.focus();
@@ -1812,12 +1795,12 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     }
   }
 
-  async function alternarDestaque(numero: string, botao: ElementoSebrae, feedback: ElementoSebrae) {
+  async function alternarDestaque(numero: string, botao: ElementoSebrae, definir: (texto: string, situacao: string) => void) {
     if (estado.destaqueOcupado.has(numero)) return;
     estado.destaqueOcupado.add(numero);
     estado.destaqueEditados.add(numero);
     const ligar = !estado.destaques[numero];
-    definirFeedback(feedback, "Salvando…", "salvando");
+    definir("Salvando…", "salvando");
     try {
       const dados = await app.apiFetch(urlChamado(numero, "destaque"), {
         method: "PUT",
@@ -1831,7 +1814,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       estado.destaqueUltimo[numero] = { versao: ++estado.destaqueVersao, ligado, em: dados?.destaque_em || "" };
       // lido depois da resposta: o botão pode ter sido refeito (autosave) e a pessoa pode ter saído dele durante o PUT
       const tinhaFoco = (document.activeElement as ElementoSebrae | null)?.dataset?.sebraeDestaque === numero;
-      definirFeedback(feedback, "", "");
+      definir("", "");
       anunciarDestaque(ligado ? "Destaque marcado." : "Destaque removido.");
       sincronizarDestaque(numero);
       // como em mostrarChamadoSebrae: o chamado em uso não pode sumir atrás de "Carregar mais"
@@ -1856,7 +1839,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
         [botao, original, el(`sebrae-aba-${visao.aba}`), ...resumos, titulo].find(focalizavel)?.focus?.();
       }
     } catch (falha) { const error = falha as ErroApi;
-      definirFeedback(feedback, `Não foi possível salvar o destaque: ${error.message}`, "erro");
+      definir(`Não foi possível salvar o destaque: ${error.message}`, "erro");
     } finally {
       estado.destaqueOcupado.delete(numero);
     }

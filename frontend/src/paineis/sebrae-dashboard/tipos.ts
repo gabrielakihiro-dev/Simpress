@@ -3,7 +3,7 @@
 // ficam como Registro, como em cobertura/tipos.ts. Estado, visão, contexto e modelo têm tipo próprio.
 import type { ApiFetchOptions } from "../../api";
 import type { LojaLeitura } from "./leitura-loja";
-import type { LojaAbas, LojaAvisos, LojaDestaques, LojaFechar, LojaMestre, LojaRascunho } from "./lojas";
+import type { IlhasDestaque, LojaAbas, LojaAvisos, LojaCartoesDestaque, LojaDestaques, LojaFechar, LojaMestre, LojaRascunho } from "./lojas";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** Os antigos em aberto (`abertos[]`) trazem `os_nova` e, no lugar dele, `os_sem_relacao` (nunca os dois com valor). */
@@ -169,6 +169,9 @@ export interface ContextoSebraeDashboard {
   lojaDestaques?: LojaDestaques;
   /** Loja da lista mestre das sub-abas (mestre.tsx); mesma regra da lojaLeitura. */
   lojaMestre?: LojaMestre;
+  /** Ponte das ilhas de destaque (selo e botão dentro dos cartões) e loja dos cartões da aba Destaques (ilhas-destaque.tsx); mesma regra da lojaLeitura. */
+  ilhasDestaque?: IlhasDestaque;
+  lojaCartoesDestaque?: LojaCartoesDestaque;
 }
 
 export interface EstadoSebrae {

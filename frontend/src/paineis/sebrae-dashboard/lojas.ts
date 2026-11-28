@@ -75,3 +75,49 @@ export interface EstadoMestre {
 }
 export const criarLojaMestre = () => criarLoja<EstadoMestre>({ listas: {}, versao: 0 });
 export type LojaMestre = ReturnType<typeof criarLojaMestre>;
+
+/** Destaques desenhados por React dentro de hosts que estado.ts cria: o selo (`<span>` do resumo) e o bloco do botão (`<div>`). */
+export interface HostDestaque { host: HTMLElement; tipo: "selo" | "bloco"; numero: string }
+export interface EstadoIlhas {
+  hosts: HostDestaque[];
+  /** Retrato de estado.destaques: número -> ligado. */
+  ligados: Record<string, boolean>;
+}
+export const criarLojaIlhas = () => criarLoja<EstadoIlhas>({ hosts: [], ligados: {} });
+export type LojaIlhas = ReturnType<typeof criarLojaIlhas>;
+
+/** Ponte entre estado.ts e as ilhas: `registrar` só guarda (e agenda um desenho de reserva); `desenhar` grava na loja os hosts ainda
+ *  conectados + o retrato dos destaques. `aoAlternar` é preenchido por estado.ts (clique do botão). */
+export function criarIlhasDestaque(loja: LojaIlhas = criarLojaIlhas()) {
+  let guardados: HostDestaque[] = [];
+  let ligados: Record<string, boolean> = {};
+  let agendado = false;
+  const ponte = {
+    loja,
+    aoAlternar: (_numero: string, _botao: HTMLElement, _definir: (texto: string, situacao: string) => void) => {},
+    registrar(host: HTMLElement, tipo: "selo" | "bloco", numero: string) {
+      guardados.push({ host, tipo, numero });
+      if (agendado) return;
+      agendado = true;
+      queueMicrotask(() => { agendado = false; ponte.desenhar(); });
+    },
+    /** Sem argumento mantém o retrato anterior. Nunca chame de dentro de render/efeito (flushSync da loja do montar). */
+    desenhar(retrato?: Record<string, boolean>) {
+      if (retrato) ligados = retrato;
+      guardados = guardados.filter(({ host }) => host.isConnected);
+      loja.atualizar({ hosts: [...guardados], ligados });
+    },
+  };
+  return ponte;
+}
+export type IlhasDestaque = ReturnType<typeof criarIlhasDestaque>;
+
+/** Dados de um cartão da aba Destaques; `fatos` só traz Solicitante e "Em destaque desde" quando existem. */
+export interface CartaoDestaque { numero: string; titulo: string; fatos: [string, string][]; observacao: string }
+export interface EstadoCartoesDestaque {
+  cartoes: CartaoDestaque[];
+  /** Cada desenharDestaques recria os cartões, como o replaceChildren. */
+  versao: number;
+}
+export const criarLojaCartoesDestaque = () => criarLoja<EstadoCartoesDestaque>({ cartoes: [], versao: 0 });
+export type LojaCartoesDestaque = ReturnType<typeof criarLojaCartoesDestaque>;

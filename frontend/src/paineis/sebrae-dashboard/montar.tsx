@@ -11,7 +11,8 @@ import { ContagensAbas, type AlvosAbas } from "./abas";
 import { ResultadoFechar, type AlvosFechar } from "./fechar";
 import { AvisosDestaques, type AlvosDestaques } from "./destaques";
 import { ListasMestre } from "./mestre";
-import { criarLojaAbas, criarLojaAvisos, criarLojaDestaques, criarLojaFechar, criarLojaMestre, criarLojaRascunho } from "./lojas";
+import { DestaquesReact } from "./ilhas-destaque";
+import { criarIlhasDestaque, criarLojaAbas, criarLojaAvisos, criarLojaCartoesDestaque, criarLojaDestaques, criarLojaFechar, criarLojaMestre, criarLojaRascunho } from "./lojas";
 import { sugestaoOsPainel } from "./sugestao-os";
 import type { AppSebrae, Registro } from "./tipos";
 
@@ -65,6 +66,13 @@ export function montar(_container: HTMLElement) {
   // Nunca chame atualizarMestre de dentro de um render ou efeito do React: ali o flushSync só avisa e não desenha na hora.
   const gravarMestre = lojaMestre.atualizar;
   lojaMestre.atualizar = parte => flushSync(() => gravarMestre(parte));
+  // Mesmo aviso: ilhas e cartões de destaque também gravam com flushSync (estado.ts lê a lista e foca o botão novo logo depois).
+  const ilhasDestaque = criarIlhasDestaque();
+  const lojaCartoesDestaque = criarLojaCartoesDestaque();
+  const gravarIlhas = ilhasDestaque.loja.atualizar;
+  ilhasDestaque.loja.atualizar = parte => flushSync(() => gravarIlhas(parte));
+  const gravarCartoes = lojaCartoesDestaque.atualizar;
+  lojaCartoesDestaque.atualizar = parte => flushSync(() => gravarCartoes(parte));
   const acoes = criarDashboardSebrae({
     app,
     dom,
@@ -80,6 +88,8 @@ export function montar(_container: HTMLElement) {
     lojaFechar,
     lojaDestaques,
     lojaMestre,
+    ilhasDestaque,
+    lojaCartoesDestaque,
   });
   // Cada parte tem a sua raiz (num div solto: o conteúdo vai por portal), então erro ao montar ou ao desenhar uma não
   // derruba as outras nem o painel: as ações voltam sempre. Portais anexam: cada parte esvazia os seus alvos de texto antes.
@@ -131,6 +141,11 @@ export function montar(_container: HTMLElement) {
     const alvos = Object.fromEntries(["novos", "antigos", "finalizados", "destaques"].map(aba => [aba, exigir(`sebrae-${aba}-mestre`)]));
     Object.values(alvos).forEach(alvo => alvo.replaceChildren());
     return <ListasMestre alvos={alvos} loja={lojaMestre} />;
+  });
+  montarParte("o selo, o botão e a lista de destaques", () => {
+    const lista = exigir("sebrae-destaques-lista");
+    lista.replaceChildren();
+    return <DestaquesReact ilhas={ilhasDestaque} cartoes={lojaCartoesDestaque} lista={lista} />;
   });
   return acoes;
 }
