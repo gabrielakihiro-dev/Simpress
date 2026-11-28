@@ -38,3 +38,14 @@ export interface EstadoAbas {
 }
 export const criarLojaAbas = () => criarLoja<EstadoAbas>({ abas: null, resultado: "", versao: 0 });
 export type LojaAbas = ReturnType<typeof criarLojaAbas>;
+
+/** Resultado do Atualizar/Fechar (#sebrae-fechar): status, rotina em andamento e a lista de avisos, erros e pulados. */
+export interface EstadoFechar {
+  status: string;
+  ocupado: boolean;
+  itens: { status: string; texto: string }[];
+  /** Conta as chamadas de renderizarFechar: 0 = nunca (o partial fica como veio); cada uma reescreve o status (role=status). */
+  versao: number;
+}
+export const criarLojaFechar = () => criarLoja<EstadoFechar>({ status: "", ocupado: false, itens: [], versao: 0 });
+export type LojaFechar = ReturnType<typeof criarLojaFechar>;

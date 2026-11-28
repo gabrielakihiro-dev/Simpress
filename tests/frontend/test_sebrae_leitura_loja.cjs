@@ -1,14 +1,15 @@
 // Chips da última leitura dos antigos (leitura-loja.ts), escritos por estado.ts: textos, popover de falhas, leitura em
 // andamento e corridas (POST recusado, resultado novo sem falhas). DOM falso e apiFetch simulado; só dados sintéticos.
 // Esc e clique fora (ouvintes no document) são provados no e2e (tests/e2e/sebrae-dashboard.spec.cjs, "chips da última leitura").
-// No fim, as lojas dos avisos dos novos e do rascunho (lojas.ts), escritas por renderizarAvisos e mostrarRascunho.
+// No fim, as lojas dos avisos dos novos, do rascunho e do resultado do Atualizar/Fechar (lojas.ts), escritas por
+// renderizarAvisos, mostrarRascunho e renderizarFechar.
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
 const { criarDashboardSebrae } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
 const { criarLojaLeitura, chipsLeitura } = require("../../frontend/src/paineis/sebrae-dashboard/leitura-loja.ts");
-const { criarLojaAvisos, criarLojaRascunho } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
+const { criarLojaAvisos, criarLojaFechar, criarLojaRascunho } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
 
 const COM_FALHAS = { em: "2026-10-28T10:40:00-03:00", concluido: true, lidos: ["UTIC-2026-1"], falhas: { "UTIC-2026-2": "Página não abriu.", "UTIC-2026-3": "Sem acesso." }, sem_utic: 1 };
 const SEM_FALHAS = { em: "2026-10-28T11:00:00-03:00", concluido: true, lidos: ["UTIC-2026-2", "UTIC-2026-3"], falhas: {}, sem_utic: 0 };
@@ -32,8 +33,8 @@ test("chipsLeitura: horário, plural, interrompida e chips vazios", () => {
   assert.deepEqual(chipsLeitura(null), { hora: "", lidos: "", falhas: [], textoFalhas: "", semUtic: "" });
 });
 
-// `respostas` é a fila de GET /api/sebrae/antigos/ler; `post` responde (ou lança) o POST.
-function montar({ respostas = [{ em_andamento: false, resultado: null }], post = async () => ({ iniciado: true }), carga = CARGA, armazenamento = null } = {}) {
+// `respostas` é a fila de GET /api/sebrae/antigos/ler; `post` responde (ou lança) o POST; `fechar` é o GET da finalização.
+function montar({ respostas = [{ em_andamento: false, resultado: null }], post = async () => ({ iniciado: true }), carga = CARGA, armazenamento = null, fechar = { em_andamento: false, resultado: null } } = {}) {
   const doc = createFakeDocument();
   const antigoDoc = global.document;
   const antigaJanela = global.window;
@@ -51,15 +52,17 @@ function montar({ respostas = [{ em_andamento: false, resultado: null }], post =
       if (opcoes.method === "POST") return post();
       return respostas.length > 1 ? respostas.shift() : respostas[0];
     }
+    if (url === "/api/sebrae/finalizar-softexpert") return structuredClone(fechar);
     return structuredClone(carga);
   };
   const loja = criarLojaLeitura();
   const lojaAvisos = criarLojaAvisos();
   const lojaRascunho = criarLojaRascunho();
+  const lojaFechar = criarLojaFechar();
   const app = { apiFetch, showToast: (texto, tipo) => toasts.push({ texto, tipo }), confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = criarDashboardSebrae({ app, dom, sebraeDashboardModel: { ...sebraeDashboardModel, INTERVALO_FECHAR_MS: 0 }, lojaLeitura: loja, lojaAvisos, lojaRascunho });
-  return { feature, loja, lojaAvisos, lojaRascunho, ouvintesJanela, toasts, doc, restaurar() { global.document = antigoDoc; global.window = antigaJanela; } };
+  const feature = criarDashboardSebrae({ app, dom, sebraeDashboardModel: { ...sebraeDashboardModel, INTERVALO_FECHAR_MS: 0 }, lojaLeitura: loja, lojaAvisos, lojaRascunho, lojaFechar });
+  return { feature, loja, lojaAvisos, lojaRascunho, lojaFechar, ouvintesJanela, toasts, doc, restaurar() { global.document = antigoDoc; global.window = antigaJanela; } };
 }
 
 test("carregar a lista põe o último resultado na loja; o chip de falhas abre e fecha o popover", async () => {
@@ -164,4 +167,29 @@ test("rascunho: carga sem rascunho deixa o bloco sem texto; sem correspondência
     assert.equal(limpa.lojaRascunho.ler().texto, "");
     assert.equal(limpa.lojaRascunho.ler().versao, 1);
   } finally { limpa.restaurar(); }
+});
+
+// ---- Resultado do Atualizar/Fechar ----
+test("fechar: sem resultado o bloco fica oculto; o último resultado traz o resumo, os erros e os pulados na ordem da tela", async () => {
+  const vazio = montar();
+  try {
+    assert.deepEqual(vazio.lojaFechar.ler(), { status: "", ocupado: false, itens: [], versao: 0 }, "antes da consulta o partial fica como veio");
+    await vazio.feature.carregarNovosSebrae();
+    await tick();
+    assert.deepEqual(vazio.lojaFechar.ler(), { status: "", ocupado: false, itens: [], versao: 1 });
+  } finally { vazio.restaurar(); }
+  const resultado = { resultados: [{ numero: "UTIC-2026-5", status: "erro", mensagem: "Sem acesso." }, { numero: "UTIC-2026-4", status: "ok", encerrado_em: "28/11/2026 10:00" }], pulados: [{ numero: "UTIC-2026-6", motivo: "sem_descricao" }] };
+  const montagem = montar({ fechar: { em_andamento: false, resultado } });
+  try {
+    await montagem.feature.carregarNovosSebrae();
+    await tick();
+    const f = montagem.lojaFechar.ler();
+    assert.equal(f.status, sebraeDashboardModel.resumoResultado({ ...resultado, resultados: [resultado.resultados[0]] }), "o finalizado sai do resumo e da lista");
+    assert.equal(f.ocupado, false);
+    assert.deepEqual(f.itens, [
+      { status: "erro", texto: `UTIC-2026-5: ${sebraeDashboardModel.textoResultado(resultado.resultados[0])}` },
+      { status: "pulado", texto: sebraeDashboardModel.textoPulado(resultado.pulados[0]) },
+    ]);
+    assert.ok(f.versao >= 1, "o finalizado recarrega a lista, que consulta e desenha de novo");
+  } finally { montagem.restaurar(); }
 });

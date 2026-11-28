@@ -589,6 +589,8 @@ test("chamado FINALIZADO sem descrição é pulado; o envio ao SharePoint pede c
   await expect(painel.locator("#sebrae-fechar-status")).toContainText("Nenhum chamado foi finalizado no SoftExpert");
   await expect(painel.locator("#sebrae-fechar-status")).toContainText("1 pulado(s)");
   await expect(painel.locator("#sebrae-fechar-lista")).toContainText("UTIC-2026-1200: não será finalizado no SoftExpert (sem descrição para finalizar).");
+  await expect(painel.locator('#sebrae-fechar-lista > li.sebrae-fechar__item[data-status="pulado"]')).toHaveCount(1);
+  await expect(painel.locator("#sebrae-fechar")).toHaveAttribute("aria-busy", "false");
   await expect(painel.locator("#sebrae-atualizar-status")).toContainText("Baixado"); // a atualização não quebra
 });
 
