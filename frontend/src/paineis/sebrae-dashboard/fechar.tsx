@@ -10,6 +10,8 @@ export function ResultadoFechar({ alvos, loja }: { alvos: AlvosFechar; loja: Loj
   const { status, ocupado, itens, versao } = useSyncExternalStore(loja.assinar, loja.ler);
   useLayoutEffect(() => {
     if (!versao) return; // nunca desenhado: o partial fica como veio (sem aria-busy)
+    // Só o estado final de várias chamadas seguidas é aplicado. A ordem hidden/aria-busy fica igual à de antes porque nenhum
+    // caminho de estado.ts chama com status preenchido e depois vazio no mesmo turno; quem fizer isso muda a ordem dos atributos.
     alvos.bloco.hidden = !status;
     alvos.bloco.setAttribute("aria-busy", ocupado ? "true" : "false");
   }, [alvos, status, ocupado, versao]);

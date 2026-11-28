@@ -177,6 +177,9 @@ test("fechar: sem resultado o bloco fica oculto; o último resultado traz o resu
     await vazio.feature.carregarNovosSebrae();
     await tick();
     assert.deepEqual(vazio.lojaFechar.ler(), { status: "", ocupado: false, itens: [], versao: 1 });
+    await vazio.feature.carregarNovosSebrae();
+    await tick();
+    assert.equal(vazio.lojaFechar.ler().versao, 2, "cada desenho soma 1 (a key nova reescreve a região role=status)");
   } finally { vazio.restaurar(); }
   const resultado = { resultados: [{ numero: "UTIC-2026-5", status: "erro", mensagem: "Sem acesso." }, { numero: "UTIC-2026-4", status: "ok", encerrado_em: "28/11/2026 10:00" }], pulados: [{ numero: "UTIC-2026-6", motivo: "sem_descricao" }] };
   const montagem = montar({ fechar: { em_andamento: false, resultado } });
