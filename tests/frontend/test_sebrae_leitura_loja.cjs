@@ -1,12 +1,14 @@
 // Chips da última leitura dos antigos (leitura-loja.ts), escritos por estado.ts: textos, popover de falhas, leitura em
 // andamento e corridas (POST recusado, resultado novo sem falhas). DOM falso e apiFetch simulado; só dados sintéticos.
 // Esc e clique fora (ouvintes no document) são provados no e2e (tests/e2e/sebrae-dashboard.spec.cjs, "chips da última leitura").
+// No fim, as lojas dos avisos dos novos e do rascunho (lojas.ts), escritas por renderizarAvisos e mostrarRascunho.
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createFakeDocument } = require("./support/fake-dom.cjs");
 const sebraeDashboardModel = require("../../frontend/src/comum/sebrae-dashboard-model.ts");
 const { criarDashboardSebrae } = require("../../frontend/src/paineis/sebrae-dashboard/estado.ts");
 const { criarLojaLeitura, chipsLeitura } = require("../../frontend/src/paineis/sebrae-dashboard/leitura-loja.ts");
+const { criarLojaAvisos, criarLojaRascunho } = require("../../frontend/src/paineis/sebrae-dashboard/lojas.ts");
 
 const COM_FALHAS = { em: "2026-10-28T10:40:00-03:00", concluido: true, lidos: ["UTIC-2026-1"], falhas: { "UTIC-2026-2": "Página não abriu.", "UTIC-2026-3": "Sem acesso." }, sem_utic: 1 };
 const SEM_FALHAS = { em: "2026-10-28T11:00:00-03:00", concluido: true, lidos: ["UTIC-2026-2", "UTIC-2026-3"], falhas: {}, sem_utic: 0 };
@@ -31,7 +33,7 @@ test("chipsLeitura: horário, plural, interrompida e chips vazios", () => {
 });
 
 // `respostas` é a fila de GET /api/sebrae/antigos/ler; `post` responde (ou lança) o POST.
-function montar({ respostas, post = async () => ({ iniciado: true }) }) {
+function montar({ respostas = [{ em_andamento: false, resultado: null }], post = async () => ({ iniciado: true }), carga = CARGA, armazenamento = null } = {}) {
   const doc = createFakeDocument();
   const antigoDoc = global.document;
   const antigaJanela = global.window;
@@ -41,20 +43,23 @@ function montar({ respostas, post = async () => ({ iniciado: true }) }) {
     return no;
   };
   global.document = doc;
-  global.window = { setTimeout, clearTimeout, localStorage: null };
+  const ouvintesJanela = {};
+  global.window = { setTimeout, clearTimeout, localStorage: armazenamento, addEventListener: (tipo, ouvinte) => { ouvintesJanela[tipo] = ouvinte; } };
   const toasts = [];
   const apiFetch = async (url, opcoes = {}) => {
     if (url === "/api/sebrae/antigos/ler") {
       if (opcoes.method === "POST") return post();
       return respostas.length > 1 ? respostas.shift() : respostas[0];
     }
-    return structuredClone(CARGA);
+    return structuredClone(carga);
   };
   const loja = criarLojaLeitura();
+  const lojaAvisos = criarLojaAvisos();
+  const lojaRascunho = criarLojaRascunho();
   const app = { apiFetch, showToast: (texto, tipo) => toasts.push({ texto, tipo }), confirmarAcao: async () => true };
   const dom = { createTextElement: (tag, classe, texto) => { const no = doc.createElement(tag); no.className = classe || ""; no.textContent = texto; return no; } };
-  const feature = criarDashboardSebrae({ app, dom, sebraeDashboardModel: { ...sebraeDashboardModel, INTERVALO_FECHAR_MS: 0 }, lojaLeitura: loja });
-  return { feature, loja, toasts, doc, restaurar() { global.document = antigoDoc; global.window = antigaJanela; } };
+  const feature = criarDashboardSebrae({ app, dom, sebraeDashboardModel: { ...sebraeDashboardModel, INTERVALO_FECHAR_MS: 0 }, lojaLeitura: loja, lojaAvisos, lojaRascunho });
+  return { feature, loja, lojaAvisos, lojaRascunho, ouvintesJanela, toasts, doc, restaurar() { global.document = antigoDoc; global.window = antigaJanela; } };
 }
 
 test("carregar a lista põe o último resultado na loja; o chip de falhas abre e fecha o popover", async () => {
@@ -107,4 +112,56 @@ test("POST recusado (409) mantém os chips do resultado anterior e o popover com
     assert.equal(loja.ler().falhasAbertas, true);
     assert.deepEqual(toasts.at(-1), { texto: "Já há uma rotina em andamento.", tipo: "warning" });
   } finally { restaurar(); }
+});
+
+// ---- Avisos dos novos e rascunho ----
+const IMPORTADO = { ...CARGA.importado, importado_em: "2026-10-28T10:00:00-03:00" };
+const COM_AVISOS = { importado: IMPORTADO, novos: { formulario: [], pendentes: [{ numero: "UTIC-2026-7", motivo: "Sem série." }], erros: { "UTIC-2026-8": "Página não abriu." } } };
+function armazenamentoFalso(inicial = {}) {
+  const dados = { ...inicial };
+  return { get length() { return Object.keys(dados).length; }, key: i => Object.keys(dados)[i] ?? null, getItem: k => (k in dados ? dados[k] : null), setItem: (k, v) => { dados[k] = String(v); }, removeItem: k => { delete dados[k]; } };
+}
+
+test("avisos: pendentes e não lidos vão para a loja na ordem da tela; recarga sem avisos esvazia", async () => {
+  const montagem = montar({ carga: COM_AVISOS });
+  try {
+    assert.deepEqual(montagem.lojaAvisos.ler(), { itens: [] });
+    await montagem.feature.carregarNovosSebrae();
+    assert.deepEqual(montagem.lojaAvisos.ler().itens, ["UTIC-2026-7: pendente. Sem série.", "UTIC-2026-8: não foi lido. Página não abriu."]);
+  } finally { montagem.restaurar(); }
+  const vazia = montar();
+  try {
+    vazia.lojaAvisos.atualizar({ itens: ["antigo"] });
+    await vazia.feature.carregarNovosSebrae();
+    assert.deepEqual(vazia.lojaAvisos.ler().itens, []);
+  } finally { vazia.restaurar(); }
+});
+
+test("rascunho: carga sem rascunho deixa o bloco sem texto; sem correspondência lista o chamado; outra aba e descartar trocam o texto", async () => {
+  const disco = armazenamentoFalso({ "simpress:sebrae-rascunho": JSON.stringify({ importado_em: "outra", valores: { "UTIC-2026-9999": { A: "CLIENTE" } }, edicoes: {} }) });
+  const montagem = montar({ carga: { ...CARGA, importado: IMPORTADO }, armazenamento: disco });
+  try {
+    assert.deepEqual(montagem.lojaRascunho.ler(), { texto: "", situacao: "", detalhes: [], versao: 0 }, "antes da primeira carga o partial fica como veio");
+    await montagem.feature.carregarNovosSebrae();
+    const r = montagem.lojaRascunho.ler();
+    assert.equal(r.texto, "Rascunhos preservados sem correspondência nesta importação (1).");
+    assert.equal(r.situacao, "alerta");
+    assert.deepEqual(r.detalhes, [{ numero: "UTIC-2026-9999", campos: [["A", "CLIENTE"]] }]);
+    const versao = r.versao;
+    assert.ok(versao >= 2, "renderizar chamou mostrarRascunho mais de uma vez (cada uma recolhe a lista)");
+    montagem.ouvintesJanela.storage({ key: "simpress:sebrae-rascunho" });
+    assert.equal(montagem.lojaRascunho.ler().situacao, "alerta");
+    assert.match(montagem.lojaRascunho.ler().texto, /^O rascunho mudou em outra aba/);
+    assert.deepEqual(montagem.lojaRascunho.ler().detalhes, []);
+    assert.equal(montagem.lojaRascunho.ler().versao, versao + 1);
+    await montagem.feature.descartarRascunhoSebrae();
+    assert.equal(montagem.lojaRascunho.ler().texto, "Rascunho descartado.");
+    assert.equal(montagem.lojaRascunho.ler().situacao, "");
+  } finally { montagem.restaurar(); }
+  const limpa = montar({ carga: { ...CARGA, importado: IMPORTADO } });
+  try {
+    await limpa.feature.carregarNovosSebrae();
+    assert.equal(limpa.lojaRascunho.ler().texto, "");
+    assert.equal(limpa.lojaRascunho.ler().versao, 1);
+  } finally { limpa.restaurar(); }
 });

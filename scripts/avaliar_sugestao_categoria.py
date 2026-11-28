@@ -86,7 +86,7 @@ def avaliar_b(registros: List[Dict[str, Any]], opcoes: Sequence[str]) -> None:
     for r in com_b:
         if r["regra_b"]:
             por_regra.setdefault(str(r["regra_b"]), []).append(r)
-    for rotulo, _ in cat.REGRAS_B:
+    for rotulo in dict.fromkeys(rotulo for rotulo, _ in cat.REGRAS_B):  # PERIFÉRICO tem duas regras; uma linha só
         exata = cat._opcao(opcoes, rotulo)
         grupo = por_regra.get(exata or "", [])
         if cat.normalizar(rotulo) in novas:

@@ -330,7 +330,8 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
   const painel = html.match(/<section[^>]*data-cockpit-tool-panel="sebrae-chamados"[\s\S]*?\n        <\/section>/)?.[0] || "";
   const cartao = html.match(/<section[^>]*id="sebrae-novos-painel"[\s\S]*?\n      <\/section>/)?.[0] || "";
   for (const id of ["sebrae-novos-lista", "sebrae-antigos", "sebrae-antigos-lista", "sebrae-antigos-resumo", "sebrae-finalizados", "sebrae-finalizados-lista", "sebrae-finalizados-resumo", "sebrae-sugestoes-a", "sebrae-sugestoes-b", "sebrae-sugestoes-s", "btn-sebrae-atualizar", "sebrae-atualizar-status", "btn-sebrae-ler-antigos", "sebrae-antigos-leitura-status", "sebrae-antigos-leitura-falhas",
-    "sebrae-leitura", "sebrae-leitura-hora", "sebrae-leitura-lidos", "sebrae-leitura-falhas", "btn-sebrae-falhas", "sebrae-falhas-popover", "sebrae-leitura-sem-utic"]) { // os chips (montar.tsx do sebrae-dashboard) só montam com todos
+    "sebrae-leitura", "sebrae-leitura-hora", "sebrae-leitura-lidos", "sebrae-leitura-falhas", "btn-sebrae-falhas", "sebrae-falhas-popover", "sebrae-leitura-sem-utic",
+    "sebrae-rascunho", "sebrae-rascunho-status", "sebrae-rascunho-detalhes", "sebrae-rascunho-resumo", "sebrae-rascunho-itens"]) { // chips e rascunho (montar.tsx do sebrae-dashboard) só montam com todos
     assert.equal(painel.split(`id="${id}"`).length - 1, 1, `${id} no painel`);
     assert.doesNotMatch(cartao, new RegExp(`id="${id}"`), `${id} fora do cartão`);
   }
