@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,7 +20,9 @@ PAGINA = """<!doctype html><html><head><style>
 <div class="ember-table-header-row ember-table-table-row">
 <div class="ember-table-header-cell"><input type="checkbox" id="todos"></div>
 <div class="ember-table-header-cell">Nome do computador</div></div>
-<div style="display:flex"><span style="width:220px;flex:none"></span><input class="search-text-box" style="width:212px"></div>
+<button id="SoMManagedComputers_searchButton" disabled>Pesquisar</button>
+<div id="barra" style="display:none"><span style="width:220px;flex:none"></span><input class="search-text-box" placeholder="Somente sequência" style="width:212px"></div>
+<div class="page-loader-wrapper">Carregando...</div>
 <div id="rows"></div><p id="count"></p>
 <button id="remover">X Remover computador(es)</button>
 <div id="dlg" hidden><div class="corpo">
@@ -38,9 +41,12 @@ function render() {
    row.innerHTML='<div class="ember-table-cell"><input type="checkbox"></div><div class="ember-table-cell"><a class="anchor-text" href="#/x"></a></div>';
    row.querySelector('a').textContent=nome; return row;
  }));
- document.querySelector('#count').textContent=filtered.length ? `1 - ${filtered.length} de ${filtered.length}` : 'Nenhum dado disponível';
+ document.querySelector('#count').textContent=filtered.length ? `1 - ${filtered.length} de Total de registros` : 'Nenhum dado disponível';
 }
 document.querySelector('.search-text-box').addEventListener('keydown', e=>{if(e.key==='Enter')render()});
+document.querySelector('#SoMManagedComputers_searchButton').onclick=()=>{document.querySelector('#barra').style.display='flex'};
+// A grade demora a aparecer depois do goto (como no portal, logo depois do login).
+setTimeout(()=>{document.querySelector('.page-loader-wrapper').remove(); document.querySelector('#SoMManagedComputers_searchButton').disabled=false; render()}, 1200);
 document.querySelector('#mdm').checked = cfg.mdm;
 if (cfg.motivo) document.querySelector('#motivo').innerHTML='<label>Motivo *</label><textarea required></textarea>';
 document.querySelector('#remover').onclick=()=>{
@@ -65,6 +71,13 @@ def _automacao():
         if not verificar():
             raise RuntimeError(descricao)
 
+    def pronto(acao, descricao, confirmar=None, **_):
+        fim = time.time() + 15
+        while not (confirmar is None or confirmar()):
+            if time.time() > fim:
+                raise RuntimeError(descricao)
+            time.sleep(0.2)
+
     return SimpleNamespace(
         ENDPOINT_URL=f"{BASE}#/uems/inventory/computers", CARREGAMENTO_MS=10000,
         verificar_cancelamento=lambda *a: None, log=lambda *a: None, RotinaErro=RuntimeError,
@@ -72,7 +85,7 @@ def _automacao():
         etapa_resiliente=lambda etapa, descricao, **k: etapa(),
         definir_pagina_ativa_para_recuperacao=lambda pagina: None, aguardar_estado=lambda *a, **k: None,
         aguardar_login=lambda *a, **k: None, endpoint_logado=lambda page: True, endpoint_entrar=lambda page: True,
-        aguardar_estabilidade_pre_clique=estabilidade,
+        aguardar_estabilidade_pre_clique=estabilidade, acionar_quando_pronto=pronto,
     )
 
 
@@ -117,12 +130,14 @@ class RemoverNoEndpointTests(unittest.TestCase):
 
         page.route(f"{BASE}**", servir)
         resultado = endpoint_remocao.remover_na_pagina(page, _automacao(), "PRNOTE100", confirmado, Path(self.pasta.name))
+        self.marcadas = page.locator("#rows input:checked").count()
         return resultado, cliques, abertas
 
     def test_sem_confirmacao_cancela_e_nunca_clica_sim(self):
         resultado, cliques, abertas = self.rodar(["PRNOTE100"])
         self.assertEqual(resultado["resultado"], "cancelado_sem_confirmacao")
         self.assertEqual(cliques, ["remover", "cancelar:mdm"])
+        self.assertEqual(self.marcadas, 0)  # a linha não fica marcada na aba que fica aberta
         self.assertTrue(Path(resultado["captura"]).is_file())
         self.assertTrue(Path(resultado["captura"]).is_relative_to(Path(self.pasta.name)))
         self.assertEqual(len(abertas), 1)

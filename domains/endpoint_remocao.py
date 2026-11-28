@@ -4,8 +4,10 @@ AUTORIZAÇÃO DE ESCRITA EM SISTEMA EXTERNO (Endpoint), dada pelo usuário em 27
 Endpoint Central a partir do botão "Remover mais antigo", com os passos abaixo.
 
 1. ``goto`` em ``<ENDPOINT_URL sem #>#/uems/agent/som/computers?managedStatus=true``; login, senha e MFA são do usuário.
-2. Filtro "Nome do computador" com o hostname; exige paginador ``1 - 1 de 1`` e uma única linha de nome igual
-   (só maiúsculas e espaços normalizados). Senão para sem clicar: ``nao_encontrado`` ou ``ambiguo``.
+2. Espera a lista carregar; filtro "Nome do computador" (caixa "Somente sequência") com o hostname; exige a faixa
+   ``1 - 1`` no rodapé (o portal mostra ``1 - N de Total de registros``, sem o total; o link não é clicado) e uma
+   única linha de nome igual (só maiúsculas e espaços normalizados). Senão para sem clicar: ``nao_encontrado`` ou
+   ``ambiguo``.
 3. ``check()`` no checkbox da linha; confere "selecionar todos" desmarcado e um único checkbox marcado.
 4. "Remover computador(es)"; no diálogo "Esta ação resulta em": contagem de selecionados = 1 e "Remove MDM
    enrollment Profile" marcado com ``check()`` (nunca ``click()``). Motivo obrigatório: para antes do clique final.
@@ -88,7 +90,36 @@ def _resultado(automacao: Any, resultado: str, **extra: Any) -> dict[str, Any]:
     return {"resultado": resultado, "mensagem": MENSAGENS[resultado], **extra}
 
 
+_FAIXA = re.compile(r"(?:^|\s)(\d+)\s*[-–]\s*(\d+)\s+de\b", re.I)
+
+
+def _faixa(page: Any) -> tuple[int, int] | None:
+    """Início e fim da faixa do rodapé (``1 - 500 de Total de registros``); o total não aparece na tela."""
+    achado = _FAIXA.search(str(page.evaluate("document.body ? document.body.innerText : ''") or ""))
+    return (int(achado.group(1)), int(achado.group(2))) if achado else None
+
+
+def _aguardar_lista(page: Any, automacao: Any) -> None:
+    """Espera a grade sair do carregamento, com a coluna do nome, linhas ou rodapé e a lupa (ou caixas) utilizável."""
+    lupa = page.locator("button[id$='_searchButton']").filter(visible=True)
+    caixas = page.locator("input.search-text-box").filter(visible=True)
+
+    def pronta() -> bool:
+        try:
+            grade = grid.ler_grade(page)
+            return (
+                not grade["carregando"] and grid.achar_cabecalho(grade, grid.COLUNA_NOME) is not None
+                and (bool(grade["linhas"]) or bool(grade["vazia"]) or _faixa(page) is not None)
+                and (caixas.count() > 0 or (lupa.count() > 0 and lupa.first.is_enabled()))
+            )
+        except Exception:
+            return False
+
+    automacao.acionar_quando_pronto(lambda: None, "A lista de computadores do Endpoint não carregou", confirmar=pronta)
+
+
 def _filtrar(page: Any, automacao: Any, hostname: str) -> tuple[dict[str, Any], list[str]]:
+    _aguardar_lista(page, automacao)
     grade = grid.aplicar_filtro(page, automacao, grid.COLUNA_NOME, hostname, modo_todos=False)
     cabecalho = grid.achar_cabecalho(grade, grid.COLUNA_NOME)
     return grade, [grid.valor_da_coluna(linha, cabecalho) for linha in grade["linhas"]]
@@ -183,7 +214,7 @@ def remover_na_pagina(
     exatos = [nome for nome in nomes if _nome(nome) == _nome(hostname)]
     if not exatos:
         return _resultado(automacao, "nao_encontrado")
-    if len(exatos) != 1 or len(nomes) != 1 or grade.get("total") != 1:
+    if len(exatos) != 1 or len(nomes) != 1 or _faixa(page) != (1, 1):
         return _resultado(automacao, "ambiguo")
 
     linha = page.locator(_LINHA).filter(visible=True)
@@ -221,6 +252,7 @@ def remover_na_pagina(
     if parada is not None or not remocao_liberada(confirmado):
         captura = _capturar(page, pasta_captura)
         _cancelar_dialogo(dialogo)
+        _desmarcar(caixa)  # não deixa a linha marcada na aba que fica aberta
         if parada is None:
             parada = "cancelado_sem_confirmacao" if confirmado is not True else "recusado_por_configuracao"
         return _resultado(automacao, parada, captura=captura)
