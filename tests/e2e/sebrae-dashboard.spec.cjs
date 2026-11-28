@@ -294,7 +294,7 @@ async function mostrarMestre(page, painel, alvo) {
   await expect(alvo).toBeVisible();
 }
 
-test("Carregar mais dos antigos: o foco vai ao 26º item da lista, visível, sem voltar a rolagem ao topo", async ({ page, request }) => {
+test("Carregar mais dos antigos: o foco vai ao 26º item da lista, visível, rolando só o necessário", async ({ page, request }) => {
   await comAntigosExtras(page);
   const { painel } = await abrirPainel(page, request);
   await abrirSecaoAntigos(painel);
@@ -306,10 +306,10 @@ test("Carregar mais dos antigos: o foco vai ao 26º item da lista, visível, sem
   const vigesimoSexto = botoes.nth(25);
   await expect(vigesimoSexto).toBeFocused();
   await expect(vigesimoSexto).toBeInViewport();
-  if (page.viewportSize().width < 1024) {
-    // no celular a área rolável não pode voltar ao topo no redesenho
-    expect(await page.locator("#cockpit-tool-panels").evaluate(no => no.scrollTop)).toBeGreaterThan(0);
-  }
+  // No celular a página rola só o mínimo para mostrar o item focado (na borda de baixo): o 27º não aparece inteiro. Se o
+  // redesenho zerasse a rolagem no meio (focusout no meio da remoção dos itens), o foco o traria do topo e o 27º apareceria.
+  // No desktop a lista rola dentro da coluna e o 27º aparece de qualquer jeito.
+  if (page.viewportSize().width < 1024) await expect(botoes.nth(26)).not.toBeInViewport({ ratio: 1 });
 });
 
 test("redesenhar a lista mestre devolve o foco ao botão novo do mesmo chamado", async ({ page, request }) => {
@@ -327,7 +327,7 @@ test("redesenhar a lista mestre devolve o foco ao botão novo do mesmo chamado",
   await painel.locator("#sebrae-antigos-lista").evaluate(no => no.dispatchEvent(new Event("change")));
   const foco = await page.evaluate(() => ({ numero: document.activeElement?.dataset?.sebraeMestre, mesmoNo: document.activeElement === window.__mestreAntigo, conectadoAntigo: window.__mestreAntigo.isConnected }));
   expect(foco).toEqual({ numero, mesmoNo: false, conectadoAntigo: false });
-  // o redesenho não mexe na rolagem (no celular, sem tirar o foco antes, ela voltava ao topo)
+  // o redesenho não mexe na rolagem
   expect(await rolagem()).toBe(antes);
   await expect(painel.locator(`#sebrae-antigos-mestre [data-sebrae-mestre="${numero}"]`)).toBeInViewport();
 });
