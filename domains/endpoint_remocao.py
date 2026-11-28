@@ -8,7 +8,8 @@ Endpoint Central a partir do botão "Remover mais antigo", com os passos abaixo.
    ``1 - 1`` no rodapé (o portal mostra ``1 - N de Total de registros``, sem o total; o link não é clicado) e uma
    única linha de nome igual (só maiúsculas e espaços normalizados). Senão para sem clicar: ``nao_encontrado`` ou
    ``ambiguo``.
-3. ``check()`` no checkbox da linha; confere "selecionar todos" desmarcado e um único checkbox marcado.
+3. ``check()`` no checkbox da linha; confere um "selecionar todos" visível e um único checkbox de linha marcado (o
+   portal marca o "selecionar todos" sozinho quando a única linha da faixa ``1 - 1`` é marcada).
 4. "Remover computador(es)"; no diálogo "Esta ação resulta em": contagem de selecionados = 1 e "Remove MDM
    enrollment Profile" marcado com ``check()`` (nunca ``click()``). Motivo obrigatório: para antes do clique final.
 5. "Sim, prosseguir" só com ``confirmado is True`` e ``SIMPRESS_ENDPOINT_SEM_REMOCAO`` diferente de ``1``; senão
@@ -224,7 +225,8 @@ def remover_na_pagina(
     caixa.check(timeout=10000)
     todos = page.locator(_CHECK_TODOS).filter(visible=True)
     marcados = page.locator(f"{_LINHA} input[type=checkbox]:checked").count()
-    if todos.count() != 1 or todos.first.is_checked() or marcados != 1:
+    # Com a faixa 1 - 1 já exigida, o "selecionar todos" marcado sozinho é esperado; a trava real é a contagem 1 do diálogo.
+    if todos.count() != 1 or marcados != 1:
         _desmarcar(caixa)
         return _resultado(automacao, "grade_inesperada")
 

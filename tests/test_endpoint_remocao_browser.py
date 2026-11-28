@@ -44,6 +44,11 @@ function render() {
  document.querySelector('#count').textContent=filtered.length ? `1 - ${filtered.length} de Total de registros` : 'Nenhum dado disponível';
 }
 document.querySelector('.search-text-box').addEventListener('keydown', e=>{if(e.key==='Enter')render()});
+// Como o Ember: o "selecionar todos" marca sozinho quando todas as linhas visíveis estão marcadas.
+document.querySelector('#rows').addEventListener('change', ()=>{
+ const caixas=[...document.querySelectorAll('#rows input[type=checkbox]')];
+ document.querySelector('#todos').checked = caixas.length > 0 && caixas.every(c=>c.checked);
+});
 document.querySelector('#SoMManagedComputers_searchButton').onclick=()=>{document.querySelector('#barra').style.display='flex'};
 // A grade demora a aparecer depois do goto (como no portal, logo depois do login).
 setTimeout(()=>{document.querySelector('.page-loader-wrapper').remove(); document.querySelector('#SoMManagedComputers_searchButton').disabled=false; render()}, 1200);
@@ -131,6 +136,7 @@ class RemoverNoEndpointTests(unittest.TestCase):
         page.route(f"{BASE}**", servir)
         resultado = endpoint_remocao.remover_na_pagina(page, _automacao(), "PRNOTE100", confirmado, Path(self.pasta.name))
         self.marcadas = page.locator("#rows input:checked").count()
+        self.todos_marcado = page.locator("#todos").is_checked()
         return resultado, cliques, abertas
 
     def test_sem_confirmacao_cancela_e_nunca_clica_sim(self):
@@ -138,6 +144,7 @@ class RemoverNoEndpointTests(unittest.TestCase):
         self.assertEqual(resultado["resultado"], "cancelado_sem_confirmacao")
         self.assertEqual(cliques, ["remover", "cancelar:mdm"])
         self.assertEqual(self.marcadas, 0)  # a linha não fica marcada na aba que fica aberta
+        self.assertFalse(self.todos_marcado)
         self.assertTrue(Path(resultado["captura"]).is_file())
         self.assertTrue(Path(resultado["captura"]).is_relative_to(Path(self.pasta.name)))
         self.assertEqual(len(abertas), 1)
