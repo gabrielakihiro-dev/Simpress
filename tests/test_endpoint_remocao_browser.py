@@ -25,12 +25,16 @@ PAGINA = """<!doctype html><html><head><style>
 <div class="page-loader-wrapper">Carregando...</div>
 <div id="rows"></div><p id="count"></p>
 <button id="remover">X Remover computador(es)</button>
-<div id="dlg" hidden><div class="corpo">
-<p>Esta ação resulta em</p><p id="qtd"></p>
-<label><input type="checkbox" id="mdm"> Remove MDM enrollment Profile</label>
-<div id="motivo"></div>
-<button id="sim">Sim, prosseguir</button><button id="cancelar">Cancelar</button>
-</div></div>
+<div role="dialog" class="app--slider"></div>
+<div class="zdialog--overlay" id="overlay" hidden></div>
+<div id="dlg" role="alertdialog" class="zdialog zdialog--alert" hidden>
+<span class="zdialog__title">Esta ação resulta em</span>
+<div class="zdialog__content"><p id="qtd"></p>
+<label><input type="checkbox"> Remove MDM enrollment Profile</label>
+<p>Especifique o motivo da remoção do agente do Endpoint Central</p><textarea id="motivo-txt"></textarea>
+<div id="motivo"></div></div>
+<button id="sim">Sim, prosseguir</button><button id="cancelar">Cancel</button>
+</div>
 <script>
 const cfg = __CFG__;
 function render() {
@@ -52,17 +56,21 @@ document.querySelector('#rows').addEventListener('change', ()=>{
 document.querySelector('#SoMManagedComputers_searchButton').onclick=()=>{document.querySelector('#barra').style.display='flex'};
 // A grade demora a aparecer depois do goto (como no portal, logo depois do login).
 setTimeout(()=>{document.querySelector('.page-loader-wrapper').remove(); document.querySelector('#SoMManagedComputers_searchButton').disabled=false; render()}, 1200);
-document.querySelector('#mdm').checked = cfg.mdm;
+const mdm = () => document.querySelector('#dlg label input[type=checkbox]');
+mdm().checked = cfg.mdm;
 if (cfg.motivo) document.querySelector('#motivo').innerHTML='<label>Motivo *</label><textarea required></textarea>';
 document.querySelector('#remover').onclick=()=>{
  window.registrar('remover');
- document.querySelector('#qtd').textContent=`${document.querySelectorAll('#rows input:checked').length} selected devices`;
- document.querySelector('#dlg').hidden=false;
+ const n=document.querySelectorAll('#rows input:checked').length;
+ document.querySelector('#qtd').textContent = cfg.reconhecivel === false ? 'Outra mensagem do portal.'
+   : `The removal of the Endpoint Central agent on the ${n} selected devices. Inability to manage the ${n} selected devices.`;
+ document.querySelector('#overlay').hidden=false; document.querySelector('#dlg').hidden=false;
 };
 document.querySelector('#sim').onclick=()=>{window.registrar('sim'); if(cfg.fecha) document.querySelector('#dlg').hidden=true;};
 document.querySelector('#cancelar').onclick=()=>{
- window.registrar('cancelar:' + (document.querySelector('#mdm').checked ? 'mdm' : 'sem_mdm'));
- document.querySelector('#dlg').hidden=true;
+ window.registrar('cancelar:' + (mdm().checked ? 'mdm' : 'sem_mdm'));
+ // Some com um pequeno atraso, como a animação do portal.
+ setTimeout(()=>{document.querySelector('#dlg').hidden=true; document.querySelector('#overlay').hidden=true}, 300);
 };
 </script></body></html>"""
 
@@ -120,7 +128,7 @@ class RemoverNoEndpointTests(unittest.TestCase):
         self.addCleanup(env.stop)
         os.environ.pop(endpoint_remocao.VAR_SEM_REMOCAO, None)
 
-    def rodar(self, linhas, confirmado=False, depois=None, mdm=False, motivo=False, fecha=True):
+    def rodar(self, linhas, confirmado=False, depois=None, mdm=False, motivo=False, fecha=True, reconhecivel=True):
         cliques = []
         abertas = []
         page = self.browser.new_page(viewport={"width": 1100, "height": 700})
@@ -130,13 +138,15 @@ class RemoverNoEndpointTests(unittest.TestCase):
         def servir(route):
             atuais = linhas if not abertas else (depois if depois is not None else linhas)
             abertas.append(route.request.url)
-            cfg = json.dumps({"linhas": atuais, "mdm": mdm, "motivo": motivo, "fecha": fecha})
+            cfg = json.dumps({"linhas": atuais, "mdm": mdm, "motivo": motivo, "fecha": fecha, "reconhecivel": reconhecivel})
             route.fulfill(status=200, content_type="text/html; charset=utf-8", body=PAGINA.replace("__CFG__", cfg))
 
         page.route(f"{BASE}**", servir)
         resultado = endpoint_remocao.remover_na_pagina(page, _automacao(), "PRNOTE100", confirmado, Path(self.pasta.name))
         self.marcadas = page.locator("#rows input:checked").count()
         self.todos_marcado = page.locator("#todos").is_checked()
+        self.alerta_visivel = page.locator("[role=alertdialog]").is_visible()
+        self.motivo_digitado = page.locator("#motivo-txt").input_value()
         return resultado, cliques, abertas
 
     def test_sem_confirmacao_cancela_e_nunca_clica_sim(self):
@@ -145,6 +155,8 @@ class RemoverNoEndpointTests(unittest.TestCase):
         self.assertEqual(cliques, ["remover", "cancelar:mdm"])
         self.assertEqual(self.marcadas, 0)  # a linha não fica marcada na aba que fica aberta
         self.assertFalse(self.todos_marcado)
+        self.assertFalse(self.alerta_visivel)
+        self.assertEqual(self.motivo_digitado, "")  # o motivo (sem asterisco nem required) não dispara parada nem é digitado
         self.assertTrue(Path(resultado["captura"]).is_file())
         self.assertTrue(Path(resultado["captura"]).is_relative_to(Path(self.pasta.name)))
         self.assertEqual(len(abertas), 1)
@@ -193,11 +205,22 @@ class RemoverNoEndpointTests(unittest.TestCase):
                 self.assertEqual(cliques, ["remover", "sim"])
                 self.assertEqual(len(abertas), 2)  # goto de novo, nunca reload
 
+    def test_dialogo_nao_reconhecido_fecha_pelo_cancel_e_desmarca(self):
+        resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, reconhecivel=False)
+        self.assertEqual(resultado["resultado"], "dialogo_inesperado")
+        self.assertEqual(cliques, ["remover", "cancelar:sem_mdm"])
+        self.assertTrue(Path(resultado["captura"]).is_file())
+        self.assertNotIn("dialogo_aberto", resultado)
+        self.assertFalse(self.alerta_visivel)
+        self.assertEqual(self.marcadas, 0)
+
     def test_motivo_obrigatorio_para_antes_do_clique_final(self):
         resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, motivo=True)
         self.assertEqual(resultado["resultado"], "motivo_obrigatorio")
         self.assertNotIn("sim", cliques)
         self.assertTrue(cliques[-1].startswith("cancelar"))
+        self.assertFalse(self.alerta_visivel)
+        self.assertEqual(self.marcadas, 0)
 
 
 class LiberacaoTests(unittest.TestCase):
@@ -213,6 +236,8 @@ class LiberacaoTests(unittest.TestCase):
         # O localizador do "Sim" só existe em _confirmar_remocao, chamada depois de remocao_liberada.
         import inspect
         fonte = inspect.getsource(endpoint_remocao.remover_na_pagina)
+        for saida in (endpoint_remocao._sair_sem_remover, endpoint_remocao._fechar_alertas):
+            self.assertNotIn("_SIM", inspect.getsource(saida))
         self.assertNotIn("_SIM", fonte)
         self.assertLess(fonte.index("remocao_liberada(confirmado)"), fonte.index("_confirmar_remocao("))
 

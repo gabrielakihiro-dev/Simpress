@@ -12,8 +12,9 @@ Endpoint Central a partir do botão "Remover mais antigo", com os passos abaixo.
    portal marca o "selecionar todos" sozinho quando a única linha da faixa ``1 - 1`` é marcada).
 4. "Remover computador(es)"; no diálogo "Esta ação resulta em": contagem de selecionados = 1 e "Remove MDM
    enrollment Profile" marcado com ``check()`` (nunca ``click()``). Motivo obrigatório: para antes do clique final.
+   Toda saída antes do "Sim" captura, fecha o ``[role=alertdialog]`` só pelo Cancel/Cancelar e desmarca a linha.
 5. "Sim, prosseguir" só com ``confirmado is True`` e ``SIMPRESS_ENDPOINT_SEM_REMOCAO`` diferente de ``1``; senão
-   captura o diálogo (pasta temporária), clica "Cancelar" e devolve ``cancelado_sem_confirmacao`` ou
+   captura o diálogo (pasta temporária), clica "Cancel" e devolve ``cancelado_sem_confirmacao`` ou
    ``recusado_por_configuracao``. O "Sim" é um único clique, nunca repetido; timeout ou erro depois dele é ``incerto``.
 6. ``removido`` só depois de novo ``goto`` (via ``about:blank``; nunca ``reload``) e refiltro com 0 linhas; ainda aparece: ``incerto``.
 
@@ -23,6 +24,7 @@ import logging
 import os
 import re
 import tempfile
+import time
 import unicodedata
 from datetime import datetime
 from importlib import import_module
@@ -50,7 +52,9 @@ _BOTAO_REMOVER = re.compile(r"Remover computador", re.I)
 _CONTAGEM = re.compile(r"(\d+)\s+(?:selected\s+devices?|dispositivos?\s+selecionados?)", re.I)
 _MDM = re.compile(r"Remove MDM enrollment Profile", re.I)
 _MOTIVO_OBRIGATORIO = re.compile(r"(?:motivo|reason)[^\n*]{0,40}\*", re.I)
-_CANCELAR = re.compile(r"^\s*Cancelar\s*$", re.I)
+_CANCELAR = re.compile(r"^\s*(?:Cancelar|Cancel)\s*$", re.I)  # o portal mostra "Cancel"
+_ALERTA = "[role=alertdialog]"
+ESPERA_FECHAR_ALERTA_MS = 10_000
 _SIM = re.compile(r"Sim,?\s*prosseguir", re.I)
 
 MENSAGENS = {
@@ -157,11 +161,34 @@ def _abrir_lista(page: Any, automacao: Any) -> None:
     automacao.definir_pagina_ativa_para_recuperacao(page)
 
 
-def _cancelar_dialogo(dialogo: Any) -> None:
+def _fechar_alertas(page: Any) -> bool:
+    """Fecha todo ``[role=alertdialog]`` visível só pelo botão de nome exato Cancel/Cancelar; nunca toca no "Sim"."""
+    alertas = page.locator(_ALERTA).filter(visible=True)
     try:
-        dialogo.get_by_role("button", name=_CANCELAR).first.click(timeout=10000)
+        for _ in range(3):
+            antes = alertas.count()
+            if not antes:
+                return True
+            alertas.first.get_by_role("button", name=_CANCELAR).first.click(timeout=10000)
+            fim = time.monotonic() + ESPERA_FECHAR_ALERTA_MS / 1000
+            while alertas.count() >= antes and time.monotonic() < fim:
+                page.wait_for_timeout(200)
+        return not alertas.count()
     except Exception as erro:
-        logger.debug("Não foi possível clicar em Cancelar no diálogo do Endpoint (%s).", type(erro).__name__)
+        logger.debug("Não foi possível fechar o diálogo do Endpoint pelo Cancel (%s).", type(erro).__name__)
+        return False
+
+
+def _sair_sem_remover(page: Any, automacao: Any, caixa: Any, pasta: Path | None, resultado: str) -> dict[str, Any]:
+    """Saída antes do "Sim": captura, fecha o diálogo pelo Cancel, espera sumir e desmarca a linha."""
+    captura = _capturar(page, pasta)
+    fechado = _fechar_alertas(page)
+    _desmarcar(caixa)
+    saida = _resultado(automacao, resultado, captura=captura)
+    if not fechado:
+        saida["dialogo_aberto"] = True
+        saida["mensagem"] += " O diálogo ficou aberto no Endpoint Central: clique em Cancel."
+    return saida
 
 
 def _capturar(page: Any, pasta: Path | None) -> str:
@@ -187,6 +214,8 @@ def _conferir_dialogo(dialogo: Any) -> tuple[str | None, Any]:
     if contagem is None or int(contagem.group(1)) != 1:
         return "dialogo_inesperado", None
     mdm = dialogo.get_by_label(_MDM)
+    if mdm.count() != 1:  # checkbox sem id dentro do label: busca direta pelo label
+        mdm = dialogo.locator("label").filter(has_text=_MDM).locator("input[type=checkbox]")
     if mdm.count() != 1:
         return "dialogo_inesperado", None
     mdm.check(timeout=10000)  # idempotente: já marcado continua marcado
@@ -235,33 +264,30 @@ def remover_na_pagina(
     if botao.count() != 1:
         _desmarcar(caixa)
         return _resultado(automacao, "grade_inesperada")
-    botao.first.click(timeout=10000)  # só abre o diálogo; nada é removido aqui
-    # O menor bloco que tem o texto do diálogo e o botão Cancelar (ancestrais vêm antes no DOM, então ``last``).
-    dialogo = (
-        page.locator("div").filter(has_text=_TEXTO_DIALOGO)
-        .filter(has=page.get_by_role("button", name=_CANCELAR)).filter(visible=True).last
-    )
+    # Daqui até o "Sim", toda saída fecha o diálogo pelo Cancel e desmarca a linha (nunca o deixa aberto).
+    alertas = page.locator(_ALERTA).filter(has_text=_TEXTO_DIALOGO).filter(visible=True)
+    mdm: Any = None
     try:
-        dialogo.wait_for(state="visible", timeout=20000)
-    except Exception:
+        botao.first.click(timeout=10000)  # só abre o diálogo; nada é removido aqui
+        try:
+            alertas.first.wait_for(state="visible", timeout=20000)
+            parada, mdm = ("dialogo_inesperado", None) if alertas.count() != 1 else _conferir_dialogo(alertas.first)
+        except Exception:
+            parada = "dialogo_inesperado"
+    except BaseException:
+        _fechar_alertas(page)
         _desmarcar(caixa)
-        return _resultado(automacao, "dialogo_inesperado")
-
-    try:
-        parada, mdm = _conferir_dialogo(dialogo)
-    except Exception:
-        parada, mdm = "dialogo_inesperado", None
+        raise
     if parada is not None or not remocao_liberada(confirmado):
-        captura = _capturar(page, pasta_captura)
-        _cancelar_dialogo(dialogo)
-        _desmarcar(caixa)  # não deixa a linha marcada na aba que fica aberta
         if parada is None:
             parada = "cancelado_sem_confirmacao" if confirmado is not True else "recusado_por_configuracao"
-        return _resultado(automacao, parada, captura=captura)
-    return _confirmar_remocao(page, automacao, hostname, confirmado, dialogo, mdm)
+        return _sair_sem_remover(page, automacao, caixa, pasta_captura, parada)
+    return _confirmar_remocao(page, automacao, hostname, confirmado, alertas.first, mdm, caixa, pasta_captura)
 
 
-def _confirmar_remocao(page: Any, automacao: Any, hostname: str, confirmado: bool, dialogo: Any, mdm: Any) -> dict[str, Any]:
+def _confirmar_remocao(
+    page: Any, automacao: Any, hostname: str, confirmado: bool, dialogo: Any, mdm: Any, caixa: Any, pasta: Path | None,
+) -> dict[str, Any]:
     """Único caminho que conhece o botão "Sim"; só é chamado com a remoção liberada."""
     sim = dialogo.get_by_role("button", name=_SIM)
 
@@ -274,11 +300,11 @@ def _confirmar_remocao(page: Any, automacao: Any, hostname: str, confirmado: boo
     try:
         automacao.aguardar_estabilidade_pre_clique(pronto, "Confirmar a remoção no Endpoint")
     except BaseException:
-        _cancelar_dialogo(dialogo)  # "pare"/"cancelar" ou diálogo instável: nada foi removido
+        _fechar_alertas(page)  # "pare"/"cancelar" ou diálogo instável: nada foi removido
+        _desmarcar(caixa)
         raise
     if not remocao_liberada(confirmado):  # a variável pode ter mudado durante a espera
-        _cancelar_dialogo(dialogo)
-        return _resultado(automacao, "recusado_por_configuracao")
+        return _sair_sem_remover(page, automacao, caixa, pasta, "recusado_por_configuracao")
 
     automacao.log(ORIGEM, "Confirmando a remoção (clique único).")
     seguro = _SemCancelamento(automacao)
