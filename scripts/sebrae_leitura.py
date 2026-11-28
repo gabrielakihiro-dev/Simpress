@@ -189,17 +189,43 @@ def executar(
     return 0
 
 
+def _antigo_unico(existentes: Any, numero: str, rotinas: Any) -> str:
+    """UTIC key of ``numero`` when it is still an old open ticket of the imported Dashboard (the import may change after the click)."""
+    try:
+        chave = chave_do_numero(numero)
+    except ValueError:
+        raise rotinas.RotinaErro("Informe o número do chamado no formato UTIC-AAAA-NNNN.") from None
+    for aberto in existentes["abertos"]:
+        try:
+            if chave_do_numero(str(aberto.get("numero") or "")) == chave:
+                return chave
+        except ValueError:
+            continue
+    raise rotinas.RotinaErro(f"{chave} não é um chamado antigo em aberto do Dashboard importado.")
+
+
+def _nao_encontrados_anteriores(caminhos: Any) -> List[str]:
+    """``nao_encontrados`` of the previous run, kept by a one-ticket read so the other tickets keep their badge."""
+    anterior = sebrae_novos.ler_resultado_antigos(caminhos)
+    lista = anterior.get("nao_encontrados") if isinstance(anterior, dict) else None
+    return [str(n) for n in lista if isinstance(n, str)] if isinstance(lista, list) else []
+
+
 def executar_antigos(
     context: "BrowserContext",
     rotinas: Any,
     *,
     state_dir: Path = STATE_DIR,
     modulo: Any = sebrae_softexpert,
+    numero: str = "",
 ) -> int:
     """Rotina ``antigos``: reads in SoftExpert the old open tickets (with UTIC) that are not in the cache yet.
 
     Incremental: a ticket already in ``sebrae_antigos_softexpert.json`` is never read again. One ticket failing never
-    stops the others; a cancel keeps what was read. The summary goes to ``sebrae_antigos_resultado.json``."""
+    stops the others; a cancel keeps what was read. The summary goes to ``sebrae_antigos_resultado.json``.
+
+    With ``numero`` (button "Conferir este chamado"): reads only that ticket, even if cached. Not found leaves the cache
+    (so the "Não encontrado" badge shows); found updates it. The other tickets' ``nao_encontrados`` are kept."""
     caminhos = sebrae_novos.caminhos_padrao(state_dir)
     existentes = sebrae_novos.ler_existentes(caminhos.existentes)
     print(f"\n=== LER CHAMADOS ANTIGOS DO SOFTEXPERT (início {rotinas.agora_iso()}) ===", flush=True)
@@ -211,13 +237,24 @@ def executar_antigos(
         cache = sebrae_novos.ler_antigos(destino, estrito=True)
     except DomainBusyError:
         raise rotinas.RotinaErro("O cache dos chamados antigos está ilegível e foi preservado; restaure uma cópia válida e execute de novo.") from None
-    a_ler, sem_utic, ja_lidos = _antigos_a_ler(existentes, cache)
+    if numero:
+        a_ler, sem_utic, ja_lidos = [_antigo_unico(existentes, numero, rotinas)], 0, 0
+        # This ticket's old badge stays until its read ends: a cancel before the read must not erase it.
+        nao_encontrados = _nao_encontrados_anteriores(caminhos)
+    else:
+        a_ler, sem_utic, ja_lidos = _antigos_a_ler(existentes, cache)
+        nao_encontrados = []
     resultado: Dict[str, Any] = {
         "em": rotinas.agora_iso(), "concluido": False, "total": len(a_ler), "lidos": [], "falhas": {},
-        "nao_encontrados": [], "sem_utic": sem_utic, "ja_lidos": ja_lidos,
+        "nao_encontrados": nao_encontrados, "sem_utic": sem_utic, "ja_lidos": ja_lidos,
     }
+    if numero:
+        resultado["numero"] = a_ler[0]
     salvar = lambda: sebrae_novos.salvar_resultado_antigos(caminhos, resultado)  # noqa: E731
-    log(f"Antigos em aberto: {len(a_ler)} para ler, {ja_lidos} já lidos, {sem_utic} sem UTIC.")
+    if numero:
+        log(f"Conferindo só o antigo {a_ler[0]}.")
+    else:
+        log(f"Antigos em aberto: {len(a_ler)} para ler, {ja_lidos} já lidos, {sem_utic} sem UTIC.")
     pagina: Optional["Page"] = None
     try:
         if a_ler:
@@ -225,25 +262,30 @@ def executar_antigos(
                 pagina = modulo.abrir_softexpert(context)
             except modulo.SessaoExpirada:
                 raise rotinas.RotinaErro(LOGIN_NAO_CONCLUIDO) from None
-        for numero in a_ler:
-            rotinas.verificar_cancelamento(f"Cancelado antes de ler {numero}.")
+        for chave in a_ler:
+            rotinas.verificar_cancelamento(f"Cancelado antes de ler {chave}.")
             try:
-                lido = _ler_chamado(context, cast("Page", pagina), numero, rotinas, modulo)
+                lido = _ler_chamado(context, cast("Page", pagina), chave, rotinas, modulo)
                 if isinstance(lido, str):
-                    resultado["falhas"][numero] = lido[:200]
+                    resultado["falhas"][chave] = lido[:200]
                     if isinstance(lido, _NaoEncontrado):
-                        resultado["nao_encontrados"].append(numero)
-                    log(f"{numero}: antigo não lido ({lido}).")
+                        if chave in cache:  # releitura de um só: sem sair do cache, tela.nao_encontrados ignora o chamado
+                            sebrae_novos.remover_antigo(destino, chave)
+                        if chave not in resultado["nao_encontrados"]:
+                            resultado["nao_encontrados"].append(chave)
+                    log(f"{chave}: antigo não lido ({lido}).")
                 else:
                     sebrae_novos.salvar_antigo(destino, lido, rotinas.agora_iso())
                     _guardar_credenciais(state_dir, lido, log)
-                    resultado["lidos"].append(numero)
-                    log(f"{numero}: antigo lido.")
+                    if chave in resultado["nao_encontrados"]:
+                        resultado["nao_encontrados"].remove(chave)
+                    resultado["lidos"].append(chave)
+                    log(f"{chave}: antigo lido.")
             except _LoginNaoConcluido:
                 raise rotinas.RotinaErro(LOGIN_NAO_CONCLUIDO) from None
             except Exception as erro:  # noqa: BLE001 - one old ticket never stops the others; log only the type
-                resultado["falhas"][numero] = type(erro).__name__
-                log(f"{numero}: antigo não lido ({type(erro).__name__}).")
+                resultado["falhas"][chave] = type(erro).__name__
+                log(f"{chave}: antigo não lido ({type(erro).__name__}).")
             salvar()
         resultado["concluido"] = True
     finally:

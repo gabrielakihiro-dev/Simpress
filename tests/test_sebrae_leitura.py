@@ -317,6 +317,54 @@ class LeituraTest(unittest.TestCase):
         self.assertFalse(sebrae_novos.ler_resultado_antigos(self.caminhos)["concluido"])
         self.assertTrue(self.aba.fechada)
 
+    def rodar_um(self, numero, leituras):
+        mod = modulo([], leituras, self.aba)
+        codigo = sebrae_leitura.executar_antigos(None, self.rotinas, state_dir=self.dir, modulo=mod, numero=numero)
+        return codigo, mod
+
+    def test_um_numero_em_cache_e_relido_e_o_cache_atualizado(self):
+        self.preparar_antigos("UTIC-2026-0010", "UTIC-2026-0011")
+        destino = sebrae_novos.caminho_antigos(self.caminhos)
+        sebrae_novos.salvar_antigo(destino, ChamadoSoftExpert("UTIC-2026-0010", titulo="Velho"), "ontem")
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"nao_encontrados": ["UTIC-2026-0010", "UTIC-2026-0011"]})
+        codigo, mod = self.rodar_um("utic-2026-0010", {"UTIC-2026-0010": ChamadoSoftExpert("UTIC-2026-0010", titulo="Novo")})
+        self.assertEqual((codigo, mod.chamadas), (0, ["UTIC-2026-0010"]))
+        self.assertEqual(self.antigos()["UTIC-2026-0010"]["titulo"], "Novo")
+        resultado = sebrae_novos.ler_resultado_antigos(self.caminhos)
+        self.assertEqual(
+            {k: resultado[k] for k in ("numero", "total", "lidos", "nao_encontrados", "concluido")},
+            {"numero": "UTIC-2026-0010", "total": 1, "lidos": ["UTIC-2026-0010"], "nao_encontrados": ["UTIC-2026-0011"], "concluido": True},
+        )
+
+    def test_um_numero_nao_achado_sai_do_cache_e_entra_em_nao_encontrados_sem_perder_os_outros(self):
+        self.preparar_antigos("UTIC-2026-0010", "UTIC-2026-0011")
+        destino = sebrae_novos.caminho_antigos(self.caminhos)
+        for n in ("UTIC-2026-0010", "UTIC-2026-0011"):
+            sebrae_novos.salvar_antigo(destino, ChamadoSoftExpert(n), "ontem")
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"nao_encontrados": ["UTIC-2026-0012"]})
+        codigo, mod = self.rodar_um("UTIC-2026-0010", {"UTIC-2026-0010": ChamadoNaoEncontrado("não achei")})
+        self.assertEqual((codigo, mod.chamadas), (0, ["UTIC-2026-0010"]))
+        self.assertEqual(set(self.antigos()), {"UTIC-2026-0011"})
+        resultado = sebrae_novos.ler_resultado_antigos(self.caminhos)
+        self.assertEqual(resultado["nao_encontrados"], ["UTIC-2026-0012", "UTIC-2026-0010"])
+        self.assertEqual(resultado["falhas"], {"UTIC-2026-0010": "não achei"})
+
+    def test_um_numero_cancelado_antes_de_ler_mantem_o_selo_e_o_cache(self):
+        self.preparar_antigos("UTIC-2026-0010")
+        sebrae_novos.salvar_resultado_antigos(self.caminhos, {"nao_encontrados": ["UTIC-2026-0010"]})
+        self.rotinas.cancelar_em = "UTIC-2026-0010"
+        with self.assertRaises(KeyboardInterrupt):
+            self.rodar_um("UTIC-2026-0010", {})
+        resultado = sebrae_novos.ler_resultado_antigos(self.caminhos)
+        self.assertEqual((resultado["nao_encontrados"], resultado["concluido"]), (["UTIC-2026-0010"], False))
+
+    def test_um_numero_que_nao_e_antigo_em_aberto_recusa_sem_abrir_o_softexpert(self):
+        self.preparar_antigos("UTIC-2026-0010")
+        for numero in ("UTIC-2026-0099", "abc"):
+            with self.subTest(numero=numero), self.assertRaises(Rotinas.RotinaErro):
+                self.rodar_um(numero, {})
+        self.assertFalse(sebrae_novos.caminho_resultado_antigos(self.caminhos).exists())
+
     def test_antigos_mascara_cpf_e_senha_no_arquivo(self):
         self.preparar_antigos("UTIC-2026-0010")
         leitura = ChamadoSoftExpert(

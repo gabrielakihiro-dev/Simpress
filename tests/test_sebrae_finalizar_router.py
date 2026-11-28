@@ -65,10 +65,10 @@ class RunnerFalso:
         self.erro = None
         self.estado = {"estado": "livre"}
 
-    def start(self, rotina):
+    def start(self, rotina, numero=""):
         if self.erro is not None:
             raise self.erro
-        self.iniciadas.append(rotina)
+        self.iniciadas.append(f"{rotina}:{numero}" if numero else rotina)
         return {"estado": "em_andamento", "rotina": rotina}
 
     def state(self):
@@ -1348,6 +1348,20 @@ class LerAntigosTest(FinalizarBase):
         self.assertEqual(corpo["resultado"]["lidos"], ["UTIC-2026-0001"])
         self.runner.estado = {"estado": "em_andamento", "rotina": "sebrae"}
         self.assertFalse(self.cliente.get(ANTIGOS).json()["em_andamento"])
+
+
+    def test_com_numero_dispara_so_esse_antigo(self):
+        self.importar()
+        resposta = self.post(ANTIGOS, json={"numero": "utic-2026-0001"})
+        self.assertEqual((resposta.status_code, resposta.json()), (202, {"iniciado": True}))
+        self.assertEqual(self.runner.iniciadas, [f"antigos:{A}"])
+
+    def test_numero_invalido_ou_que_nao_e_antigo_em_aberto_responde_422(self):
+        self.importar()
+        for corpo in ({"numero": "abc"}, {"numero": C}, {"numero": "UTIC-2026-0999"}, {"numero": A, "extra": 1}):
+            with self.subTest(corpo=corpo):
+                self.assertEqual(self.post(ANTIGOS, json=corpo).status_code, 422)
+        self.assertEqual(self.runner.iniciadas, [])
 
 
 class LerAntigosSemRunnerTest(FinalizarBase):
