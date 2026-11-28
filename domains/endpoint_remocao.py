@@ -237,6 +237,20 @@ def _caixa_estavel(page: Any, alerta: Any) -> dict[str, float] | None:
     return dict(anterior) if anterior else None
 
 
+def _zoom(page: Any) -> float:
+    """Zoom do viewport visual (Page.getLayoutMetrics); 1 se não der para ler."""
+    try:
+        cdp = page.context.new_cdp_session(page)
+        try:
+            zoom = float(cdp.send("Page.getLayoutMetrics")["cssVisualViewport"].get("zoom") or 1)
+        finally:
+            cdp.detach()
+        return zoom if zoom > 0 else 1.0
+    except Exception as erro:
+        logger.debug("Não foi possível ler o zoom da aba do Endpoint (%s).", type(erro).__name__)
+        return 1.0
+
+
 def _capturar(page: Any, pasta: Path | None) -> str:
     """Só o painel do diálogo (a página tem colunas com nome e usuário fora da tela); guarda as últimas capturas."""
     destino = Path(pasta or Path(tempfile.gettempdir()) / "simpress_endpoint_remocao")
@@ -249,7 +263,9 @@ def _capturar(page: Any, pasta: Path | None) -> str:
             return ""
         destino.mkdir(parents=True, exist_ok=True)
         arquivo = destino / f"dialogo-remocao-{datetime.now():%Y%m%d-%H%M%S-%f}.png"
-        page.screenshot(path=str(arquivo), clip=caixa, timeout=10000)
+        # O Chrome de automação desenha 1920 px CSS numa janela de 1280 (zoom 0,667): o clip vai em pixels de tela.
+        zoom = _zoom(page)
+        page.screenshot(path=str(arquivo), clip={chave: valor * zoom for chave, valor in caixa.items()}, timeout=10000)
         antigas = sorted(destino.glob("dialogo-remocao-*.png"), key=lambda item: item.stat().st_mtime, reverse=True)
         for velha in antigas[CAPTURAS_MANTIDAS:]:
             velha.unlink(missing_ok=True)

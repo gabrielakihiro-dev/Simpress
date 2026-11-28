@@ -330,6 +330,17 @@ class RemoverNoEndpointTests(unittest.TestCase):
         self.assertFalse(self.alerta_visivel)
         self.assertEqual(self.marcadas, 0)
 
+    def test_zoom_do_viewport_multiplica_o_recorte(self):
+        with patch.object(endpoint_remocao, "_zoom", return_value=0.5):
+            resultado, _, _ = self.rodar(["PRNOTE100"])
+        largura = int.from_bytes(Path(resultado["captura"]).read_bytes()[16:20], "big")
+        self.assertTrue(190 <= largura <= 210, largura)  # painel de 400 px CSS x zoom 0,5
+
+    def test_zoom_real_sem_escala_e_1(self):
+        page = self.browser.new_page()
+        self.addCleanup(page.close)
+        self.assertEqual(endpoint_remocao._zoom(page), 1.0)
+
     def test_contato_recente_ilegivel_ou_sem_corte_nao_clica(self):
         for contato, corte in (
             ("nov 25, 2026 07:00 AM", "nov 25, 2026 08:59 PM"),  # mesmo dia do corte
