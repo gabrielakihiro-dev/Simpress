@@ -251,6 +251,13 @@ async function preparar(page, { tema = "light", ...inicial } = {}) {
     }
     return responder(route, { json: { removidos: ambiente.removidos } });
   });
+  // Remoção no Endpoint Central (sintética): grava o par só quando o resultado é "removido" com gravação local.
+  await page.route("**/api/endpoint/hostnames-removidos/remover-no-endpoint", route => {
+    const { serie, hostname } = route.request().postDataJSON();
+    const resposta = ambiente.remocaoEndpoint || { resultado: "removido", gravado_local: true, mensagem: "Computador removido no Endpoint Central." };
+    if (resposta.resultado === "removido" && resposta.gravado_local) ambiente.removidos.push({ serie, hostname });
+    return responder(route, { json: resposta });
+  });
   await page.route("**/api/endpoint/hostnames-removidos/restaurar", route => {
     const { serie, hostname } = route.request().postDataJSON();
     ambiente.removidos = ambiente.removidos.filter(item => !(item.serie === serie && item.hostname === hostname));
@@ -1229,6 +1236,29 @@ test.describe("comportamento (só no desktop)", () => {
     await expect(page.locator(PAINEL_PRONTIDAO)).toHaveAttribute("data-state", "warning");
     await expect(resumoCurto(page)).toHaveText("2 pendentes");
     await expect(resumoLongo(page)).toHaveText("3 de 5 arquivos disponíveis. Confira os detalhes abaixo.");
+  });
+
+  test("Remover mais antigo: confirma nomeando o hostname, envia confirmado e incerto não marca a linha", async ({ page }) => {
+    const ambiente = await preparar(page, { remocaoEndpoint: { resultado: "incerto", gravado_local: false, mensagem: "Confira no Endpoint." } });
+    await abrirResumo(page, { aba: "apelidos" });
+    const remover = page.locator("#comparacao-planilhas-conteudo [data-hostname-remove]:visible");
+    await remover.click();
+    const mensagem = page.locator("#mensagem-confirmar-acao");
+    await expect(mensagem).toContainText("no Endpoint Central");
+    await expect(mensagem).toContainText("não se desfaz pelo cockpit");
+    const hostname = await page.locator("#comparacao-planilhas-conteudo [data-hostname-remove]:visible").evaluate(botao => botao.closest("[data-hostname-item]").dataset.hostnameNome);
+    await expect(mensagem).toContainText(hostname);
+    // Cancelar no diálogo não chama a API.
+    await page.locator("#btn-confirmar-acao-cancelar").click();
+    const rota = "/api/endpoint/hostnames-removidos/remover-no-endpoint";
+    await assentar(page);
+    expect(chamadasDe(ambiente, "POST", rota)).toHaveLength(0);
+    await remover.click();
+    await confirmar(page);
+    await expect.poll(() => chamadasDe(ambiente, "POST", rota).length).toBe(1);
+    expect(corpoDe(chamadasDe(ambiente, "POST", rota)[0])).toMatchObject({ hostname, confirmado: true });
+    await expect(remover).toBeVisible();
+    await expect(page.locator("#comparacao-planilhas-conteudo [data-hostname-restore]:visible")).toHaveCount(0);
   });
 
   test("Corrida: resposta antiga de /api/stats não sobrescreve a nova", async ({ page }) => {

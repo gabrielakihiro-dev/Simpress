@@ -514,7 +514,7 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
   }
 
   // With several Endpoint rows for one serial, lists each hostname with its last successful check.
-  // The oldest one gets a button that discards it so the remaining hostname is the one exported.
+  // The oldest one gets a button that removes it in Endpoint Central, so the remaining hostname is the one exported.
   function celulaVerificacaoAmbigua(item: { registros_endpoint?: RegistroEndpoint[]; ultima_verificacao?: string }, permitirRemocao: boolean) {
     const registros = Array.isArray(item.registros_endpoint) ? item.registros_endpoint : [];
     if (registros.length < 2) {
@@ -525,9 +525,9 @@ export function criarRenderizadorResultado(context: ContextoRenderizador) {
       const hostname = registro.computador || "";
       const horario = registro.ultima_verificacao ? formatarHorarioHistorico(registro.ultima_verificacao) : "—";
       const acoes = permitirRemocao && registro.mais_antigo === true
-        ? `<button type="button" data-hostname-remove class="${classeBotao} bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-200" aria-label="${escapeHtml(`Remover o hostname mais antigo ${hostname}, série ${registro.serie || "sem série"}`)}">Remover mais antigo</button>
+        ? `<button type="button" data-hostname-remove class="${classeBotao} bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-200" title="Remove este computador no Endpoint Central (não se desfaz pelo cockpit)" aria-label="${escapeHtml(`Remover no Endpoint Central o computador mais antigo ${hostname}, série ${registro.serie || "sem série"}`)}">Remover mais antigo</button>
             <span hidden data-hostname-removed class="text-xs text-emerald-300">Removido; vale o outro hostname</span>
-            <button type="button" hidden data-hostname-restore class="${classeBotao} bg-fg-weak/10 hover:bg-fg-weak/20 border-fg-weak/25 text-fg-secondary" aria-label="${escapeHtml(`Desfazer a remoção do hostname ${hostname}`)}">Desfazer</button>`
+            <button type="button" hidden data-hostname-restore class="${classeBotao} bg-fg-weak/10 hover:bg-fg-weak/20 border-fg-weak/25 text-fg-secondary" title="Desfaz só a marcação no cockpit; não desfaz a remoção no Endpoint Central" aria-label="${escapeHtml(`Desfazer só no cockpit a remoção do hostname ${hostname}; a remoção no Endpoint Central continua`)}">Desfazer</button>`
         : "";
       return `<li class="flex flex-col gap-1" data-hostname-item data-hostname-serie="${escapeHtml(registro.serie || "")}" data-hostname-nome="${escapeHtml(hostname)}">
           <span class="font-mono text-fg-secondary break-all">${escapeHtml(hostname || "—")}</span>

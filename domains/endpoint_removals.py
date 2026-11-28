@@ -145,6 +145,51 @@ def remove_endpoint_hostname(services: EndpointRemovalServices, serie: str, host
     }
 
 
+def remove_in_endpoint(
+    services: EndpointRemovalServices, serie: str, hostname: str, confirmado: bool,
+    remover: Callable[[str, bool], Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Remove o computador antigo no Endpoint Central e, só depois de ``removido``, grava o par localmente.
+
+    Guardas antes de abrir o Chrome: o par está nas duplicidades do índice atual, a série tem um hostname
+    mais recente sem empate e o pedido não é esse hostname (o nome vivo nunca é removido).
+    """
+    serie = _clean(serie, "a série", MAX_SERIAL_LENGTH)
+    hostname = _clean(hostname, "o hostname", MAX_HOSTNAME_LENGTH)
+    key = removal_key(serie, hostname)
+    index = services.read_endpoint_alias_index()
+    rows = index.get("duplicates", {}).get(key[0], [])
+    if not any(normalize_reference_value(row.get("hostname")) == key[1] for row in rows):
+        raise DomainConflictError(
+            "Esse hostname não está mais duplicado no Endpoint ativo; atualize o histórico e confira."
+        )
+    vivo = index.get("resolved_by_recency", {}).get(key[0])
+    if not vivo:
+        raise DomainConflictError("As verificações empatam ou faltam datas: não dá para saber qual é o mais antigo.")
+    if normalize_reference_value(vivo) == key[1]:
+        raise DomainConflictError("Esse é o hostname mais recente; só o mais antigo pode ser removido.")
+
+    resultado = dict(remover(hostname, confirmado))
+    if resultado.get("resultado") != "removido":
+        return {**resultado, "gravado_local": False}
+    try:
+        local = remove_endpoint_hostname(services, serie, hostname)
+    except Exception as error:
+        # O Endpoint já removeu: nunca vira 409/503 nem libera nova remoção; a nova tentativa é só local.
+        detalhe = str(getattr(error, "detail", "") or type(error).__name__)
+        return {
+            **resultado, "gravado_local": False,
+            "mensagem": (
+                f"Removido no Endpoint Central, mas a gravação no cockpit falhou ({detalhe}). "
+                "Clique em \"Remover mais antigo\" de novo para gravar só no cockpit; o Endpoint não é acionado de novo."
+            ),
+        }
+    return {
+        **resultado, "gravado_local": True, "serie": serie, "hostname": hostname, "mantidos": local["mantidos"],
+        "mensagem": "Computador removido no Endpoint Central; o outro hostname passa a valer na base e nas próximas exportações.",
+    }
+
+
 def restore_endpoint_hostname(services: EndpointRemovalServices, serie: str, hostname: str) -> Dict[str, Any]:
     serie = _clean(serie, "a série", MAX_SERIAL_LENGTH)
     hostname = _clean(hostname, "o hostname", MAX_HOSTNAME_LENGTH)

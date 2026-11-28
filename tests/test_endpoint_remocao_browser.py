@@ -1,0 +1,199 @@
+"""Remover no Endpoint: página falsa (dados sintéticos) servida no endereço do SoM, sem tocar no Endpoint real."""
+import importlib.util
+import json
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from domains import endpoint_remocao
+
+BASE = "https://endpoint.teste.invalid/client"
+
+PAGINA = """<!doctype html><html><head><style>
+.ember-table-table-row { display:flex } .ember-table-cell,.ember-table-header-cell { width:220px; flex:none }
+#dlg[hidden] { display:none }
+</style></head><body>
+<div class="ember-table-header-row ember-table-table-row">
+<div class="ember-table-header-cell"><input type="checkbox" id="todos"></div>
+<div class="ember-table-header-cell">Nome do computador</div></div>
+<div style="display:flex"><span style="width:220px;flex:none"></span><input class="search-text-box" style="width:212px"></div>
+<div id="rows"></div><p id="count"></p>
+<button id="remover">X Remover computador(es)</button>
+<div id="dlg" hidden><div class="corpo">
+<p>Esta ação resulta em</p><p id="qtd"></p>
+<label><input type="checkbox" id="mdm"> Remove MDM enrollment Profile</label>
+<div id="motivo"></div>
+<button id="sim">Sim, prosseguir</button><button id="cancelar">Cancelar</button>
+</div></div>
+<script>
+const cfg = __CFG__;
+function render() {
+ const value=document.querySelector('.search-text-box').value.toLowerCase();
+ const filtered=cfg.linhas.filter(n=>n.toLowerCase().includes(value));
+ document.querySelector('#rows').replaceChildren(...filtered.map(nome=>{
+   const row=document.createElement('div'); row.className='ember-table-table-row';
+   row.innerHTML='<div class="ember-table-cell"><input type="checkbox"></div><div class="ember-table-cell"><a class="anchor-text" href="#/x"></a></div>';
+   row.querySelector('a').textContent=nome; return row;
+ }));
+ document.querySelector('#count').textContent=filtered.length ? `1 - ${filtered.length} de ${filtered.length}` : 'Nenhum dado disponível';
+}
+document.querySelector('.search-text-box').addEventListener('keydown', e=>{if(e.key==='Enter')render()});
+document.querySelector('#mdm').checked = cfg.mdm;
+if (cfg.motivo) document.querySelector('#motivo').innerHTML='<label>Motivo *</label><textarea required></textarea>';
+document.querySelector('#remover').onclick=()=>{
+ window.registrar('remover');
+ document.querySelector('#qtd').textContent=`${document.querySelectorAll('#rows input:checked').length} selected devices`;
+ document.querySelector('#dlg').hidden=false;
+};
+document.querySelector('#sim').onclick=()=>{window.registrar('sim'); if(cfg.fecha) document.querySelector('#dlg').hidden=true;};
+document.querySelector('#cancelar').onclick=()=>{
+ window.registrar('cancelar:' + (document.querySelector('#mdm').checked ? 'mdm' : 'sem_mdm'));
+ document.querySelector('#dlg').hidden=true;
+};
+</script></body></html>"""
+
+
+class _Cancelada(BaseException):
+    pass
+
+
+def _automacao():
+    def estabilidade(verificar, descricao, **_):
+        if not verificar():
+            raise RuntimeError(descricao)
+
+    return SimpleNamespace(
+        ENDPOINT_URL=f"{BASE}#/uems/inventory/computers", CARREGAMENTO_MS=10000,
+        verificar_cancelamento=lambda *a: None, log=lambda *a: None, RotinaErro=RuntimeError,
+        EtapaInstavel=RuntimeError, RotinaCancelada=_Cancelada,
+        etapa_resiliente=lambda etapa, descricao, **k: etapa(),
+        definir_pagina_ativa_para_recuperacao=lambda pagina: None, aguardar_estado=lambda *a, **k: None,
+        aguardar_login=lambda *a, **k: None, endpoint_logado=lambda page: True, endpoint_entrar=lambda page: True,
+        aguardar_estabilidade_pre_clique=estabilidade,
+    )
+
+
+@unittest.skipUnless(importlib.util.find_spec("playwright") is not None, "playwright não está instalado")
+class RemoverNoEndpointTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from playwright.sync_api import sync_playwright
+
+        cls.pw = sync_playwright().start()
+        try:
+            cls.browser = cls.pw.chromium.launch()
+        except Exception as exc:
+            cls.pw.stop()
+            raise unittest.SkipTest(f"Chromium do Playwright indisponível: {str(exc)[:120]}")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.pw.stop()
+
+    def setUp(self):
+        self.pasta = tempfile.TemporaryDirectory()
+        self.addCleanup(self.pasta.cleanup)
+        env = patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(endpoint_remocao.VAR_SEM_REMOCAO, None)
+
+    def rodar(self, linhas, confirmado=False, depois=None, mdm=False, motivo=False, fecha=True):
+        cliques = []
+        abertas = []
+        page = self.browser.new_page(viewport={"width": 1100, "height": 700})
+        self.addCleanup(page.close)
+        page.expose_function("registrar", lambda nome: cliques.append(nome))
+
+        def servir(route):
+            atuais = linhas if not abertas else (depois if depois is not None else linhas)
+            abertas.append(route.request.url)
+            cfg = json.dumps({"linhas": atuais, "mdm": mdm, "motivo": motivo, "fecha": fecha})
+            route.fulfill(status=200, content_type="text/html; charset=utf-8", body=PAGINA.replace("__CFG__", cfg))
+
+        page.route(f"{BASE}**", servir)
+        resultado = endpoint_remocao.remover_na_pagina(page, _automacao(), "PRNOTE100", confirmado, Path(self.pasta.name))
+        return resultado, cliques, abertas
+
+    def test_sem_confirmacao_cancela_e_nunca_clica_sim(self):
+        resultado, cliques, abertas = self.rodar(["PRNOTE100"])
+        self.assertEqual(resultado["resultado"], "cancelado_sem_confirmacao")
+        self.assertEqual(cliques, ["remover", "cancelar:mdm"])
+        self.assertTrue(Path(resultado["captura"]).is_file())
+        self.assertTrue(Path(resultado["captura"]).is_relative_to(Path(self.pasta.name)))
+        self.assertEqual(len(abertas), 1)
+        self.assertEqual(endpoint_remocao.url_som(_automacao()), f"{BASE}#/uems/agent/som/computers?managedStatus=true")
+
+    def test_variavel_de_recusa_vence_a_confirmacao(self):
+        os.environ[endpoint_remocao.VAR_SEM_REMOCAO] = "1"
+        resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True)
+        self.assertEqual(resultado["resultado"], "recusado_por_configuracao")
+        self.assertNotIn("sim", cliques)
+        self.assertEqual(cliques[-1], "cancelar:mdm")
+
+    def test_zero_ou_duas_linhas_param_sem_clicar(self):
+        for linhas, esperado in (([], "nao_encontrado"), (["PRNOTE100", "PRNOTE100"], "ambiguo")):
+            with self.subTest(linhas=linhas):
+                resultado, cliques, _ = self.rodar(linhas, confirmado=True)
+                self.assertEqual(resultado["resultado"], esperado)
+                self.assertEqual(cliques, [])
+
+    def test_nome_parecido_nao_conta_como_exato(self):
+        for linhas, esperado in ((["PRNOTE1000"], "nao_encontrado"), (["PRNOTE100", "PRNOTE1000"], "ambiguo")):
+            with self.subTest(linhas=linhas):
+                resultado, cliques, _ = self.rodar(linhas, confirmado=True)
+                self.assertEqual(resultado["resultado"], esperado)
+                self.assertEqual(cliques, [])
+
+    def test_mdm_desmarcado_e_marcado_e_marcado_continua(self):
+        for mdm in (False, True):
+            with self.subTest(mdm=mdm):
+                resultado, cliques, _ = self.rodar(["PRNOTE100"], mdm=mdm)
+                self.assertEqual(resultado["resultado"], "cancelado_sem_confirmacao")
+                self.assertEqual(cliques[-1], "cancelar:mdm")
+
+    def test_dialogo_que_nao_fecha_e_incerto_com_um_clique(self):
+        with patch.object(endpoint_remocao, "ESPERA_DIALOGO_FECHAR_MS", 1500):
+            resultado, cliques, abertas = self.rodar(["PRNOTE100"], confirmado=True, fecha=False)
+        self.assertEqual(resultado["resultado"], "incerto")
+        self.assertEqual(cliques.count("sim"), 1)
+        self.assertEqual(len(abertas), 1)  # sem nova navegação nem nova tentativa
+
+    def test_removido_so_quando_o_refiltro_volta_vazio(self):
+        for depois, esperado in (([], "removido"), (["PRNOTE100"], "incerto")):
+            with self.subTest(depois=depois):
+                resultado, cliques, abertas = self.rodar(["PRNOTE100"], confirmado=True, depois=depois)
+                self.assertEqual(resultado["resultado"], esperado)
+                self.assertEqual(cliques, ["remover", "sim"])
+                self.assertEqual(len(abertas), 2)  # goto de novo, nunca reload
+
+    def test_motivo_obrigatorio_para_antes_do_clique_final(self):
+        resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, motivo=True)
+        self.assertEqual(resultado["resultado"], "motivo_obrigatorio")
+        self.assertNotIn("sim", cliques)
+        self.assertTrue(cliques[-1].startswith("cancelar"))
+
+
+class LiberacaoTests(unittest.TestCase):
+    def test_so_true_literal_e_sem_variavel_liberam(self):
+        with patch.dict(os.environ, {endpoint_remocao.VAR_SEM_REMOCAO: "0"}):
+            self.assertTrue(endpoint_remocao.remocao_liberada(True))
+            self.assertFalse(endpoint_remocao.remocao_liberada(1))
+            self.assertFalse(endpoint_remocao.remocao_liberada("true"))
+        with patch.dict(os.environ, {endpoint_remocao.VAR_SEM_REMOCAO: "1"}):
+            self.assertFalse(endpoint_remocao.remocao_liberada(True))
+
+    def test_sem_confirmacao_o_codigo_nao_alcanca_o_sim(self):
+        # O localizador do "Sim" só existe em _confirmar_remocao, chamada depois de remocao_liberada.
+        import inspect
+        fonte = inspect.getsource(endpoint_remocao.remover_na_pagina)
+        self.assertNotIn("_SIM", fonte)
+        self.assertLess(fonte.index("remocao_liberada(confirmado)"), fonte.index("_confirmar_remocao("))
+
+
+if __name__ == "__main__":
+    unittest.main()

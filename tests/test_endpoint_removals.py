@@ -14,6 +14,7 @@ import openpyxl
 
 import main
 from core.errors import DomainConflictError, DomainError
+from core.integrity import FileTransactionError
 from domains import endpoint_removals, inventory_state
 from domains.effective_alias import build_endpoint_alias_index
 from domains.history_annotations import history_annotation_row_fingerprint
@@ -251,6 +252,89 @@ class RemovalWorkflowTests(unittest.TestCase):
             ["HOST-OLD"],
         )
         self.assertEqual(main.load_endpoint_aliases(), {"SN1": "HOST-NEW"})
+
+    def _remover(self, resultado):
+        chamadas = []
+
+        def remover(hostname, confirmado):
+            chamadas.append((hostname, confirmado))
+            return {"resultado": resultado, "mensagem": "sintético"}
+
+        return remover, chamadas
+
+    def _stored(self):
+        return json.loads(self.removed.read_text(encoding="utf-8")) if self.removed.exists() else []
+
+    def test_remove_in_endpoint_guards_never_open_the_chrome(self):
+        remover, chamadas = self._remover("removido")
+        index = main.read_endpoint_alias_index()
+        empate = copy.deepcopy(index)
+        empate["resolved_by_recency"].pop("SN1")
+        casos = [
+            (self.services, "SN-9", "HOST-X"),  # par fora das duplicidades
+            (self.services, "SN-1", "host new"),  # o hostname vivo nunca é removido
+            (dataclasses.replace(self.services, read_endpoint_alias_index=lambda: empate), "SN-1", "HOST-OLD"),
+        ]
+        for services, serie, hostname in casos:
+            with self.subTest(hostname=hostname), self.assertRaises(DomainConflictError):
+                endpoint_removals.remove_in_endpoint(services, serie, hostname, True, remover)
+        self.assertEqual(chamadas, [])
+        self.assertEqual(self._stored(), [])
+
+    def test_remove_in_endpoint_writes_locally_only_after_removido(self):
+        for resultado in ("incerto", "nao_encontrado", "cancelado_sem_confirmacao"):
+            remover, chamadas = self._remover(resultado)
+            with self.subTest(resultado=resultado):
+                saida = endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", False, remover)
+                self.assertEqual((saida["resultado"], saida["gravado_local"]), (resultado, False))
+                self.assertEqual(chamadas, [("HOST-OLD", False)])
+                self.assertEqual(self._stored(), [])
+
+        remover, chamadas = self._remover("removido")
+        saida = endpoint_removals.remove_in_endpoint(self.services, "SN-1", "HOST-OLD", True, remover)
+        self.assertEqual((saida["resultado"], saida["gravado_local"], saida["mantidos"]), ("removido", True, ["HOST-NEW"]))
+        self.assertEqual([(item["serie"], item["hostname"]) for item in self._stored()], [("SN-1", "HOST-OLD")])
+
+    def test_local_write_failure_after_removido_is_reported_without_new_attempt(self):
+        remover, chamadas = self._remover("removido")
+
+        def falha(*_args):
+            raise FileTransactionError("disco cheio")
+
+        broken = dataclasses.replace(self.services, atomic_file_transaction=falha)
+        saida = endpoint_removals.remove_in_endpoint(broken, "SN-1", "HOST-OLD", True, remover)
+        self.assertEqual((saida["resultado"], saida["gravado_local"]), ("removido", False))
+        self.assertIn("só no cockpit", saida["mensagem"])
+        self.assertEqual(len(chamadas), 1)
+        self.assertEqual(self._stored(), [])
+
+    def test_route_maps_chrome_errors_and_passes_confirmado(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from domains import endpoint_remocao
+        from routers.endpoint_removals import create_endpoint_removals_router
+
+        recebido = []
+
+        def remover(hostname, confirmado):
+            recebido.append(confirmado)
+            return {"resultado": "cancelado_sem_confirmacao", "mensagem": "sintético"}
+
+        def ocupado(hostname, confirmado):
+            raise endpoint_remocao.automation.TravaOcupada("ocupado")
+
+        rota = "/api/endpoint/hostnames-removidos/remover-no-endpoint"
+        for fake, corpo, status in (
+            (remover, {"serie": "SN-1", "hostname": "HOST-OLD"}, 200),
+            (remover, {"serie": "SN-1", "hostname": "HOST-OLD", "confirmado": "true"}, 422),
+            (ocupado, {"serie": "SN-1", "hostname": "HOST-OLD", "confirmado": True}, 409),
+        ):
+            app = FastAPI()
+            app.include_router(create_endpoint_removals_router(self.services, remover_no_endpoint=fake))
+            with self.subTest(corpo=corpo):
+                self.assertEqual(TestClient(app).post(rota, json=corpo).status_code, status)
+        self.assertEqual(recebido, [False])
+        self.assertEqual(self._stored(), [])
 
     def test_listing_returns_the_stored_pairs(self):
         endpoint_removals.remove_endpoint_hostname(self.services, "SN-1", "HOST-OLD")

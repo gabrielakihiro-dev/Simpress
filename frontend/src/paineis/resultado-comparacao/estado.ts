@@ -241,37 +241,67 @@ export function criarResultadoComparacao(context: ContextoResultadoComparacao) {
     });
   }
 
-  // Discards the oldest duplicated Endpoint hostname (or undoes it). Only the local list of discarded
-  // pairs changes; the remaining hostname is the one the alias base and the next exports use.
+  // "Remover mais antigo" removes the old computer in Endpoint Central (Chrome de automação) and only then records
+  // the pair locally. "Desfazer" only undoes the local record; the removal in Endpoint Central stays.
   function conectarRemocaoHostnames(): void {
     const botoes = document.querySelectorAll<HTMLButtonElement>(
       "#comparacao-planilhas-conteudo [data-hostname-remove], #comparacao-planilhas-conteudo [data-hostname-restore]"
     );
     if (!botoes.length) return;
+    // Pairs already removed in Endpoint Central whose local record failed: the next click records only locally.
+    const soLocal = new Set<string>();
     const alterar = async (botao: HTMLButtonElement, restaurar: boolean): Promise<void> => {
       const item = botao.closest<HTMLElement>("[data-hostname-item]");
       const serie = item?.dataset.hostnameSerie || "";
       const hostname = item?.dataset.hostnameNome || "";
-      if (!restaurar && !(await app.confirmarAcao({
-        titulo: "Remover hostname mais antigo?",
-        mensagem: `Remover ${hostname} (série ${serie || "sem série"})? A planilha do Endpoint não é alterada; o outro hostname passa a valer na base e nas próximas exportações. Dá para desfazer.`,
-        confirmar: "Remover hostname",
+      const chave = chaveHostname(serie, hostname);
+      const local = restaurar || soLocal.has(chave);
+      if (!restaurar && !(await app.confirmarAcao(local ? {
+        titulo: "Gravar a remoção no cockpit?",
+        mensagem: `${hostname} já foi removido no Endpoint Central. Gravar só no cockpit, sem acionar o Endpoint de novo?`,
+        confirmar: "Gravar no cockpit",
+      } : {
+        titulo: "Remover no Endpoint Central?",
+        mensagem: `Remover o computador ${hostname} (série ${serie || "sem série"}) no Endpoint Central? Isso não se desfaz pelo cockpit. Depois da remoção, o outro hostname passa a valer na base e nas próximas exportações.`,
+        confirmar: "Remover no Endpoint",
       }))) return;
       botao.disabled = true;
       botao.setAttribute("aria-busy", "true");
       try {
-        const data = await context.apiFetch<{ mensagem?: string }>(
-          `/api/endpoint/hostnames-removidos${restaurar ? "/restaurar" : ""}`,
+        if (local) {
+          const data = await context.apiFetch<{ mensagem?: string }>(
+            `/api/endpoint/hostnames-removidos${restaurar ? "/restaurar" : ""}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ serie, hostname }),
+              errorMessage: restaurar ? "Não foi possível desfazer a remoção." : "Não foi possível gravar a remoção.",
+            }
+          );
+          soLocal.delete(chave);
+          mostrarEstadoHostname(chave, !restaurar);
+          app.atualizarIndicadoresPosSalvamento();
+          app.showToast(data.mensagem || (restaurar ? "Hostname restaurado." : "Hostname removido."), "success");
+          return;
+        }
+        app.showToast("Removendo no Endpoint Central pelo Chrome de automação; faça o login se ele pedir.", "info");
+        const data = await context.apiFetch<{ resultado?: string; gravado_local?: boolean; mensagem?: string }>(
+          "/api/endpoint/hostnames-removidos/remover-no-endpoint",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ serie, hostname }),
-            errorMessage: restaurar ? "Não foi possível desfazer a remoção." : "Não foi possível remover o hostname.",
+            body: JSON.stringify({ serie, hostname, confirmado: true }),
+            errorMessage: "Não foi possível remover no Endpoint Central.",
           }
         );
-        mostrarEstadoHostname(chaveHostname(serie, hostname), !restaurar);
-        app.atualizarIndicadoresPosSalvamento();
-        app.showToast(data.mensagem || (restaurar ? "Hostname restaurado." : "Hostname removido."), "success");
+        if (data.resultado === "removido" && data.gravado_local) {
+          mostrarEstadoHostname(chave, true);
+          app.atualizarIndicadoresPosSalvamento();
+          app.showToast(data.mensagem || "Computador removido no Endpoint Central.", "success");
+        } else {
+          if (data.resultado === "removido") soLocal.add(chave);
+          app.showToast(data.mensagem || "O computador não foi removido no Endpoint Central.", data.resultado === "incerto" || data.resultado === "removido" ? "warning" : "error");
+        }
       } catch (error) {
         console.error("Erro ao alterar hostname duplicado do Endpoint:", error);
         app.showToast(mensagemDoErro(error) || "Não foi possível concluir a operação.", "error");
