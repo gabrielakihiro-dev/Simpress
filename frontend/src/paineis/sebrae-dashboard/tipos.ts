@@ -21,6 +21,7 @@ export interface ModeloSebrae {
   CAMPOS_AUTOMATICOS: readonly Par[];
   CAMPOS_PREENCHIDOS: readonly Par[];
   STATUS_CHAMADO: readonly string[];
+  STATUS_FINALIZADO: string;
   TIPOS_CHAMADO: readonly string[];
   DESCRICAO_API_SEBRAE: string;
   AVISO_CRUZAMENTO: Readonly<Record<string, string>>;

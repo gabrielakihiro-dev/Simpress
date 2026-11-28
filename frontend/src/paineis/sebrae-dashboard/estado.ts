@@ -14,7 +14,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   "use strict";
   const { app, dom } = context;
   const {
-    CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, TIPOS_CHAMADO, DESCRICAO_API_SEBRAE, AVISO_CRUZAMENTO, ROTULOS_FALTA,
+    CAMPOS_AUTOMATICOS, CAMPOS_PREENCHIDOS, STATUS_CHAMADO, STATUS_FINALIZADO, TIPOS_CHAMADO, DESCRICAO_API_SEBRAE, AVISO_CRUZAMENTO, ROTULOS_FALTA,
     MAX_TITULO, MAX_DESCRICAO, NUMERO_UTIC, INTERVALO_FECHAR_MS, STATUS_DESFEITOS, STATUS_OUTRO_TECNICO, CHAVE_RASCUNHO, NUMERO_RASCUNHO, PREFIXO_CAMPO,
     ehApiSebrae, padroesManuais, avisoOutraPessoa, avisoNomeDaDescricao, formatarEncerramento, encerramentoParaCampo, encerramentoAgora, payloadEdicoes, descricaoJaNoDashboard,
     tituloAntigo, dadosAntigo, AJUDA_ENCERRAMENTO, encerramentoInformado, ajudaEncerramentoSemHora, encerramentoObrigatorio, pendenciasEncerramento, avisoEncerramento,
@@ -992,8 +992,12 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       [novo, seloDestaque(item.numero), seloObservacao(item.numero, item.observacao), seloOs(item.linha.E), ...selosAutomaticos()], blocoChamado(item));
   }
 
-  /** Sugestão do servidor para A (Responsável), B (Categoria) ou J (Tipo) de chamado novo, ou só A e J de antigo; vazia para as outras letras e para API SEBRAE (que já vem preenchido). */
+  /**
+   * Sugestão do servidor para A (Responsável), B (Categoria) ou J (Tipo) de chamado novo, ou só A e J de antigo; vazia para as outras letras e para API SEBRAE (que já vem preenchido).
+   * Status (D): todo chamado, novo ou antigo, sugere `FINALIZADO` (pedido do usuário, 27/11/2026); só aparece enquanto D não é FINALIZADO.
+   */
   function sugestaoManual(item: Registro, letra: string, alvo = "novo") {
+    if (letra === "D") return STATUS_FINALIZADO;
     if (ehApiSebrae(item.linha?.I ?? item.usuario)) return "";
     const valor = { A: item.sugestao_responsavel, B: alvo === "novo" ? item.sugestao_categoria : undefined, J: item.sugestao_tipo }[letra];
     return typeof valor === "string" ? valor.trim() : "";
@@ -1002,7 +1006,8 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
   /**
    * Campo manual de chamado novo ou antigo em aberto (`alvo`). Em A, B e J (nos antigos, só A e J), com sugestão e o campo ainda vazio (inclusive no rascunho), põe um chip
    * `Sugestão: <valor>` + `Usar` abaixo do campo. Nada é preenchido nem salvo sem o clique em `Usar`.
-   * Escolher à mão qualquer valor esconde o chip; voltar a vazio o mostra de novo.
+   * Escolher à mão qualquer valor esconde o chip; voltar a vazio o mostra de novo. No Status (D) o chip `Sugestão: FINALIZADO` aparece
+   * também com `EM ABERTO` e só some com D em FINALIZADO.
    * shortcut: a sugestão de J vem do servidor já calculada com a sugestão de B; mudar B na tela não a recalcula, só ao recarregar a lista.
    */
   function campoManualComSugestao(item: Registro, letra: string, alvo = "novo") {
@@ -1010,10 +1015,13 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
     const rotulo = campo(ROTULOS_MANUAIS[letra as keyof typeof ROTULOS_MANUAIS], controle);
     if (letra === "R") return comBotaoAgora(rotulo, controle);
     const sugestao = sugestaoManual(item, letra, alvo);
-    if (!sugestao || controle.disabled || String(controle.value || "").trim() || String(valoresDe(alvo)[item.numero]?.[letra] || "").trim()) return rotulo;
+    // D: "preenchido" é só FINALIZADO; EM ABERTO (o padrão dos novos) ainda mostra a sugestão
+    const preenchido = (valor: unknown) => letra === "D" ? String(valor || "").trim().toUpperCase() === STATUS_FINALIZADO : Boolean(String(valor || "").trim());
+    if (!sugestao || controle.disabled || preenchido(controle.value) || preenchido(valoresDe(alvo)[item.numero]?.[letra])) return rotulo;
     const nomeCampo = ROTULOS_MANUAIS[letra as keyof typeof ROTULOS_MANUAIS].replace(/\s*\*$/, "");
     const chip = document.createElement("div");
     chip.className = "sebrae-sugestao";
+    chip.dataset.sebraeSugestao = letra;
     const usar = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm sebrae-sugestao__usar", "Usar");
     usar.type = "button";
     usar.setAttribute("aria-label", `Usar sugestão ${sugestao} em ${nomeCampo}`);
@@ -1031,7 +1039,7 @@ export function criarDashboardSebrae(context: ContextoSebraeDashboard) {
       chip.remove();
       controle.focus();
     });
-    const alternar = () => { chip.hidden = Boolean(String(controle.value || "").trim()); };
+    const alternar = () => { chip.hidden = preenchido(controle.value); };
     controle.addEventListener("input", alternar);
     controle.addEventListener("change", alternar);
     const envoltorio = document.createElement("div");

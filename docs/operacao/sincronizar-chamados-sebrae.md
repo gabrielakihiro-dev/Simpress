@@ -143,6 +143,14 @@ Pedido do usuário em 13/11/2026: os chamados novos trazidos pela busca do SoftE
 - **Contrato:** `GET /api/sebrae/novos` traz `sugestao_responsavel` (`CLIENTE`, `SIMPRESS` ou `null`) em cada item de `novos.formulario`. O Assistente lê o campo (regra 36) e nunca diz que o salvou.
 - **O que não escreve:** nada no SoftExpert, no SharePoint, no Excel Online nem em `data/state`.
 
+### Sugestão FINALIZADO no Status (D) (27/11/2026)
+
+Pedido do usuário em 27/11/2026: todo chamado em aberto do F5, novo (da busca e importação) ou antigo, mostra abaixo do Status (D) o chip `Sugestão: FINALIZADO` com o botão `Usar` (`aria-label` `Usar sugestão FINALIZADO em Status (D)`), como os chips de A, B e J.
+
+- **Quando aparece:** com D vazio ou em `EM ABERTO` (o padrão dos novos), inclusive para solicitante `API SEBRAE`. Some com D em `FINALIZADO` (escolhido à mão, pelo `Usar` ou no rascunho) e volta se o D voltar a `EM ABERTO`. Finalizados não têm chip.
+- **O clique:** só troca o D de `EM ABERTO` para `FINALIZADO` pelo mesmo caminho da edição manual (rascunho, R obrigatório com a ajuda "Obrigatório ao finalizar o chamado" e botão Atualizar). Nada vai ao Dashboard, ao SharePoint nem ao SoftExpert sem o `Atualizar Dashboard` ou a finalização de sempre.
+- **Onde está:** só no front-end (`sugestaoManual` e `campoManualComSugestao` em `frontend/src/paineis/sebrae-dashboard/estado.ts`; constante `STATUS_FINALIZADO` em `frontend/src/comum/sebrae-dashboard-model.ts`); o servidor não muda. O chip leva `data-sebrae-sugestao="D"`.
+
 ### Cabo HDMI e cabo de força do monitor: CLIENTE e INCIDENTE (17/11/2026)
 
 Pedido do usuário em 17/11/2026: chamado de cabo HDMI ou de cabo de força do monitor sugere Responsável (A) `CLIENTE` e Tipo (J) `INCIDENTE`, seja pedido ("Solicitação de cabo HDMI") ou defeito ("problema no cabo"). O resto do hardware continua `SIMPRESS`.
