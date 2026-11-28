@@ -29,11 +29,7 @@ PAGINA = """<!doctype html><html><head><style>
 <div class="zdialog--overlay" id="overlay" hidden></div>
 <div id="dlg" role="alertdialog" class="zdialog zdialog--alert" hidden>
 <span class="zdialog__title">Esta ação resulta em</span>
-<div class="zdialog__content"><p id="qtd"></p>
-<label><input type="checkbox"> Remove MDM enrollment Profile</label>
-<p>Especifique o motivo da remoção do agente do Endpoint Central</p><textarea id="motivo-txt"></textarea>
-<div id="motivo"></div></div>
-<button id="sim">Sim, prosseguir</button><button id="cancelar">Cancel</button>
+<div id="conteudo"></div>
 </div>
 <script>
 const cfg = __CFG__;
@@ -56,21 +52,33 @@ document.querySelector('#rows').addEventListener('change', ()=>{
 document.querySelector('#SoMManagedComputers_searchButton').onclick=()=>{document.querySelector('#barra').style.display='flex'};
 // A grade demora a aparecer depois do goto (como no portal, logo depois do login).
 setTimeout(()=>{document.querySelector('.page-loader-wrapper').remove(); document.querySelector('#SoMManagedComputers_searchButton').disabled=false; render()}, 1200);
-const mdm = () => document.querySelector('#dlg label input[type=checkbox]');
-mdm().checked = cfg.mdm;
-if (cfg.motivo) document.querySelector('#motivo').innerHTML='<label>Motivo *</label><textarea required></textarea>';
+const mdm = () => document.querySelector('#dlg label.checkbox--form input[type=checkbox]');
+const CONTEUDO = `<div class="zdialog__content"><p id="qtd"></p>
+<label class="checkbox--form" tooltip="default"><input type="checkbox" value="false" style="width:0;height:0;opacity:0;margin:0">
+<span class="label--text">Remove MDM enrollment Profile</span><span class="checkmark"></span></label>
+<p>Especifique o motivo da remoção do agente do Endpoint Central</p><textarea id="motivo-txt"></textarea>
+<div id="motivo"></div></div>
+<button id="sim">Sim, prosseguir</button><button id="cancelar">Cancel</button>`;
 document.querySelector('#remover').onclick=()=>{
  window.registrar('remover');
  const n=document.querySelectorAll('#rows input:checked').length;
- document.querySelector('#qtd').textContent = cfg.reconhecivel === false ? 'Outra mensagem do portal.'
-   : `The removal of the Endpoint Central agent on the ${n} selected devices. Inability to manage the ${n} selected devices.`;
  document.querySelector('#overlay').hidden=false; document.querySelector('#dlg').hidden=false;
-};
-document.querySelector('#sim').onclick=()=>{window.registrar('sim'); if(cfg.fecha) document.querySelector('#dlg').hidden=true;};
-document.querySelector('#cancelar').onclick=()=>{
- window.registrar('cancelar:' + (mdm().checked ? 'mdm' : 'sem_mdm'));
- // Some com um pequeno atraso, como a animação do portal.
- setTimeout(()=>{document.querySelector('#dlg').hidden=true; document.querySelector('#overlay').hidden=true}, 300);
+ // Como no portal: a moldura aparece primeiro e o conteúdo chega ~800 ms depois.
+ setTimeout(()=>{
+  document.querySelector('#conteudo').innerHTML = CONTEUDO;
+  document.querySelector('#qtd').textContent = cfg.reconhecivel === false ? 'Outra mensagem do portal.'
+    : `The removal of the Endpoint Central agent on the ${n} selected devices. Inability to manage the ${n} selected devices.`;
+  mdm().checked = cfg.mdm;
+  // O clique no label alterna o input (o clique sintético no input não conta como outro clique do usuário).
+  document.querySelector('label.checkbox--form').addEventListener('click', e=>{if(e.target.tagName!=='INPUT') window.registrar('label_mdm')});
+  if (cfg.motivo) document.querySelector('#motivo').innerHTML='<label>Motivo *</label><textarea required></textarea>';
+  document.querySelector('#sim').onclick=()=>{window.registrar('sim'); if(cfg.fecha) document.querySelector('#dlg').hidden=true;};
+  document.querySelector('#cancelar').onclick=()=>{
+   window.registrar('cancelar:' + (mdm().checked ? 'mdm' : 'sem_mdm'));
+   // Some com um pequeno atraso, como a animação do portal.
+   setTimeout(()=>{document.querySelector('#dlg').hidden=true; document.querySelector('#overlay').hidden=true}, 300);
+  };
+ }, 800);
 };
 </script></body></html>"""
 
@@ -84,8 +92,8 @@ def _automacao():
         if not verificar():
             raise RuntimeError(descricao)
 
-    def pronto(acao, descricao, confirmar=None, **_):
-        fim = time.time() + 15
+    def pronto(acao, descricao, timeout_ms=15000, confirmar=None, **_):
+        fim = time.time() + timeout_ms / 1000
         while not (confirmar is None or confirmar()):
             if time.time() > fim:
                 raise RuntimeError(descricao)
@@ -142,17 +150,21 @@ class RemoverNoEndpointTests(unittest.TestCase):
             route.fulfill(status=200, content_type="text/html; charset=utf-8", body=PAGINA.replace("__CFG__", cfg))
 
         page.route(f"{BASE}**", servir)
-        resultado = endpoint_remocao.remover_na_pagina(page, _automacao(), "PRNOTE100", confirmado, Path(self.pasta.name))
+        automacao = _automacao()
+        self.logs = []
+        automacao.log = lambda origem, mensagem: self.logs.append(mensagem)
+        resultado = endpoint_remocao.remover_na_pagina(page, automacao, "PRNOTE100", confirmado, Path(self.pasta.name))
+        self.assertFalse([m for m in self.logs if "PRNOTE" in m.upper()])  # hostname nunca vai a log
         self.marcadas = page.locator("#rows input:checked").count()
         self.todos_marcado = page.locator("#todos").is_checked()
         self.alerta_visivel = page.locator("[role=alertdialog]").is_visible()
-        self.motivo_digitado = page.locator("#motivo-txt").input_value()
+        self.motivo_digitado = page.locator("#motivo-txt").input_value() if page.locator("#motivo-txt").count() else ""
         return resultado, cliques, abertas
 
     def test_sem_confirmacao_cancela_e_nunca_clica_sim(self):
         resultado, cliques, abertas = self.rodar(["PRNOTE100"])
         self.assertEqual(resultado["resultado"], "cancelado_sem_confirmacao")
-        self.assertEqual(cliques, ["remover", "cancelar:mdm"])
+        self.assertEqual(cliques, ["remover", "label_mdm", "cancelar:mdm"])
         self.assertEqual(self.marcadas, 0)  # a linha não fica marcada na aba que fica aberta
         self.assertFalse(self.todos_marcado)
         self.assertFalse(self.alerta_visivel)
@@ -189,6 +201,8 @@ class RemoverNoEndpointTests(unittest.TestCase):
                 resultado, cliques, _ = self.rodar(["PRNOTE100"], mdm=mdm)
                 self.assertEqual(resultado["resultado"], "cancelado_sem_confirmacao")
                 self.assertEqual(cliques[-1], "cancelar:mdm")
+                # Desmarcado: um único clique no label; já marcado: nenhum clique (o label alterna).
+                self.assertEqual(cliques.count("label_mdm"), 0 if mdm else 1)
 
     def test_dialogo_que_nao_fecha_e_incerto_com_um_clique(self):
         with patch.object(endpoint_remocao, "ESPERA_DIALOGO_FECHAR_MS", 1500):
@@ -202,15 +216,17 @@ class RemoverNoEndpointTests(unittest.TestCase):
             with self.subTest(depois=depois):
                 resultado, cliques, abertas = self.rodar(["PRNOTE100"], confirmado=True, depois=depois)
                 self.assertEqual(resultado["resultado"], esperado)
-                self.assertEqual(cliques, ["remover", "sim"])
+                self.assertEqual(cliques, ["remover", "label_mdm", "sim"])
                 self.assertEqual(len(abertas), 2)  # goto de novo, nunca reload
 
     def test_dialogo_nao_reconhecido_fecha_pelo_cancel_e_desmarca(self):
-        resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, reconhecivel=False)
+        with patch.object(endpoint_remocao, "ESPERA_CONTEUDO_DIALOGO_MS", 2500):
+            resultado, cliques, _ = self.rodar(["PRNOTE100"], confirmado=True, reconhecivel=False)
         self.assertEqual(resultado["resultado"], "dialogo_inesperado")
         self.assertEqual(cliques, ["remover", "cancelar:sem_mdm"])
         self.assertTrue(Path(resultado["captura"]).is_file())
         self.assertNotIn("dialogo_aberto", resultado)
+        self.assertIn("Diálogo não reconhecido: conteudo.", self.logs)
         self.assertFalse(self.alerta_visivel)
         self.assertEqual(self.marcadas, 0)
 

@@ -11,7 +11,8 @@ Endpoint Central a partir do botão "Remover mais antigo", com os passos abaixo.
 3. ``check()`` no checkbox da linha; confere um "selecionar todos" visível e um único checkbox de linha marcado (o
    portal marca o "selecionar todos" sozinho quando a única linha da faixa ``1 - 1`` é marcada).
 4. "Remover computador(es)"; no diálogo "Esta ação resulta em": contagem de selecionados = 1 e "Remove MDM
-   enrollment Profile" marcado com ``check()`` (nunca ``click()``). Motivo obrigatório: para antes do clique final.
+   enrollment Profile" marcado com um único clique no label (só se estiver desmarcado; o input é invisível).
+   Motivo obrigatório: para antes do clique final.
    Toda saída antes do "Sim" captura, fecha o ``[role=alertdialog]`` só pelo Cancel/Cancelar e desmarca a linha.
 5. "Sim, prosseguir" só com ``confirmado is True`` e ``SIMPRESS_ENDPOINT_SEM_REMOCAO`` diferente de ``1``; senão
    captura o diálogo (pasta temporária), clica "Cancel" e devolve ``cancelado_sem_confirmacao`` ou
@@ -55,6 +56,7 @@ _MOTIVO_OBRIGATORIO = re.compile(r"(?:motivo|reason)[^\n*]{0,40}\*", re.I)
 _CANCELAR = re.compile(r"^\s*(?:Cancelar|Cancel)\s*$", re.I)  # o portal mostra "Cancel"
 _ALERTA = "[role=alertdialog]"
 ESPERA_FECHAR_ALERTA_MS = 10_000
+ESPERA_CONTEUDO_DIALOGO_MS = 15_000
 _SIM = re.compile(r"Sim,?\s*prosseguir", re.I)
 
 MENSAGENS = {
@@ -203,8 +205,32 @@ def _capturar(page: Any, pasta: Path | None) -> str:
         return ""
 
 
-def _conferir_dialogo(dialogo: Any) -> tuple[str | None, Any]:
-    """Devolve (motivo da parada, checkbox do MDM); nenhum clique final acontece aqui."""
+def _conferir_dialogo(dialogo: Any, automacao: Any) -> tuple[str | None, Any]:
+    """Devolve (motivo da parada, checkbox do MDM); nenhum clique final acontece aqui.
+
+    O portal mostra a moldura do diálogo antes do conteúdo (texto, MDM, motivo e botões chegam ~1 s depois).
+    """
+    def parar(conferencia: str) -> tuple[str | None, Any]:
+        automacao.log(ORIGEM, f"Diálogo não reconhecido: {conferencia}.")  # só o nome da conferência, nunca texto do portal
+        return "dialogo_inesperado", None
+
+    cancelar = dialogo.get_by_role("button", name=_CANCELAR)
+
+    def conteudo_pronto() -> bool:
+        try:
+            return cancelar.count() == 1 and cancelar.first.is_visible() and bool(
+                _CONTAGEM.search(dialogo.inner_text(timeout=2000))
+            )
+        except Exception:
+            return False
+
+    try:
+        automacao.acionar_quando_pronto(
+            lambda: None, "O conteúdo do diálogo de remoção não apareceu",
+            timeout_ms=ESPERA_CONTEUDO_DIALOGO_MS, confirmar=conteudo_pronto, intervalo_s=0.3,
+        )
+    except automacao.RotinaErro:
+        return parar("conteudo")
     texto = dialogo.inner_text(timeout=10000)
     if _MOTIVO_OBRIGATORIO.search(texto) or dialogo.locator(
         "textarea[required], input[type=text][required], [aria-required=true]"
@@ -212,15 +238,19 @@ def _conferir_dialogo(dialogo: Any) -> tuple[str | None, Any]:
         return "motivo_obrigatorio", None
     contagem = _CONTAGEM.search(texto)
     if contagem is None or int(contagem.group(1)) != 1:
-        return "dialogo_inesperado", None
-    mdm = dialogo.get_by_label(_MDM)
-    if mdm.count() != 1:  # checkbox sem id dentro do label: busca direta pelo label
-        mdm = dialogo.locator("label").filter(has_text=_MDM).locator("input[type=checkbox]")
-    if mdm.count() != 1:
-        return "dialogo_inesperado", None
-    mdm.check(timeout=10000)  # idempotente: já marcado continua marcado
+        return parar("contagem")
+    # Checkbox estilizado: o input tem 0x0 e opacidade 0; quem recebe o clique é o label que o contém.
+    rotulo = dialogo.locator("label").filter(has_text=_MDM)
+    mdm = rotulo.locator("input[type=checkbox]")
+    if rotulo.count() != 1 or mdm.count() != 1:
+        return parar("mdm_nao_encontrado")
     if not mdm.is_checked():
-        return "dialogo_inesperado", None
+        rotulo.click(timeout=10000)  # um único clique: o label alterna, então nunca clica se já estiver marcado
+        fim = time.monotonic() + 3
+        while not mdm.is_checked() and time.monotonic() < fim:
+            dialogo.page.wait_for_timeout(200)
+    if not mdm.is_checked():
+        return parar("mdm_nao_marcou")
     return None, mdm
 
 
@@ -267,12 +297,18 @@ def remover_na_pagina(
     # Daqui até o "Sim", toda saída fecha o diálogo pelo Cancel e desmarca a linha (nunca o deixa aberto).
     alertas = page.locator(_ALERTA).filter(has_text=_TEXTO_DIALOGO).filter(visible=True)
     mdm: Any = None
+    parada: str | None = None
     try:
         botao.first.click(timeout=10000)  # só abre o diálogo; nada é removido aqui
         try:
             alertas.first.wait_for(state="visible", timeout=20000)
-            parada, mdm = ("dialogo_inesperado", None) if alertas.count() != 1 else _conferir_dialogo(alertas.first)
-        except Exception:
+            if alertas.count() != 1:
+                automacao.log(ORIGEM, "Diálogo não reconhecido: dialogo_ausente.")
+                parada = "dialogo_inesperado"
+            else:
+                parada, mdm = _conferir_dialogo(alertas.first, automacao)
+        except Exception as erro:
+            automacao.log(ORIGEM, f"Diálogo não reconhecido: erro {type(erro).__name__}.")
             parada = "dialogo_inesperado"
     except BaseException:
         _fechar_alertas(page)
