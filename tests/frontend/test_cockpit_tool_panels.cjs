@@ -659,33 +659,6 @@ test("sub-abas da OS no HTML: tablist rotulado, abas ligadas ao painel único e 
   assert.equal((html.match(/id="cockpit-tickets-os"/g) || []).length, 1);
 });
 
-test("linha do tempo da série descarta a resposta tardia quando a linha de Andamento foi desconectada", async () => {
-  let responder;
-  const apiFetch = () => new Promise(resolve => { responder = resolve; });
-  const { api, el } = criarAmbientePaineis({ apiFetch });
-  let opcoes;
-  paineisDadosFalso = {
-    montarTabelaOs: (_host, opts) => { opcoes = opts; return {}; },
-    filtrarTabelaOs() {}, atualizarTabelaOs: async () => {},
-  };
-  try {
-    await api.abrirPainelCockpit("chamados");
-    opcoes.aoCarregar({ snapshot_id: "s1", resumo: {}, chamados: [{ serie: "SN-1", relacao: "constructor", oracle: [], simpress: {} }] });
-    // O histórico é desenhado num nó criado por renderTicketDetail: guarda todos os nós novos para desconectá-los.
-    const criados = [];
-    const criar = global.document.createElement;
-    global.document.createElement = (...args) => { const node = criar(...args); criados.push(node); return node; };
-    opcoes.aoExpandirSerie("SN-1", el("celula-andamento"));
-    global.document.createElement = criar;
-    let renders = 0;
-    criados.forEach(node => { node.isConnected = false; node.replaceChildren = () => { renders += 1; }; });
-    responder({ eventos: [{ tipo: "Atualização", atualizado_em: "2026-10-30" }] });
-    await new Promise(resolve => setImmediate(resolve));
-    assert.ok(criados.length > 0);
-    assert.equal(renders, 0, "resposta tardia não redesenha uma linha que já saiu da tabela");
-  } finally { delete global.document; paineisDadosFalso = undefined; }
-});
-
 test("abrirChamadosDoEquipamento preenche a busca com a série e filtra a tabela", async () => {
   const { api, el } = criarAmbientePaineis();
   const filtros = [];

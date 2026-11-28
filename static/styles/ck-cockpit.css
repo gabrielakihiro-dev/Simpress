@@ -944,7 +944,6 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #modal-chamado-os .ck-tabela--cards td.ck-td--largo { grid-column: 1 / -1; }
 #modal-chamado-os .ck-tabela--cards td.ck-td--sem-rotulo::before { display: none; }
 #modal-chamado-os .ck-tabela--cards .ck-td--dir { text-align: left; }
-#modal-chamado-os .chamado-os-janela__lado .ck-os-andamento { grid-template-columns: minmax(0, 1fr); }
 #modal-chamado-os .ck-os tbody td[data-label] { order: 5; }
 #modal-chamado-os .ck-os tbody td[data-label="Série"] { order: 1; }
 #modal-chamado-os .ck-os tbody td[data-label="OS"] { order: 2; display: block; }
@@ -2155,10 +2154,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-chamados-evolucao__resumo { margin: 0; font-weight: var(--peso-medio); color: var(--cor-texto); }
 .ck-chamados-evolucao__lista { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-left: 18px; }
 #cockpit-tickets-os { margin-top: 12px; }
-.ck-chamados-anotacao { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-.ck-chamados-anotacao__rotulo { font-size: var(--fs-sm); color: var(--cor-texto-sutil); }
-.ck-chamados-anotacao .annotation-field { width: 100%; min-height: 56px; resize: vertical; transition: border-color var(--duracao) var(--curva); }
-.ck-chamados-anotacao .annotation-status:empty { display: none; }
 @media (max-width: 767.98px) {
   .ck-chamados-bloco { margin: 12px 12px 0; }
   #cockpit-tickets-manage-panel .ckp-recolher__corpo { padding: 12px; }
@@ -2182,7 +2177,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   #cockpit-tickets-os tr[data-andamento] .ck-det-campos dd { margin-bottom: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ck-chamados-triagem__botao, .ck-chamados-anotacao .annotation-field { transition: none; }
+  .ck-chamados-triagem__botao { transition: none; }
 }
 
 /* =====================================================================
@@ -2437,16 +2432,10 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os__andamento-btn[aria-expanded="true"]::before { transform: rotate(45deg); }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os tbody tr[data-andamento] > td.ck-td--largo { background: var(--cor-superficie-funda); box-shadow: inset 3px 0 0 var(--cor-destaque); }
-:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px 28px; }
+:is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento { display: grid; grid-template-columns: minmax(0, 1fr); }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento > * { min-width: 0; margin-top: 0; }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento__dados { display: flex; flex-direction: column; gap: 12px; }
 :is(#cockpit-tickets-os, #modal-chamado-os) .ck-os-andamento__dados > * { margin-top: 0; }
-@media (min-width: 1200px) {
-  #cockpit-tickets-os .ck-os-andamento__tempo { padding-left: 28px; border-left: 1px solid var(--cor-borda-suave); }
-}
-@media (max-width: 1199.98px) {
-  #cockpit-tickets-os .ck-os-andamento { grid-template-columns: minmax(0, 1fr); }
-}
 
 /* ---------- 10. Cartões (<1200px): Série e OS no topo, Fonte em linha ---------- */
 @media (max-width: 1199.98px) {
