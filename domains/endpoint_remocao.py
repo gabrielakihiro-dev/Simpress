@@ -32,6 +32,7 @@ marcador durável "em_andamento" (sem ele, não clica); ``apos_trava`` relê as 
 Log só com etapa e resultado: nunca hostname, usuário, senha nem motivo.
 """
 import logging
+import math
 import os
 import re
 import tempfile
@@ -242,18 +243,18 @@ def _caixa_estavel(page: Any, alerta: Any) -> dict[str, float] | None:
     return None
 
 
-def _zoom(page: Any) -> float:
-    """Zoom do viewport visual (Page.getLayoutMetrics); 1 se não der para ler."""
+def _zoom(page: Any) -> float | None:
+    """Zoom do viewport visual (Page.getLayoutMetrics); None se não der para ler (sem captura)."""
     try:
         cdp = page.context.new_cdp_session(page)
         try:
-            zoom = float(cdp.send("Page.getLayoutMetrics")["cssVisualViewport"].get("zoom") or 1)
+            zoom = float(cdp.send("Page.getLayoutMetrics")["cssVisualViewport"]["zoom"])
         finally:
             cdp.detach()
-        return zoom if zoom > 0 else 1.0
     except Exception as erro:
         logger.debug("Não foi possível ler o zoom da aba do Endpoint (%s).", type(erro).__name__)
-        return 1.0
+        return None
+    return zoom if math.isfinite(zoom) and zoom > 0 else None
 
 
 def _capturar(page: Any, pasta: Path | None) -> str:
@@ -266,10 +267,12 @@ def _capturar(page: Any, pasta: Path | None) -> str:
         caixa = _caixa_estavel(page, alertas.first)
         if caixa is None:
             return ""
-        destino.mkdir(parents=True, exist_ok=True)
-        arquivo = destino / f"dialogo-remocao-{datetime.now():%Y%m%d-%H%M%S-%f}.png"
         # O Chrome de automação desenha 1920 px CSS numa janela de 1280 (zoom 0,667): o clip vai em pixels de tela.
         zoom = _zoom(page)
+        if zoom is None:  # sem o zoom, um clip em pixels CSS pegaria outra parte da tela (LGPD): não captura
+            return ""
+        destino.mkdir(parents=True, exist_ok=True)
+        arquivo = destino / f"dialogo-remocao-{datetime.now():%Y%m%d-%H%M%S-%f}.png"
         page.screenshot(path=str(arquivo), clip={chave: valor * zoom for chave, valor in caixa.items()}, timeout=10000)
         antigas = sorted(destino.glob("dialogo-remocao-*.png"), key=lambda item: item.stat().st_mtime, reverse=True)
         for velha in antigas[CAPTURAS_MANTIDAS:]:

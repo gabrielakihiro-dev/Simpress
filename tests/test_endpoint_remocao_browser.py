@@ -371,6 +371,23 @@ class RemoverNoEndpointTests(unittest.TestCase):
         self.assertFalse(self.alerta_visivel)
         self.assertEqual(self.marcadas, 0)
 
+    def test_zoom_ilegivel_nao_captura_e_fecha_pelo_cancel(self):
+        with patch.object(endpoint_remocao, "_zoom", return_value=None):
+            resultado, cliques, _ = self.rodar(["PRNOTE100"])
+        self.assertEqual(resultado["resultado"], "cancelado_sem_confirmacao")
+        self.assertEqual(resultado["captura"], "")
+        self.assertEqual(cliques[-1], "cancelar:mdm")
+        self.assertFalse(self.alerta_visivel)
+        self.assertEqual(self.marcadas, 0)
+
+    def test_zoom_que_nao_e_numero_finito_positivo_e_none(self):
+        for metricas in ({"cssVisualViewport": {"zoom": 0}}, {"cssVisualViewport": {"zoom": float("nan")}},
+                         {"cssVisualViewport": {"zoom": "x"}}, {"cssVisualViewport": {}}, {}):
+            with self.subTest(metricas=metricas):
+                cdp = SimpleNamespace(send=lambda *_a, m=metricas: m, detach=lambda: None)
+                page = SimpleNamespace(context=SimpleNamespace(new_cdp_session=lambda _p, c=cdp: c))
+                self.assertIsNone(endpoint_remocao._zoom(page))
+
     def test_zoom_real_sem_escala_e_1(self):
         page = self.browser.new_page()
         self.addCleanup(page.close)
